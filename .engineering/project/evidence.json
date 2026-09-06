@@ -1,0 +1,572 @@
+{
+  "schemaVersion": 2,
+  "phase": "build",
+  "recommendation": "go",
+  "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
+  "researchCompletedAt": "2026-09-06T20:44:48Z",
+  "createdAt": "2026-09-06",
+  "refreshedAt": "2026-09-06T20:44:48Z",
+  "project": {
+    "name": "Walkz",
+    "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
+    "user": "Solo developers and small-team maintainers who need evidence before merging a pull request.",
+    "outcome": "A maintainer can run a local review and receive a deterministic verdict tied to changed lines, repository checks, and explicit coverage.",
+    "deadline": null,
+    "type": "developer-tool",
+    "stack": [
+      "Node.js 24.13.0",
+      "TypeScript",
+      "npm 11.6.2 workspaces",
+      "Git 2.52.0",
+      "Groq OpenAI-compatible HTTP API",
+      "Vitest"
+    ],
+    "deliverySurface": "Local cross-platform CLI used inside a Git repository",
+    "riskClass": "high",
+    "triggeredOverlays": [
+      "Personal or sensitive data",
+      "Authentication, authorization, money or secrets",
+      "External dependency",
+      "AI-assisted implementation"
+    ],
+    "overlayDecision": "Private source may cross a provider boundary, a provider key is required, repository commands execute locally, and the project depends on Git, Node, Groq, and selected npm packages. The work is AI-assisted, so small evidence-backed slices and independent review are required. Hosted, distributed, migration, and graphical-interface overlays do not apply to Milestone 1."
+  },
+  "repositorySearch": {
+    "status": "completed",
+    "capability": "Bounded Git patch parsing, changed-line indexing, shell-free cross-platform command execution, descendant termination, evidence policy, and structured AI review.",
+    "completedAt": "2026-09-06T20:44:48Z",
+    "shortlistCount": 5,
+    "summary": "Five credible repositories were checked. Adopt jsdiff and Execa behind Walkz-owned boundaries, inspect reviewdog and ReviewGate for tests and policy patterns, and reject Qodo PR-Agent as an architectural dependency. No repository supplies Walkz's evidence engine or base/head proof."
+  },
+  "claims": [
+    {
+      "id": "claim-m1-overlap",
+      "text": "CodeRabbit already provides most of the visible Milestone 1 local review workflow, so Walkz's defensible difference begins with counterfactual proof.",
+      "status": "verified",
+      "sourceIds": [
+        "source-coderabbit-cli"
+      ]
+    },
+    {
+      "id": "claim-models-are-advisory",
+      "text": "Model review can miss defects, invent findings, and propose unsafe fixes, so model output cannot control the final verdict.",
+      "status": "verified",
+      "sourceIds": [
+        "source-copilot-limitations",
+        "source-review-feedback-study"
+      ]
+    },
+    {
+      "id": "claim-fixtures-are-not-outcomes",
+      "text": "Synthetic broken and clean fixtures prove engineering behavior but do not establish usefulness on real pull requests.",
+      "status": "verified",
+      "sourceIds": [
+        "source-real-pr-gap"
+      ]
+    },
+    {
+      "id": "claim-runner-is-not-sandbox",
+      "text": "Shell-free process execution can limit injection, but Milestone 1 commands still run with developer authority and descendant termination is best-effort.",
+      "status": "verified",
+      "sourceIds": [
+        "source-node-child-process",
+        "source-node-shell-deprecation",
+        "source-execa-termination"
+      ]
+    },
+    {
+      "id": "claim-private-code-crosses-boundary",
+      "text": "A local Groq review still sends selected private source off the machine and may face temporary provider retention unless ZDR is enabled.",
+      "status": "verified",
+      "sourceIds": [
+        "source-groq-data"
+      ]
+    },
+    {
+      "id": "claim-model-capability-is-mutable",
+      "text": "Active model IDs, structured-output support, free limits, and provider failures are separate mutable facts that must be checked and recorded.",
+      "status": "verified",
+      "sourceIds": [
+        "source-groq-structured-output",
+        "source-groq-models",
+        "source-groq-rate-limits",
+        "source-groq-errors"
+      ]
+    },
+    {
+      "id": "claim-git-metadata-trust",
+      "text": "Git metadata and external diff helpers can execute code, while unusual paths require literal and NUL-delimited handling.",
+      "status": "verified",
+      "sourceIds": [
+        "source-git-security",
+        "source-git-diff-format"
+      ]
+    },
+    {
+      "id": "claim-focused-dependencies-fit",
+      "text": "jsdiff v9 and Execa v10 cover two failure-prone boundaries behind replaceable adapters; neither supplies Walkz's evidence semantics.",
+      "status": "verified",
+      "sourceIds": [
+        "source-jsdiff-parser",
+        "source-execa-termination"
+      ],
+      "runIds": [
+        "run-repository-validation-existing",
+        "run-repository-validation-new"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-coderabbit-cli",
+      "title": "CodeRabbit Command-Line Review Tool",
+      "url": "https://docs.coderabbit.ai/cli/index",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Shows that local Git scopes, diagnostics, terminal output, and structured findings are existing table stakes."
+    },
+    {
+      "id": "source-copilot-limitations",
+      "title": "GitHub Copilot Agents responsible-use guidance",
+      "url": "https://docs.github.com/en/enterprise-cloud@latest/copilot/responsible-use/agents",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Supports human review, testing, and a deterministic boundary because AI review can miss issues or invent them."
+    },
+    {
+      "id": "source-review-feedback-study",
+      "title": "Is Agentic Code Review Helpful?",
+      "url": "https://arxiv.org/abs/2607.03316",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Its observed rejection rate makes precision and dismissal cost better outcome measures than finding count."
+    },
+    {
+      "id": "source-real-pr-gap",
+      "title": "Bigger Isn't Always Better: A Comparative Evaluation of LLMs for Automated Code Review",
+      "url": "https://arxiv.org/abs/2606.15689",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Shows that synthetic fixtures are engineering checks, not enough evidence of usefulness on real pull requests."
+    },
+    {
+      "id": "source-node-child-process",
+      "title": "Node.js 24 child process documentation",
+      "url": "https://nodejs.org/docs/latest-v24.x/api/child_process.html",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Defines shell-free argument execution, Windows command limitations, cancellation, and incomplete descendant termination."
+    },
+    {
+      "id": "source-node-shell-deprecation",
+      "title": "Node.js DEP0190 shell argument deprecation",
+      "url": "https://nodejs.org/docs/latest-v24.x/api/deprecations.html#dep0190-passing-args-to-nodechild_process-execfilespawn-with-shell-option",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Rules out passing configured arguments through shell-enabled spawn or execFile."
+    },
+    {
+      "id": "source-git-security",
+      "title": "Git security guidance",
+      "url": "https://git-scm.com/docs/git#_security",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Narrows Milestone 1 to developer-trusted Git metadata and forbids bypassing Git ownership protection."
+    },
+    {
+      "id": "source-git-diff-format",
+      "title": "Git diff format",
+      "url": "https://git-scm.com/docs/diff-format",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Requires NUL-delimited machine records and explicit handling of unusual and quoted paths."
+    },
+    {
+      "id": "source-groq-structured-output",
+      "title": "Groq Structured Outputs",
+      "url": "https://console.groq.com/docs/structured-outputs",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Supports schema-constrained responses on selected models while still requiring local semantic validation."
+    },
+    {
+      "id": "source-groq-data",
+      "title": "Your Data in GroqCloud",
+      "url": "https://console.groq.com/docs/your-data",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Requires a private-code disclosure because inference data can be retained for reliability or abuse review unless ZDR is enabled."
+    },
+    {
+      "id": "source-groq-models",
+      "title": "Groq Supported Models",
+      "url": "https://console.groq.com/docs/models",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Supports setup-time discovery but not blind selection of the first active model."
+    },
+    {
+      "id": "source-groq-rate-limits",
+      "title": "Groq Rate Limits",
+      "url": "https://console.groq.com/docs/rate-limits",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Requires account-aware budgets, Retry-After handling, and an inconclusive result when bounded retries are exhausted."
+    },
+    {
+      "id": "source-groq-errors",
+      "title": "Groq API Error Codes and Responses",
+      "url": "https://console.groq.com/docs/errors",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Defines the provider failure classes that need separate retry and verdict behavior."
+    },
+    {
+      "id": "source-nist-ai-ssdf",
+      "title": "NIST SP 800-218A",
+      "url": "https://csrc.nist.gov/pubs/sp/800/218/a/final",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Supports treating model inputs, outputs, versions, tests, and human oversight as lifecycle risks for an AI system."
+    },
+    {
+      "id": "source-jsdiff-parser",
+      "title": "jsdiff v9 Git patch parser",
+      "url": "https://github.com/kpdecker/jsdiff/blob/87c5152b9b3908d8364e875aabce8f4015c7fe0e/src/patch/parse.ts",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Supplies strict hunk validation and Git path parsing behind a small, replaceable Walkz wrapper."
+    },
+    {
+      "id": "source-execa-termination",
+      "title": "Execa v10 termination documentation",
+      "url": "https://github.com/sindresorhus/execa/blob/8017b279e19347efaf2587711c2d57dbd4330740/docs/termination.md",
+      "accessedAt": "2026-09-06T20:44:48Z",
+      "decisionImpact": "Provides maintained cross-platform descendant termination while documenting its best-effort limits."
+    }
+  ],
+  "repositories": [
+    {
+      "id": "repo-jsdiff",
+      "url": "https://github.com/kpdecker/jsdiff",
+      "checkedAt": "2026-09-06T20:44:48Z",
+      "license": "BSD-3-Clause",
+      "decision": "adopt",
+      "reason": "Adopt the zero-runtime-dependency parsePatch entry point behind a Walkz wrapper for strict hunk and Git path parsing.",
+      "version": "9.0.0",
+      "maintenanceSignal": "Pushed 2026-08-24 with active parser hardening and a recent security fix.",
+      "adoptionCost": "One runtime package with no runtime dependencies.",
+      "securityPosture": "Pure parsing with strict hunk counts; Walkz must still cap input and contain paths.",
+      "upgradePath": "Pin the lockfile and test the wrapper against Walkz fixtures before upgrades.",
+      "exitCost": "Low because only parsePatch crosses the adapter.",
+      "sourceInspected": true,
+      "cloned": false,
+      "commit": "87c5152b9b3908d8364e875aabce8f4015c7fe0e",
+      "inspectedPaths": [
+        "src/patch/parse.ts",
+        "test/patch/parse.js",
+        "package.json",
+        "LICENSE"
+      ],
+      "validationRunIds": [
+        "run-repository-validation-new"
+      ]
+    },
+    {
+      "id": "repo-execa",
+      "url": "https://github.com/sindresorhus/execa",
+      "checkedAt": "2026-09-06T20:44:48Z",
+      "license": "MIT",
+      "decision": "adopt",
+      "reason": "Adopt argument-array execution and cross-platform descendant termination behind the sandbox adapter.",
+      "version": "10.0.1",
+      "maintenanceSignal": "Released and pushed 2026-07-31 with two open issues when checked.",
+      "adoptionCost": "Twelve runtime dependencies and an ESM-only Node 22+ package.",
+      "securityPosture": "Supports shell-free calls and validates the Windows taskkill path; cleanup is still best-effort.",
+      "upgradePath": "Pin the lockfile and rerun Windows and Linux process-tree tests before upgrades.",
+      "exitCost": "Medium-low because process behavior stays behind executeCommand and terminateProcessTree.",
+      "sourceInspected": true,
+      "cloned": true,
+      "commit": "8017b279e19347efaf2587711c2d57dbd4330740",
+      "inspectedPaths": [
+        "docs/execution.md",
+        "docs/termination.md",
+        "docs/windows.md",
+        "lib/terminate/kill-descendants.js",
+        "license"
+      ],
+      "validationRunIds": [
+        "run-repository-validation-existing"
+      ]
+    },
+    {
+      "id": "repo-reviewdog",
+      "url": "https://github.com/reviewdog/reviewdog",
+      "checkedAt": "2026-09-06T20:44:48Z",
+      "license": "MIT",
+      "decision": "inspect",
+      "reason": "Reuse diff-index and unusual-filename test ideas without adding a Go binary or its provider surface.",
+      "maintenanceSignal": "Pushed 2026-09-06; latest formal release was v0.21.0 on 2025-09-03.",
+      "adoptionCost": "High as a runtime component because it is a Go tool with unrelated reporters and providers.",
+      "securityPosture": "Its runner can execute configured tools and is not a sandbox.",
+      "upgradePath": "Recheck only when a Walkz diff fixture exposes a parser or location gap.",
+      "exitCost": "None because it remains a reference.",
+      "sourceInspected": true,
+      "cloned": true,
+      "commit": "3250b05a581b87a63e28caba333c0b150aa65a1e",
+      "inspectedPaths": [
+        "diff/parse.go",
+        "diff/parse_test.go",
+        "filter/diff_filter.go",
+        "filter/diff_filter_test.go",
+        "diff/testdata"
+      ],
+      "validationRunIds": [
+        "run-repository-validation-existing"
+      ]
+    },
+    {
+      "id": "repo-reviewgate",
+      "url": "https://github.com/LVTD-LLC/reviewgate",
+      "checkedAt": "2026-09-06T20:44:48Z",
+      "license": "Apache-2.0",
+      "decision": "inspect",
+      "reason": "Compare its model-confidence and deterministic-disposition split without adopting its new Rust and GitHub Action stack.",
+      "maintenanceSignal": "Created 2026-06-25 and pushed 2026-09-03; active but too new for component adoption.",
+      "adoptionCost": "High because it introduces Rust, GitHub Actions, and a different provider workflow.",
+      "securityPosture": "Keeps untrusted text outside authority but deliberately does not execute pull-request code.",
+      "upgradePath": "Revisit only if its evidence policy gains measured field results.",
+      "exitCost": "None because it remains a comparator.",
+      "sourceInspected": true,
+      "cloned": false,
+      "commit": "87aa4396de6d670edba731ca8215e139f03cf167",
+      "inspectedPaths": [
+        "docs/finding-policy.md",
+        "crates/reviewgate-core/src/agent_result.rs",
+        "fixtures/evidence-grounding/regressions.json"
+      ],
+      "validationRunIds": [
+        "run-repository-validation-new"
+      ]
+    },
+    {
+      "id": "repo-pr-agent",
+      "url": "https://github.com/qodo-ai/pr-agent",
+      "checkedAt": "2026-09-06T20:44:48Z",
+      "license": "MIT",
+      "decision": "reject",
+      "reason": "Its Python runtime, broad provider matrix, and large dependency surface would replace the chosen architecture without supplying base/head proof.",
+      "version": "0.45.0",
+      "maintenanceSignal": "Released 2026-09-05 and pushed 2026-09-06.",
+      "adoptionCost": "Very high: Python 3.12+, many direct dependencies, and unrelated hosting integrations.",
+      "securityPosture": "Mature security tests, but a much broader attack and maintenance surface than Milestone 1 needs.",
+      "upgradePath": "Use only as a reference for token budgeting and trusted settings.",
+      "exitCost": "Very high if adopted.",
+      "sourceInspected": true,
+      "cloned": true,
+      "commit": "97169bcab8943d457b99256d357b856c68e0c61e",
+      "inspectedPaths": [
+        "pr_agent/algo/git_patch_processing.py",
+        "pr_agent/git_providers/diff_parsing.py",
+        "pr_agent/algo/review_finding_state.py"
+      ],
+      "validationRunIds": [
+        "run-repository-validation-existing"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-evidence-improves-decisions",
+      "status": "open",
+      "text": "Counterfactual evidence will help maintainers make better or faster merge decisions than existing local review workflows.",
+      "impact": "This is the product thesis and cannot be proven by Milestone 1 fixtures.",
+      "nextCheck": "After Milestone 2, compare Walkz with CodeRabbit or checks plus an assistant on 10 to 20 historical real defects."
+    },
+    {
+      "id": "assumption-runner-meets-local-boundary",
+      "status": "open",
+      "text": "Execa can execute approved commands without shell interpolation and terminate the tested descendant trees on Windows and Linux.",
+      "impact": "A failure blocks the runner contract and may require a narrower command policy.",
+      "nextCheck": "Build the first slice around hostile arguments, stripped secrets, timeouts, cancellation, and child-grandchild heartbeats."
+    },
+    {
+      "id": "assumption-free-model-is-usable",
+      "status": "open",
+      "text": "At least one free Groq production model can return useful schema-valid reviews within the configured token and latency budgets.",
+      "impact": "Without it, the model path remains inconclusive and Walkz narrows to deterministic checks.",
+      "nextCheck": "Probe capabilities during doctor and score the selected model on the golden fixtures before accepting the provider phase."
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "contradiction-m1-fix-policy",
+      "status": "resolved",
+      "text": "Milestone 1 requires a broken fixture to return FIX, while default policy permits only VERIFIED findings to block and proof begins in Milestone 2.",
+      "resolution": "The broken fixture explicitly opts into blocking SUPPORTED deterministic evidence. Default repositories still block only VERIFIED evidence, and UNVERIFIED model findings never block.",
+      "claimIds": [
+        "claim-models-are-advisory"
+      ]
+    },
+    {
+      "id": "contradiction-standard-library-runner",
+      "status": "resolved",
+      "text": "Earlier research deferred Execa pending a standard-library spike, while Execa v10 now implements the required cross-platform descendant behavior.",
+      "resolution": "Adopt Execa behind Walkz interfaces, retain direct process-tree tests, and keep its best-effort limitation visible.",
+      "claimIds": [
+        "claim-runner-is-not-sandbox",
+        "claim-focused-dependencies-fit"
+      ]
+    },
+    {
+      "id": "contradiction-competitor-overlap",
+      "status": "resolved",
+      "text": "Existing tools cover most Milestone 1 features, which weakens the case for another standalone local reviewer.",
+      "resolution": "Treat Milestone 1 as a time-boxed foundation. Continue only toward the base/head proof that existing finalists did not demonstrate.",
+      "claimIds": [
+        "claim-m1-overlap",
+        "claim-fixtures-are-not-outcomes"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-build-m1",
+      "status": "accepted",
+      "text": "Build Milestone 1 as the bounded local foundation for counterfactual proof, then reassess differentiation with real evidence.",
+      "claimIds": [
+        "claim-m1-overlap",
+        "claim-fixtures-are-not-outcomes"
+      ]
+    },
+    {
+      "id": "decision-model-has-no-verdict-authority",
+      "status": "accepted",
+      "text": "The model proposes findings only. Deterministic code validates locations, coverage, evidence levels, and the final verdict.",
+      "claimIds": [
+        "claim-models-are-advisory"
+      ]
+    },
+    {
+      "id": "decision-adopt-bounded-dependencies",
+      "status": "accepted",
+      "text": "Use jsdiff parsePatch and Execa behind Walkz-owned adapters; keep evidence, policy, path containment, approval, and provider logic local.",
+      "claimIds": [
+        "claim-focused-dependencies-fit"
+      ]
+    },
+    {
+      "id": "decision-runner-first",
+      "status": "accepted",
+      "text": "Make the safe runner the first implementation slice because command execution, secret inheritance, and process cleanup carry the highest immediate cost.",
+      "claimIds": [
+        "claim-runner-is-not-sandbox",
+        "claim-git-metadata-trust"
+      ]
+    },
+    {
+      "id": "decision-provider-disclosure",
+      "status": "accepted",
+      "text": "Disclose private-code transfer before first model use, keep no-model useful, select a compatible free production model explicitly, and return INCONCLUSIVE when provider evidence is insufficient.",
+      "claimIds": [
+        "claim-private-code-crosses-boundary",
+        "claim-model-capability-is-mutable"
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "id": "run-evidence-init",
+      "command": "node D:/Programming/Projects/engineering-playbook/scripts/project-evidence.mjs init --dir D:/Programming/Projects/Walkz",
+      "exitCode": 0,
+      "summary": "Created the brief, evidence, and outcome templates without overwriting project files.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-toolchain-scan",
+      "command": "node --version; npm --version; git --version",
+      "exitCode": 0,
+      "summary": "Found Node 24.13.0, npm 11.6.2, and Git 2.52.0 for the local build baseline.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-repository-validation-existing",
+      "command": "node D:/Programming/Projects/engineering-playbook/scripts/check-repo.mjs reviewdog/reviewdog The-PR-Agent/pr-agent sindresorhus/execa lint-staged/lint-staged VOD-Studio/inori",
+      "exitCode": 0,
+      "summary": "Verified existence, license, activity, size, and contributor signals for the earlier reference set.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-repository-validation-new",
+      "command": "node D:/Programming/Projects/engineering-playbook/scripts/check-repo.mjs kpdecker/jsdiff LVTD-LLC/reviewgate",
+      "exitCode": 0,
+      "summary": "Verified jsdiff and ReviewGate metadata before adoption or comparison decisions.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-npm-diff-query",
+      "command": "npm view diff version license engines dependencies --json",
+      "exitCode": 0,
+      "summary": "Confirmed diff 9.0.0, BSD-3-Clause, and no runtime dependencies.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-npm-execa-query",
+      "command": "npm view execa version license engines dependencies --json",
+      "exitCode": 0,
+      "summary": "Confirmed Execa 10.0.1, MIT, Node 22+, and twelve runtime dependencies.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-npm-typescript-query",
+      "command": "npm view typescript version license engines --json",
+      "exitCode": 0,
+      "summary": "Confirmed TypeScript 7.0.2 as the current registry version at planning time.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-evidence-check-initial",
+      "command": "node D:/Programming/Projects/engineering-playbook/scripts/project-evidence.mjs check --dir D:/Programming/Projects/Walkz --strict",
+      "exitCode": 1,
+      "summary": "The first strict check found date-only values that were one day ahead in UTC and rejected offset timestamps.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-evidence-check-final",
+      "command": "node D:/Programming/Projects/engineering-playbook/scripts/project-evidence.mjs check --dir D:/Programming/Projects/Walkz --strict",
+      "exitCode": 0,
+      "summary": "The corrected project evidence pack passed strict validation.",
+      "ranAt": "2026-09-06T20:44:48Z"
+    }
+  ],
+  "gates": [
+    {
+      "id": "gate-runner-slice",
+      "stage": "during",
+      "trigger": "The runtime foundation and safe runner slice are implemented.",
+      "requiredEvidence": "Windows build plus hostile-argument, stripped-secret, bounded-output, cancellation, timeout, and child-grandchild termination tests; Linux process-tree coverage configured for CI.",
+      "status": "ready",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-runner-is-not-sandbox",
+        "claim-git-metadata-trust"
+      ],
+      "runIds": []
+    },
+    {
+      "id": "gate-m1-release",
+      "stage": "release",
+      "trigger": "All six Milestone 1 phases and their focused reviews pass.",
+      "requiredEvidence": "Clean npm ci, build, unit and integration suites, provider error matrix, CLI fixture verdicts, Windows paths with spaces, and a 60-second local demo tied to one commit.",
+      "status": "planned",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-models-are-advisory",
+        "claim-private-code-crosses-boundary",
+        "claim-model-capability-is-mutable"
+      ],
+      "runIds": []
+    },
+    {
+      "id": "gate-product-outcome",
+      "stage": "outcome",
+      "trigger": "Milestone 2 counterfactual proof exists and 10 to 20 historical real defects are available.",
+      "requiredEvidence": "A same-diff comparison with CodeRabbit or checks plus an assistant, recording precision, recall, proof rate, latency, tokens, dismissal reasons, and decision usefulness.",
+      "status": "planned",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-m1-overlap",
+        "claim-fixtures-are-not-outcomes"
+      ],
+      "runIds": []
+    }
+  ]
+}

@@ -50,20 +50,38 @@ Walkz will use Node's native argument parser instead of Commander. It will not s
 subprocess command string on spaces, load executable rule files, or add a matrix of CI
 providers during the local milestone.
 
-## Execa: process termination needs an operating-system design
+## jsdiff: parse Git patches behind a narrow wrapper
+
+We inspected <https://github.com/kpdecker/jsdiff> at
+`87c5152b9b3908d8364e875aabce8f4015c7fe0e`.
+
+- Version 9 parses Git extended headers, renames, copies, modes, binary markers,
+  C-quoted paths, and UTF-8 octal escapes.
+- Its hunk parser rejects mismatched line counts and invalid hunk lines.
+- The `diff` package has no runtime dependencies and supports ESM and CommonJS.
+- Walkz still owns input caps, path normalization and containment, added-line
+  indexing, binary handling, and coverage reporting.
+
+Adopt only `parsePatch` behind the Git adapter. This keeps the exit cost low and
+lets Walkz reject parser output that violates its stricter repository rules.
+
+## Execa: use maintained process-tree handling
 
 We inspected <https://github.com/sindresorhus/execa> at
 `8017b279e19347efaf2587711c2d57dbd4330740`.
 
-- Validate timeouts as finite, non-negative numbers.
-- On Unix, start the child in its own process group and signal the negative process ID.
-- On Windows, call the absolute `taskkill.exe` path with an argument array and `/T /F`.
-- Fall back to the direct child when tree termination is unavailable, but expose that
-  reduced guarantee to the caller.
+- Version 10 accepts argument arrays with `shell: false` and resolves Windows command
+  shims without string interpolation.
+- `killDescendants` uses a Unix process group and an absolute, validated
+  `taskkill.exe` path on Windows.
+- Descendant termination remains best-effort. An escaped Unix daemon or failed Windows
+  fallback may survive.
+- The package adds twelve runtime dependencies, so Walkz will keep it behind
+  `executeCommand` and `terminateProcessTree`.
 
-Windows `.cmd` resolution and quoting need a focused spike before the runner contract is
-fixed. We will not add Execa automatically. First we will prove whether the required
-behavior can be implemented safely with Node's standard library.
+The new version changes the earlier standard-library-first decision. Walkz will use
+Execa for Milestone 1, but it will still test child and grandchild cleanup directly and
+will never describe the local runner as a sandbox.
 
 ## lint-staged: parse Git output without guessing filenames
 
@@ -95,10 +113,27 @@ will not salvage arbitrary text around JSON, downgrade an invented location into
 general comment, or silently ignore lockfiles and generated files. Those cases affect
 coverage and may require stricter handling.
 
+## ReviewGate: compare deterministic policy boundaries
+
+We inspected <https://github.com/LVTD-LLC/reviewgate> at
+`87aa4396de6d670edba731ca8215e139f03cf167`.
+
+- Keep model confidence separate from deterministic blocking disposition.
+- Bind a result to an exact head commit.
+- Treat provider and parse failures as inconclusive.
+- Keep forked content, repository instructions, and model text outside authority.
+
+ReviewGate is a useful comparator, but it is new, written in Rust, and deliberately
+does not execute PR code. Walkz will not adopt it. Its policy split supports the
+existing design, while base/head execution remains Walkz's differentiator.
+
 ## Decisions carried into Walkz
 
 - Keep the CLI entry point thin and the engine independent from terminal output.
-- Use NUL-delimited Git output and a normalized changed-line index.
+- Parse bounded patches with `diff`, then build a normalized changed-line index.
+- Use NUL-delimited Git output for machine-readable file and rename records.
+- Use Execa behind the runner boundary with `shell: false` and best-effort descendant
+  termination.
 - Validate configuration, provider output, and stored result shapes with Zod.
 - Store commands as executable and argument arrays. Never evaluate repository strings
   through a shell.
