@@ -5,7 +5,13 @@
       "path": "./packages/contracts"
     },
     {
+      "path": "./packages/git"
+    },
+    {
       "path": "./packages/sandbox"
+    },
+    {
+      "path": "./apps/cli"
     }
   ]
 }

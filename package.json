@@ -8,6 +8,7 @@
     "node": ">=24"
   },
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "scripts": {
@@ -15,7 +16,8 @@
     "test": "vitest run",
     "test:types": "tsc -p tsconfig.test.json --noEmit --pretty false",
     "typecheck": "npm run build && npm run test:types",
-    "verify": "npm run typecheck && npm test"
+    "verify": "npm run typecheck && npm test",
+    "walkz": "node apps/cli/dist/bin.js"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

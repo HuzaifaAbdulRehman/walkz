@@ -1,5 +1,5 @@
 {
-  "name": "@walkz/contracts",
+  "name": "@walkz/git",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,5 @@
   },
   "files": [
     "dist"
-  ],
-  "dependencies": {
-    "zod": "4.5.4"
-  }
+  ]
 }

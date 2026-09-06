@@ -41,3 +41,33 @@ export interface CommandExecutionResult {
   termination: CommandTermination;
   errorMessage?: string;
 }
+
+export {
+  approvedCommandSchema,
+  createDefaultWalkzConfig,
+  evidenceLevelSchema,
+  mergeCliOverrides,
+  parseWalkzConfig,
+  repositoryConfigSchema,
+} from './config.js';
+
+export type {
+  ApprovedCommand,
+  EvidenceLevel,
+  RepositoryConfig,
+  WalkzCliOverrides,
+} from './config.js';
+
+export {
+  modelFindingSchema,
+  modelReviewResponseSchema,
+  parseModelReviewResponse,
+  reviewRequestSchema,
+  validateReviewRequest,
+} from './review.js';
+
+export type {
+  ModelFinding,
+  ModelReviewResponse,
+  ReviewRequest,
+} from './review.js';

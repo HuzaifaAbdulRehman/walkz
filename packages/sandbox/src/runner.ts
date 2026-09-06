@@ -64,6 +64,12 @@ export interface TerminableProcess {
   kill(signal?: NodeJS.Signals | number): boolean;
 }
 
+export interface CommandAvailability {
+  status: 'available' | 'missing' | 'unsafe';
+  resolvedExecutable?: string;
+  errorMessage?: string;
+}
+
 interface RawCapture {
   buffer: Buffer;
   originalBytes: number;
@@ -333,6 +339,27 @@ async function prepareCommand(
     executable: await resolveExecutable(spec.executable, environment, cwd),
     secrets,
   };
+}
+
+export async function checkCommandAvailability(
+  spec: CommandSpec,
+  options: Pick<ExecuteCommandOptions, 'parentEnvironment'> = {},
+): Promise<CommandAvailability> {
+  try {
+    const prepared = await prepareCommand(
+      spec,
+      options.parentEnvironment ?? process.env,
+    );
+    return {
+      status: 'available',
+      resolvedExecutable: prepared.executable,
+    };
+  } catch (error) {
+    return {
+      status: error instanceof CommandSpawnError ? 'missing' : 'unsafe',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 async function captureStream(
