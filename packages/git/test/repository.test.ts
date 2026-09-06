@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -30,7 +30,7 @@ describe('locateRepositoryRoot', () => {
     await mkdir(join(root, '.git'));
     await mkdir(nested, { recursive: true });
 
-    expect(await locateRepositoryRoot(nested)).toBe(root);
+    expect(await locateRepositoryRoot(nested)).toBe(await realpath(root));
   });
 
   it('accepts a worktree .git file', async () => {
@@ -40,7 +40,7 @@ describe('locateRepositoryRoot', () => {
       'gitdir: ../main/.git/worktrees/example\n',
     );
 
-    expect(await locateRepositoryRoot(root)).toBe(root);
+    expect(await locateRepositoryRoot(root)).toBe(await realpath(root));
   });
 
   it('fails clearly outside a repository', async () => {
