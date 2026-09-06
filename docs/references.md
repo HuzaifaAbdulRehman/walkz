@@ -107,6 +107,7 @@ coverage and may require stricter handling.
 - Build our own small vertical slice. Do not import a reference project's provider,
   plugin, or hosting architecture.
 
-Six repositories cover the current questions. Add another reference only when a new
-implementation question cannot be answered by the platform documentation or focused
-tests.
+Six repositories answer the current questions, but there is no fixed ceiling. When a
+new question appears, search broadly and inspect as many relevant sources as needed.
+Clone a repository when local source search would help, then record its exact commit
+and useful decisions here.
