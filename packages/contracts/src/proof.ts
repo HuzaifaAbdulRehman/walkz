@@ -1,7 +1,13 @@
 import { z } from 'zod';
 
-const sha1Schema = z.string().regex(/^[a-f0-9]{40}$/i);
-const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
+const sha1Schema = z
+  .string()
+  .regex(/^[a-f0-9]{40}$/i)
+  .transform((value) => value.toLowerCase());
+const sha256Schema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/i)
+  .transform((value) => value.toLowerCase());
 const noControlString = z
   .string()
   .refine((value) => !/[\u0000-\u001f\u007f]/.test(value), {
@@ -84,7 +90,18 @@ export const proofPlanSchema = z
     containerImage: noControlString
       .trim()
       .max(512)
-      .regex(/^[^\s@]+@sha256:[a-f0-9]{64}$/i),
+      .regex(/^[^\s@]+@sha256:[a-f0-9]{64}$/i)
+      .transform(
+        (value) => value.slice(0, -64) + value.slice(-64).toLowerCase(),
+      ),
+    isolation: z
+      .object({
+        network: z.literal('none'),
+        readOnlyRootFilesystem: z.literal(true),
+        dropCapabilities: z.literal('all'),
+        noNewPrivileges: z.literal(true),
+      })
+      .strict(),
     command: proofCommandSchema,
     commandDigest: sha256Schema,
     files: z.array(proofFileSchema).max(16),
@@ -133,6 +150,8 @@ export const sanitizedProofOutputSchema = z
 
 export const proofExecutionResultSchema = z
   .object({
+    planDigest: sha256Schema,
+    commandDigest: sha256Schema,
     revision: z.enum(['base', 'head']),
     sha: sha1Schema,
     outcome: z.enum([

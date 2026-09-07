@@ -19,6 +19,22 @@ export type {
   BuildReviewPromptOptions,
   BuiltReviewPrompt,
 } from './prompt.js';
+export {
+  allocateProofBudget,
+  createProofPlan,
+  digestProofCommand,
+  fingerprintProofPlan,
+  verifyProofPlan,
+} from './proof-plan.js';
+export type {
+  AllocateProofBudgetOptions,
+  CreateProofPlanInput,
+  ProofBudget,
+  ProofBudgetAllocation,
+  ProofBudgetExhaustionReason,
+  ProofFileInput,
+  ProofPlanAuthorization,
+} from './proof-plan.js';
 export { runLocalReviewPipeline } from './pipeline.js';
 export type {
   FindingRejection,

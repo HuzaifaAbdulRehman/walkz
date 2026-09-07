@@ -15,6 +15,12 @@ function plan(): unknown {
     baseSha: '1'.repeat(40),
     headSha: '2'.repeat(40),
     containerImage: 'node:24@sha256:' + '3'.repeat(64),
+    isolation: {
+      network: 'none',
+      readOnlyRootFilesystem: true,
+      dropCapabilities: 'all',
+      noNewPrivileges: true,
+    },
     command: {
       executable: 'node',
       args: ['.walkz-proof/reproducer.mjs'],
@@ -93,6 +99,15 @@ describe('proof plan contracts', () => {
     expect(() => parseProofPlan(input)).toThrow();
   });
 
+  it('does not permit weaker isolation settings', () => {
+    const input = plan() as ReturnType<typeof plan> & {
+      isolation: { network: string };
+    };
+    input.isolation.network = 'bridge';
+
+    expect(() => parseProofPlan(input)).toThrow();
+  });
+
   it('caps every resource dimension', () => {
     const input = plan() as ReturnType<typeof plan> & {
       limits: { pidsLimit: number };
@@ -114,6 +129,8 @@ describe('proof execution contracts', () => {
 
     expect(
       parseProofExecutionResult({
+        planDigest: '6'.repeat(64),
+        commandDigest: '4'.repeat(64),
         revision: 'head',
         sha: '2'.repeat(40),
         outcome: 'failed',
@@ -139,6 +156,8 @@ describe('proof execution contracts', () => {
 
     expect(() =>
       parseProofExecutionResult({
+        planDigest: '6'.repeat(64),
+        commandDigest: '4'.repeat(64),
         revision: 'base',
         sha: '1'.repeat(40),
         outcome: 'passed',
@@ -162,6 +181,8 @@ describe('proof execution contracts', () => {
 
     expect(() =>
       parseProofExecutionResult({
+        planDigest: '6'.repeat(64),
+        commandDigest: '4'.repeat(64),
         revision: 'head',
         sha: '2'.repeat(40),
         outcome: 'failed',
