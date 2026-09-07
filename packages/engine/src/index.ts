@@ -27,6 +27,7 @@ export {
   verifyProofPlan,
 } from './proof-plan.js';
 export { runProofPlanInContainers } from './proof-execution.js';
+export { assessCounterfactualProof } from './proof-evidence.js';
 export type {
   AllocateProofBudgetOptions,
   CreateProofPlanInput,
@@ -37,6 +38,12 @@ export type {
   ProofPlanAuthorization,
 } from './proof-plan.js';
 export type { RunProofPlanInContainersOptions } from './proof-execution.js';
+export type {
+  CounterfactualProofAssessment,
+  CounterfactualProofClassification,
+  CounterfactualProofPairInput,
+  CounterfactualProofReason,
+} from './proof-evidence.js';
 export { runLocalReviewPipeline } from './pipeline.js';
 export type {
   FindingRejection,

@@ -89,7 +89,10 @@ function attachDeterministicSupport(
     evidenceLevel: 'SUPPORTED',
     evidence: supportingChecks.map((check) => ({
       kind: 'deterministic_check',
+      planDigest: null,
       commandDigest: commandDigest(check),
+      baseSha: null,
+      headSha: null,
       baseOutcome: null,
       headOutcome: check.execution.outcome,
       baseExitCode: null,

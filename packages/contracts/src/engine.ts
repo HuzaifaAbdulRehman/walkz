@@ -44,7 +44,10 @@ export type EvidenceKind = 'deterministic_check' | 'counterfactual_proof';
 
 export interface Evidence {
   kind: EvidenceKind;
+  planDigest: string | null;
   commandDigest: string;
+  baseSha: string | null;
+  headSha: string | null;
   baseOutcome: string | null;
   headOutcome: string;
   baseExitCode: number | null;
