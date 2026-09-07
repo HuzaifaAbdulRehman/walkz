@@ -26,8 +26,14 @@ export {
   fingerprintProofPlan,
   verifyProofPlan,
 } from './proof-plan.js';
-export { runProofPlanInContainers } from './proof-execution.js';
-export { assessCounterfactualProof } from './proof-evidence.js';
+export {
+  runAndAssessCounterfactualProof,
+  runProofPlanInContainers,
+} from './proof-execution.js';
+export {
+  assessCounterfactualProof,
+  createIncompleteCounterfactualProofAssessment,
+} from './proof-evidence.js';
 export type {
   AllocateProofBudgetOptions,
   CreateProofPlanInput,
@@ -37,7 +43,10 @@ export type {
   ProofFileInput,
   ProofPlanAuthorization,
 } from './proof-plan.js';
-export type { RunProofPlanInContainersOptions } from './proof-execution.js';
+export type {
+  CounterfactualProofRun,
+  RunProofPlanInContainersOptions,
+} from './proof-execution.js';
 export type {
   CounterfactualProofAssessment,
   CounterfactualProofClassification,

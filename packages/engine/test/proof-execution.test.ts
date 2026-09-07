@@ -19,6 +19,7 @@ import {
   createProofPlan,
   digestProofCommand,
   fingerprintProofPlan,
+  runAndAssessCounterfactualProof,
   runProofPlanInContainers,
   type ProofBudget,
 } from '../src/index.js';
@@ -61,10 +62,10 @@ function output(text = ''): CapturedOutput {
   };
 }
 
-function execution(text = ''): CommandExecutionResult {
+function execution(text = '', exitCode = 0): CommandExecutionResult {
   return {
-    outcome: 'succeeded',
-    exitCode: 0,
+    outcome: exitCode === 0 ? 'succeeded' : 'failed',
+    exitCode,
     signal: null,
     durationMs: 10,
     stdout: output(text),
@@ -256,5 +257,127 @@ describe('runProofPlanInContainers', () => {
       }),
     ).rejects.toThrow('has not been approved');
     await expect(readdir(temp)).resolves.toEqual([]);
+  });
+});
+
+describe('runAndAssessCounterfactualProof', () => {
+  it('feeds an exact base-pass and head-fail pair into verified evidence', async () => {
+    const repository = await fixture();
+    await repository.write('value.txt', 'base\n');
+    const baseSha = await repository.commitAll('base');
+    await repository.write('value.txt', 'head\n');
+    const headSha = await repository.commitAll('head');
+    const temp = await temporaryRoot();
+    const finding = {
+      fingerprint: 'a'.repeat(64),
+      category: 'correctness' as const,
+      severity: 'high' as const,
+      file: 'value.txt',
+      line: 1,
+      claim: 'The change regresses the value.',
+      failureMechanism: 'The head revision fails the reproducer.',
+      suggestedProof: 'Run the reproducer.',
+      lifecycleStatus: 'unverified' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+      advisoryConfidence: 0.9,
+      evidence: [],
+      dismissal: null,
+      fix: null,
+    };
+    const proofPlan = createProofPlan(
+      {
+        runId: 'run-1',
+        findingFingerprint: finding.fingerprint,
+        baseSha,
+        headSha,
+        containerImage: 'node:24-alpine@sha256:' + '3'.repeat(64),
+        command,
+        limits,
+      },
+      authorization,
+      budget,
+    );
+    const executor: DockerCommandExecutor = async (spec) => {
+      if (spec.args[0] !== 'run') {
+        return execution();
+      }
+      return spec.args[2]!.includes('-base-')
+        ? execution('base passes\n')
+        : execution('head fails\n', 1);
+    };
+
+    const result = await runAndAssessCounterfactualProof(finding, proofPlan, {
+      repositoryRoot: repository.root,
+      authorization,
+      budget,
+      workspaceLimits: { maxFiles: 100, maxBytes: 1024 * 1_024 },
+      temporaryRoot: temp,
+      docker: {
+        executor,
+        containerNameFactory: (revision) =>
+          'walkz-proof-' + revision + '-fixed',
+        containerUser: '1000:1000',
+      },
+    });
+
+    expect(result.execution).toMatchObject({
+      base: { outcome: 'passed', sha: baseSha },
+      head: { outcome: 'failed', sha: headSha },
+    });
+    expect(result.assessment).toMatchObject({
+      classification: 'verified',
+      proofStatus: 'complete',
+      finding: { evidenceLevel: 'VERIFIED' },
+      evidence: { planDigest: fingerprintProofPlan(proofPlan) },
+    });
+  });
+
+  it('returns incomplete evidence when the proof cannot be materialized', async () => {
+    const proofPlan = createProofPlan(
+      {
+        runId: 'run-1',
+        findingFingerprint: 'a'.repeat(64),
+        baseSha: '1'.repeat(40),
+        headSha: '2'.repeat(40),
+        containerImage: 'node:24-alpine@sha256:' + '3'.repeat(64),
+        command,
+        limits,
+      },
+      authorization,
+      budget,
+    );
+    const finding = {
+      fingerprint: 'a'.repeat(64),
+      category: 'correctness' as const,
+      severity: 'high' as const,
+      file: 'value.txt',
+      line: 1,
+      claim: 'The change regresses the value.',
+      failureMechanism: 'The head revision fails the reproducer.',
+      suggestedProof: 'Run the reproducer.',
+      lifecycleStatus: 'unverified' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+      advisoryConfidence: 0.9,
+      evidence: [],
+      dismissal: null,
+      fix: null,
+    };
+
+    const result = await runAndAssessCounterfactualProof(finding, proofPlan, {
+      repositoryRoot: 'not-a-repository',
+      authorization,
+      budget,
+      workspaceLimits: { maxFiles: 100, maxBytes: 1024 * 1_024 },
+    });
+
+    expect(result).toMatchObject({
+      execution: null,
+      assessment: {
+        classification: 'incomplete',
+        proofStatus: 'incomplete',
+        reason: 'execution_incomplete',
+        evidence: null,
+      },
+    });
   });
 });

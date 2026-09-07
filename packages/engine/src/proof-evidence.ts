@@ -136,6 +136,18 @@ function invalidAssessment(finding: Finding): CounterfactualProofAssessment {
   };
 }
 
+export function createIncompleteCounterfactualProofAssessment(
+  finding: Finding,
+): CounterfactualProofAssessment {
+  return {
+    classification: 'incomplete',
+    proofStatus: 'incomplete',
+    reason: 'execution_incomplete',
+    finding,
+    evidence: null,
+  };
+}
+
 export function assessCounterfactualProof(
   finding: Finding,
   planInput: unknown,
