@@ -104,14 +104,18 @@ when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is exact proof workspace materialization. Huzaifa owns every gate.
+The next gate is locked container execution. Huzaifa owns every gate.
 
 - Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
   Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
 - Passed, during: proof contracts and planning passed 218 tests in normal and shuffled
   order. The authorization test failed when its gate was deliberately disabled.
-- Ready, during: exact base and head workspaces must leave the developer's dirty tree
-  unchanged, reject unsafe links and paths, and clean up on every terminal path.
+- Passed, during: exact base and head workspaces leave the developer's dirty tree
+  unchanged, preserve committed bytes, reject unsafe links and paths, and clean up
+  after success, failure, or cancellation. The full suite passed 236 tests, and the
+  cleanup test failed when cleanup was deliberately disabled.
+- Ready, during: the same pinned image and command must run for base and head with no
+  runtime network or secrets, bounded resources, timeout handling, and process cleanup.
 - Planned, release: Milestone 2 must produce one `VERIFIED` finding from identical
   base/head execution and pass from a clean clone on Windows and Ubuntu.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz

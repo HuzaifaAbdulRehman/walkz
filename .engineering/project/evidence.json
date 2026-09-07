@@ -5,7 +5,7 @@
   "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-07T14:58:22Z",
+  "refreshedAt": "2026-09-07T15:41:35Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -127,6 +127,21 @@
         "run-m2-proof-focused",
         "run-m2-authorization-mutation"
       ]
+    },
+    {
+      "id": "claim-exact-proof-workspaces",
+      "text": "Walkz can reconstruct exact base and head trees from Git objects without changing the developer's checkout, applying checkout filters, or leaving proof data behind.",
+      "status": "verified",
+      "sourceIds": [
+        "source-git-attributes",
+        "source-git-cat-file"
+      ],
+      "runIds": [
+        "run-m2-workspace-focused",
+        "run-m2-workspace-cleanup-mutation",
+        "run-m2-workspace-full-tests",
+        "run-m2-workspace-shuffled-tests"
+      ]
     }
   ],
   "sources": [
@@ -241,6 +256,20 @@
       "url": "https://github.com/sindresorhus/execa/blob/8017b279e19347efaf2587711c2d57dbd4330740/docs/termination.md",
       "accessedAt": "2026-09-06T20:44:48Z",
       "decisionImpact": "Provides maintained cross-platform descendant termination while documenting its best-effort limits."
+    },
+    {
+      "id": "source-git-attributes",
+      "title": "Git attributes documentation",
+      "url": "https://git-scm.com/docs/gitattributes",
+      "accessedAt": "2026-09-07T15:41:35Z",
+      "decisionImpact": "Shows that checkout can apply attribute-driven conversions and smudge filters, which proof materialization must avoid."
+    },
+    {
+      "id": "source-git-cat-file",
+      "title": "Git cat-file documentation",
+      "url": "https://git-scm.com/docs/git-cat-file",
+      "accessedAt": "2026-09-07T15:41:35Z",
+      "decisionImpact": "Defines the batch protocol used to read exact object bytes through one bounded Git process."
     }
   ],
   "repositories": [
@@ -479,6 +508,15 @@
         "claim-proof-plan-authority",
         "claim-models-are-advisory"
       ]
+    },
+    {
+      "id": "decision-materialize-git-objects",
+      "status": "accepted",
+      "text": "Build proof workspaces from bounded Git tree and object reads instead of checkout operations, then reject unsupported entries and remove every temporary workspace.",
+      "claimIds": [
+        "claim-exact-proof-workspaces",
+        "claim-git-metadata-trust"
+      ]
     }
   ],
   "runs": [
@@ -614,6 +652,55 @@
       "exitCode": 1,
       "summary": "The scan did not run because Semgrep is not installed. No dependency was added for this optional local scanner.",
       "ranAt": "2026-09-07T14:56:15Z"
+    },
+    {
+      "id": "run-m2-workspace-focused",
+      "command": "npm exec vitest run packages/git/test/process.test.ts packages/git/test/proof-workspace.test.ts -- --reporter=dot",
+      "exitCode": 0,
+      "summary": "The two workspace test files passed all 18 bounded-input, materialization, path, limit, cancellation, and cleanup tests.",
+      "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-workspace-cleanup-mutation",
+      "command": "npm exec vitest run packages/git/test/proof-workspace.test.ts after temporarily disabling proof-root cleanup",
+      "exitCode": 1,
+      "summary": "The cleanup assertion failed and exposed the retained proof directory. Cleanup was restored immediately and the test passed again.",
+      "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-workspace-full-tests",
+      "command": "npm run verify",
+      "exitCode": 0,
+      "summary": "The build, typecheck, and all 26 test files with 236 tests passed after workspace materialization was added.",
+      "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-workspace-shuffled-tests",
+      "command": "npm exec vitest run -- --sequence.shuffle --sequence.seed=7092027 --reporter=dot",
+      "exitCode": 0,
+      "summary": "All 26 test files and 236 tests passed in shuffled order with seed 7092027.",
+      "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-workspace-playbook-hook",
+      "command": "node D:/Programming/Projects/engineering-playbook/hooks/typecheck.mjs",
+      "exitCode": 0,
+      "summary": "The playbook typecheck hook passed after the workspace implementation review.",
+      "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-workspace-gitleaks",
+      "command": "gitleaks dir --no-banner --redact --exit-code 1 .",
+      "exitCode": 0,
+      "summary": "Gitleaks found no secrets in the proof-workspace checkpoint.",
+      "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-workspace-osv",
+      "command": "osv-scanner scan source --lockfile=package-lock.json",
+      "exitCode": 0,
+      "summary": "OSV-Scanner found no known issues in the locked dependencies.",
+      "ranAt": "2026-09-07T15:41:35Z"
     }
   ],
   "gates": [
@@ -679,12 +766,35 @@
       "stage": "during",
       "trigger": "Exact base and head proof workspaces are implemented.",
       "requiredEvidence": "Dirty-tree preservation, exact SHA binding, path and link rejection, unusual-name coverage, paths with spaces, cancellation, and cleanup tests.",
-      "status": "ready",
+      "status": "passed",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
       "claimIds": [
         "claim-git-metadata-trust",
-        "claim-proof-plan-authority"
+        "claim-proof-plan-authority",
+        "claim-exact-proof-workspaces"
+      ],
+      "runIds": [
+        "run-m2-workspace-focused",
+        "run-m2-workspace-cleanup-mutation",
+        "run-m2-workspace-full-tests",
+        "run-m2-workspace-shuffled-tests",
+        "run-m2-workspace-playbook-hook",
+        "run-m2-workspace-gitleaks",
+        "run-m2-workspace-osv"
+      ]
+    },
+    {
+      "id": "gate-proof-containers",
+      "stage": "during",
+      "trigger": "Locked container execution is implemented for proof plans.",
+      "requiredEvidence": "The same pinned image and approved command run for base and head after separate secret-free dependency preparation, with runtime networking disabled, no inherited secrets, bounded CPU, memory, disk, output and process count, timeout handling, and cleanup.",
+      "status": "ready",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-proof-plan-authority",
+        "claim-exact-proof-workspaces"
       ],
       "runIds": []
     },
