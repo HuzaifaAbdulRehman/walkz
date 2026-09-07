@@ -90,3 +90,36 @@ export interface LocalReviewRun {
   startedAt: string;
   completedAt: string | null;
 }
+
+export type RequiredStepStatus = 'complete' | 'incomplete' | 'error';
+export type OptionalStepStatus = 'complete' | 'not_requested' | 'incomplete';
+
+export type VerdictReason =
+  | 'context_error'
+  | 'checks_error'
+  | 'blocking_verified_finding'
+  | 'blocking_supported_finding'
+  | 'context_incomplete'
+  | 'checks_incomplete'
+  | 'provider_incomplete'
+  | 'proof_incomplete'
+  | 'human_judgment_required'
+  | 'no_blocking_evidence';
+
+export interface LocalVerdictInput {
+  contextStatus: RequiredStepStatus;
+  checkStatus: RequiredStepStatus;
+  providerStatus: OptionalStepStatus;
+  proofStatus: OptionalStepStatus;
+  findings: readonly Finding[];
+  blockingEvidenceLevels: readonly Extract<
+    EvidenceLevel,
+    'VERIFIED' | 'SUPPORTED'
+  >[];
+  humanJudgmentRequired: boolean;
+}
+
+export interface LocalVerdictDecision {
+  verdict: ReviewVerdict;
+  reasons: VerdictReason[];
+}

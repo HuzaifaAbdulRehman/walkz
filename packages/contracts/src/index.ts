@@ -91,6 +91,11 @@ export type {
   FindingLifecycleStatus,
   LocalReviewBudget,
   LocalReviewRun,
+  LocalVerdictDecision,
+  LocalVerdictInput,
+  OptionalStepStatus,
+  RequiredStepStatus,
   ReviewLifecycleStatus,
   ReviewVerdict,
+  VerdictReason,
 } from './engine.js';

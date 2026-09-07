@@ -7,3 +7,4 @@ export type {
   FindingLocationFailure,
   FindingLocationValidation,
 } from './finding.js';
+export { adjudicateLocalVerdict } from './verdict.js';
