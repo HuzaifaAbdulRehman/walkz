@@ -19,8 +19,14 @@ export {
   GROQ_STRICT_MODEL_PREFERENCE,
   requestStructuredReview,
   validateProviderAccess,
+  WALKZ_REVIEW_SCHEMA_VERSION,
 } from './groq.js';
 export type {
   GroqAccessOptions,
   GroqProviderOptions,
 } from './groq.js';
+export { createMockProvider } from './mock.js';
+export type {
+  MockProviderOptions,
+  MockProviderOutcome,
+} from './mock.js';

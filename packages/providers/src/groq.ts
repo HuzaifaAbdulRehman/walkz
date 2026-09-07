@@ -23,7 +23,7 @@ import {
 import { calculateRetryDelay } from './retry.js';
 
 const GROQ_DATA_CONTROLS_URL = 'https://console.groq.com/settings/data-controls';
-const REVIEW_SCHEMA_VERSION = 'walkz-review-v1';
+export const WALKZ_REVIEW_SCHEMA_VERSION = 'walkz-review-v1';
 const GROQ_PRIVACY_NOTICE =
   'Walkz sends bounded repository context to Groq for review. Groq says inference inputs and outputs are not retained by default, but temporary logging may apply unless Zero Data Retention is enabled. Check Groq Data Controls before reviewing private code.';
 
@@ -383,7 +383,7 @@ function createRequestBody(request: StructuredReviewRequest): string {
     response_format: {
       type: 'json_schema',
       json_schema: {
-        name: REVIEW_SCHEMA_VERSION.replaceAll('-', '_'),
+        name: WALKZ_REVIEW_SCHEMA_VERSION.replaceAll('-', '_'),
         strict: true,
         schema: GROQ_REVIEW_JSON_SCHEMA,
       },
@@ -443,7 +443,7 @@ async function requestStructuredReviewOnce(
     provider: 'groq',
     model: envelope.model,
     promptVersion: request.promptVersion,
-    schemaVersion: REVIEW_SCHEMA_VERSION,
+    schemaVersion: WALKZ_REVIEW_SCHEMA_VERSION,
     review: parseStructuredReview(choice.message.content),
     usage: {
       promptTokens: envelope.usage.prompt_tokens,
