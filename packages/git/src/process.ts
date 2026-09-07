@@ -47,6 +47,7 @@ export class GitOutputLimitError extends GitCommandError {
 }
 
 export interface RunGitOptions {
+  input?: Uint8Array | undefined;
   maxOutputBytes?: number;
   signal?: AbortSignal | undefined;
   timeoutMs?: number;
@@ -139,6 +140,12 @@ export async function runGitBuffer(
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000) {
     throw new GitCommandError('Git timeout must be between 1 and 120000 milliseconds.');
   }
+  if (
+    options.input !== undefined &&
+    options.input.byteLength > 2 * 1_024 * 1_024
+  ) {
+    throw new GitCommandError('Git input exceeded its configured byte limit.');
+  }
 
   const cwd = await realpath(repositoryRoot);
   if (!(await stat(cwd)).isDirectory()) {
@@ -158,10 +165,12 @@ export async function runGitBuffer(
         cwd,
         env: environment,
         shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       },
     );
+    child.stdin.on('error', () => {});
+    child.stdin.end(options.input);
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let stdoutBytes = 0;
