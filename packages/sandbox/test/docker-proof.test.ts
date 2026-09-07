@@ -178,11 +178,15 @@ describe('executeProofInContainer', () => {
         '1.000000000',
         '--user',
         '1000:1000',
+        '--log-driver',
+        'none',
+        '--entrypoint',
+        'node',
+        'NODE_OPTIONS=',
       ]),
     );
-    expect(run.args.slice(-3)).toEqual([
+    expect(run.args.slice(-2)).toEqual([
       plan().containerImage,
-      'node',
       '.walkz-proof/reproducer.mjs',
     ]);
     expect(JSON.stringify(run.args)).not.toContain('must-not-reach-container');
@@ -251,7 +255,27 @@ describe('executeProofInContainer', () => {
     });
 
     expect(result.outcome).toBe('infrastructure_error');
+    expect(result.stderr.summary).toContain('cleanup could not be verified');
     await expect(readdir(target.path)).resolves.toEqual([]);
+  });
+
+  it('bounds evidence summaries below the execution capture limit', async () => {
+    const target = await workspace('base');
+    const executor: DockerCommandExecutor = async (spec) =>
+      spec.args[0] === 'run'
+        ? { ...execution(), stdout: output('x'.repeat(20_000)) }
+        : emptyExecution();
+
+    const result = await executeProofInContainer(plan(), SHA256, target, {
+      executor,
+      containerNameFactory: () => 'walkz-proof-base-fixed',
+      containerUser: '1000:1000',
+      now: () => FIXED_TIME,
+    });
+
+    expect(Buffer.byteLength(result.stdout.summary)).toBeLessThanOrEqual(8_192);
+    expect(result.stdout.originalBytes).toBe(20_000);
+    expect(result.stdout.truncated).toBe(true);
   });
 
   it('does not start Docker when cancellation already happened', async () => {

@@ -13,6 +13,8 @@ const noControlString = z
   .refine((value) => !/[\u0000-\u001f\u007f]/.test(value), {
     message: 'Control characters are not allowed.',
   });
+const windowsReservedName =
+  /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 
 function isSafeContainerPath(value: string): boolean {
   if (value.startsWith('/') || value.includes('\\')) {
@@ -24,6 +26,16 @@ function isSafeContainerPath(value: string): boolean {
   );
 }
 
+function isPortableHostPath(value: string): boolean {
+  return value.split('/').every(
+    (segment) =>
+      !segment.endsWith('.') &&
+      !segment.endsWith(' ') &&
+      !segment.includes(':') &&
+      !windowsReservedName.test(segment),
+  );
+}
+
 const proofFilePathSchema = noControlString
   .min(1)
   .max(1_024)
@@ -32,6 +44,9 @@ const proofFilePathSchema = noControlString
   })
   .refine((value) => value.startsWith('.walkz-proof/'), {
     message: 'Proof files must stay inside the reserved .walkz-proof directory.',
+  })
+  .refine(isPortableHostPath, {
+    message: 'Proof file paths must be portable across supported hosts.',
   });
 
 const proofWorkingDirectorySchema = noControlString
@@ -93,7 +108,7 @@ export const proofPlanSchema = z
     containerImage: noControlString
       .trim()
       .max(512)
-      .regex(/^[^\s@]+@sha256:[a-f0-9]{64}$/i)
+      .regex(/^(?!-)[^\s@]+@sha256:[a-f0-9]{64}$/i)
       .transform(
         (value) => value.slice(0, -64) + value.slice(-64).toLowerCase(),
       ),
@@ -123,10 +138,18 @@ export const proofPlanSchema = z
     const paths = new Set<string>();
     plan.files.forEach((file, index) => {
       const comparisonPath = file.path.toLowerCase();
-      if (paths.has(comparisonPath)) {
+      const collides =
+        paths.has(comparisonPath) ||
+        [...paths].some(
+          (path) =>
+            path.startsWith(comparisonPath + '/') ||
+            comparisonPath.startsWith(path + '/'),
+        );
+      if (collides) {
         context.addIssue({
           code: 'custom',
-          message: 'Proof file paths must be unique across platforms.',
+          message:
+            'Proof file paths must be unique and cannot be both a file and directory.',
           path: ['files', index, 'path'],
         });
       }

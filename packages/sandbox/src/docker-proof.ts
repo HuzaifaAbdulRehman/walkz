@@ -20,6 +20,7 @@ import {
 
 import {
   executeCommand,
+  truncateAndRedactOutput,
   type ExecuteCommandOptions,
 } from './runner.js';
 
@@ -28,6 +29,7 @@ const CONTAINER_NAME_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,62}$/;
 const PROOF_DIRECTORY = '.walkz-proof';
 const CONTAINER_WORKSPACE = '/workspace';
 const CLEANUP_TIMEOUT_MS = 15_000;
+const PROOF_SUMMARY_MAX_BYTES = 8_192;
 
 export interface DockerProofWorkspace {
   revision: 'base' | 'head';
@@ -168,6 +170,8 @@ export function buildDockerProofArguments(
     '--init',
     '--stop-timeout',
     '1',
+    '--log-driver',
+    'none',
     '--mount',
     'type=bind,source=' +
       safeMountSource(workspacePath) +
@@ -194,8 +198,27 @@ export function buildDockerProofArguments(
     'LC_ALL=C.UTF-8',
     '--env',
     'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-    plan.containerImage,
+    '--env',
+    'BASH_ENV=',
+    '--env',
+    'ENV=',
+    '--env',
+    'GIT_CONFIG_GLOBAL=/dev/null',
+    '--env',
+    'NODE_OPTIONS=',
+    '--env',
+    'NODE_PATH=',
+    '--env',
+    'NPM_CONFIG_USERCONFIG=/dev/null',
+    '--env',
+    'PERL5OPT=',
+    '--env',
+    'PYTHONPATH=',
+    '--env',
+    'RUBYOPT=',
+    '--entrypoint',
     plan.command.executable,
+    plan.containerImage,
     ...plan.command.args,
   ];
 }
@@ -277,11 +300,16 @@ function outputArtifacts(
 }
 
 function proofOutput(output: CapturedOutput) {
-  return {
-    summary: output.text,
+  const bounded = truncateAndRedactOutput(output.text, {
+    maxBytes: PROOF_SUMMARY_MAX_BYTES,
     originalBytes: output.originalBytes,
-    truncated: output.truncated,
-    redacted: output.redacted,
+    wasTruncated: output.truncated,
+  });
+  return {
+    summary: bounded.text,
+    originalBytes: bounded.originalBytes,
+    truncated: bounded.truncated,
+    redacted: bounded.redacted || output.redacted,
   };
 }
 
@@ -314,6 +342,15 @@ function createResult(
   now: () => Date,
   forceInfrastructureError = false,
 ): ProofExecutionResult {
+  const resultStderr = forceInfrastructureError
+    ? {
+        ...execution.stderr,
+        text:
+          execution.stderr.text +
+          (execution.stderr.text.length === 0 ? '' : '\n') +
+          'Proof container cleanup could not be verified.',
+      }
+    : execution.stderr;
   return parseProofExecutionResult({
     planDigest,
     commandDigest: plan.commandDigest,
@@ -325,7 +362,7 @@ function createResult(
     exitCode: execution.exitCode,
     durationMs: execution.durationMs,
     stdout: proofOutput(execution.stdout),
-    stderr: proofOutput(execution.stderr),
+    stderr: proofOutput(resultStderr),
     artifacts: outputArtifacts(execution.stdout, execution.stderr),
     recordedAt: now().toISOString(),
   });

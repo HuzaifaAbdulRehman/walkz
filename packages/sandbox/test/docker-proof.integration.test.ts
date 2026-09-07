@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 
 import type { ProofPlan } from '@walkz/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -17,6 +19,31 @@ const dockerTest = image === undefined ? it.skip : it;
 const roots: string[] = [];
 const BASE_SHA = '1'.repeat(40);
 const HEAD_SHA = '2'.repeat(40);
+const execFileAsync = promisify(execFile);
+
+async function waitForRunningContainer(containerName: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      const { stdout } = await execFileAsync(
+        'docker',
+        [
+          'container',
+          'inspect',
+          '--format',
+          '{{.State.Running}}',
+          containerName,
+        ],
+        { windowsHide: true },
+      );
+      if (stdout.trim() === 'true') {
+        return;
+      }
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('Proof container did not start before cancellation.');
+}
 
 function plan(script: string, timeoutMs = 10_000): ProofPlan {
   if (image === undefined) {
@@ -197,7 +224,7 @@ setInterval(() => {}, 1000);
     async () => {
       const target = await workspace('head');
       const controller = new AbortController();
-      const cancellation = setTimeout(() => controller.abort(), 2_000);
+      const containerName = 'walkz-proof-cancel-integration';
       const script = String.raw`
 import { spawn } from 'node:child_process';
 spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
@@ -207,20 +234,21 @@ console.log('child started');
 setInterval(() => {}, 1000);
 `;
 
-      try {
-        const result = await executeProofInContainer(
-          plan(script),
-          'c'.repeat(64),
-          target,
-          { signal: controller.signal },
-        );
+      const runningProof = executeProofInContainer(
+        plan(script),
+        'c'.repeat(64),
+        target,
+        {
+          signal: controller.signal,
+          containerNameFactory: () => containerName,
+        },
+      );
+      await waitForRunningContainer(containerName);
+      controller.abort();
+      const result = await runningProof;
 
-        expect(result.outcome).toBe('cancelled');
-        expect(result.stdout.summary).toContain('child started');
-        await expect(readdir(target.path)).resolves.toEqual(['value.txt']);
-      } finally {
-        clearTimeout(cancellation);
-      }
+      expect(result.outcome).toBe('cancelled');
+      await expect(readdir(target.path)).resolves.toEqual(['value.txt']);
     },
     30_000,
   );

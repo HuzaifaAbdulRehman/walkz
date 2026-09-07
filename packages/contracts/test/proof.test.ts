@@ -61,6 +61,9 @@ describe('proof plan contracts', () => {
     'nested/../outside.mjs',
     'windows\\outside.mjs',
     'src/reproducer.mjs',
+    '.walkz-proof/CON.txt',
+    '.walkz-proof/trailing.',
+    '.walkz-proof/stream:name',
   ])('rejects unsafe proof file path %s', (path) => {
     const input = plan() as ReturnType<typeof plan> & {
       files: Array<{ path: string }>;
@@ -79,8 +82,20 @@ describe('proof plan contracts', () => {
       path: '.WALKZ-PROOF/reproducer.mjs',
     });
 
+    expect(() => parseProofPlan(input)).toThrow('must be unique');
+  });
+
+  it('rejects proof file and directory prefix collisions', () => {
+    const input = plan() as ReturnType<typeof plan> & {
+      files: Array<Record<string, unknown>>;
+    };
+    input.files.push({
+      ...input.files[0],
+      path: '.walkz-proof/reproducer.mjs/nested',
+    });
+
     expect(() => parseProofPlan(input)).toThrow(
-      'unique across platforms',
+      'cannot be both a file and directory',
     );
   });
 
@@ -96,6 +111,13 @@ describe('proof plan contracts', () => {
   it('requires a digest-pinned container image', () => {
     const input = plan() as Record<string, unknown>;
     input.containerImage = 'node:24';
+
+    expect(() => parseProofPlan(input)).toThrow();
+  });
+
+  it('rejects an option-shaped container image', () => {
+    const input = plan() as Record<string, unknown>;
+    input.containerImage = '--help@sha256:' + '3'.repeat(64);
 
     expect(() => parseProofPlan(input)).toThrow();
   });
