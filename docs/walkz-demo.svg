@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480" viewBox="0 0 960 480" role="img" aria-labelledby="title description">
+  <title id="title">Walkz reports a supported regression</title>
+  <desc id="description">Terminal output showing a FIX verdict, complete coverage, a failed test, and a supported finding on a changed line.</desc>
+  <rect width="960" height="480" rx="18" fill="#101418"/>
+  <rect width="960" height="52" rx="18" fill="#202830"/>
+  <rect y="34" width="960" height="18" fill="#202830"/>
+  <circle cx="28" cy="26" r="7" fill="#ff6b6b"/>
+  <circle cx="52" cy="26" r="7" fill="#ffd166"/>
+  <circle cx="76" cy="26" r="7" fill="#5dd39e"/>
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="22" fill="#d7e0e8">
+    <text x="36" y="100" font-weight="700">Walkz review</text>
+    <text x="36" y="148">Verdict: <tspan fill="#ff7b72" font-weight="700">FIX</tspan></text>
+    <text x="36" y="190">Coverage: <tspan fill="#5dd39e">complete (1/1 files)</tspan></text>
+    <text x="36" y="250" font-weight="700">Checks</text>
+    <text x="60" y="290"><tspan fill="#ff7b72">FAIL</tspan><tspan dx="58">test</tspan></text>
+    <text x="36" y="350" font-weight="700">Findings</text>
+    <text x="60" y="390"><tspan fill="#ffd166">[SUPPORTED]</tspan><tspan dx="18">high src/value.mjs:1</tspan></text>
+    <text x="84" y="430" fill="#aebbc7">Zero crosses the wrong boundary.</text>
+  </g>
+</svg>
