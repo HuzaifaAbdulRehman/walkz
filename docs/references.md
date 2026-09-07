@@ -127,6 +127,29 @@ ReviewGate is a useful comparator, but it is new, written in Rust, and deliberat
 does not execute PR code. Walkz will not adopt it. Its policy split supports the
 existing design, while base/head execution remains Walkz's differentiator.
 
+## Groq: verify capabilities before sending code
+
+We checked Groq's official documentation on 7 September 2026.
+
+- The [models endpoint](https://console.groq.com/docs/models) reports which models are
+  active. Setup should query it instead of assuming a model ID still exists.
+- [Strict structured outputs](https://console.groq.com/docs/structured-outputs) require
+  every field and reject extra properties. The documented model list is an allowlist
+  that must be checked again when provider sources are refreshed.
+- Groq documents distinct [API errors](https://console.groq.com/docs/errors) for bad
+  credentials, forbidden access, rate limits, invalid requests, and server failures.
+  [Rate-limit headers](https://console.groq.com/docs/rate-limits) include `Retry-After`
+  on `429` responses.
+- Groq says inference inputs and outputs are not retained by default, but temporary
+  logging may apply. Its [data controls](https://console.groq.com/docs/your-data) explain
+  retention settings and Zero Data Retention.
+
+Walkz discovers models without sending repository content. A review uses native
+`fetch`, a bounded response body, one cancellation deadline, and one retry layer. It
+accepts only a clean strict-schema completion from the requested model. The CLI must
+show the privacy notice before private code is sent; that wiring belongs to the CLI
+phase.
+
 ## Decisions carried into Walkz
 
 - Keep the CLI entry point thin and the engine independent from terminal output.
