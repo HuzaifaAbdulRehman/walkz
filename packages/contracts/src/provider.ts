@@ -45,6 +45,8 @@ export interface StructuredReviewRequest {
 export interface StructuredReviewResult {
   provider: ProviderName;
   model: string;
+  promptVersion: string;
+  schemaVersion: string;
   review: ModelReviewResponse;
   usage: ProviderUsage;
   requestId: string | null;

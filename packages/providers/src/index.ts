@@ -14,8 +14,13 @@ export type {
 export { calculateRetryDelay } from './retry.js';
 export type { RetryDelayOptions } from './retry.js';
 export {
+  createGroqProvider,
   discoverGroqModels,
   GROQ_STRICT_MODEL_PREFERENCE,
+  requestStructuredReview,
   validateProviderAccess,
 } from './groq.js';
-export type { GroqAccessOptions } from './groq.js';
+export type {
+  GroqAccessOptions,
+  GroqProviderOptions,
+} from './groq.js';
