@@ -38,7 +38,7 @@ export class ProviderError extends Error implements ProviderFailure {
 export class ProviderHttpError extends Error {
   readonly status: number;
   readonly retryAfterMs: number | null;
-  readonly providerMessage: string | null;
+  readonly quotaExhausted: boolean;
 
   constructor(
     status: number,
@@ -49,7 +49,8 @@ export class ProviderHttpError extends Error {
     this.name = 'ProviderHttpError';
     this.status = status;
     this.retryAfterMs = retryAfterMs;
-    this.providerMessage = providerMessage;
+    this.quotaExhausted =
+      providerMessage !== null && /quota|billing|credit|spend/i.test(providerMessage);
   }
 }
 
@@ -57,6 +58,13 @@ export class ProviderTimeoutError extends Error {
   constructor() {
     super('Provider request timed out.');
     this.name = 'ProviderTimeoutError';
+  }
+}
+
+export class ProviderCancelledError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('The provider request was cancelled.', options);
+    this.name = 'ProviderCancelledError';
   }
 }
 
@@ -78,7 +86,6 @@ function normalizedFailure(
 }
 
 function classifyHttpError(error: ProviderHttpError): ProviderFailure {
-  const message = error.providerMessage?.toLowerCase() ?? '';
   if (error.status === 401) {
     return normalizedFailure(
       'authentication',
@@ -120,13 +127,12 @@ function classifyHttpError(error: ProviderHttpError): ProviderFailure {
     );
   }
   if (error.status === 429) {
-    const exhausted = /quota|billing|credit|spend/.test(message);
     return normalizedFailure(
-      exhausted ? 'quota_exhausted' : 'rate_limited',
-      exhausted
+      error.quotaExhausted ? 'quota_exhausted' : 'rate_limited',
+      error.quotaExhausted
         ? 'The provider quota is exhausted.'
         : 'The provider rate limit was reached.',
-      !exhausted,
+      !error.quotaExhausted,
       error.status,
       error.retryAfterMs,
     );
@@ -167,6 +173,13 @@ export function classifyProviderError(error: unknown): ProviderFailure {
       true,
     );
   }
+  if (error instanceof ProviderCancelledError) {
+    return normalizedFailure(
+      'cancelled',
+      'The provider request was cancelled.',
+      false,
+    );
+  }
   if (error instanceof DOMException && error.name === 'AbortError') {
     return normalizedFailure(
       'cancelled',
@@ -193,4 +206,14 @@ export function classifyProviderError(error: unknown): ProviderFailure {
     'The provider returned an unexpected failure.',
     false,
   );
+}
+
+export function toProviderError(error: unknown): ProviderError {
+  if (error instanceof ProviderError) {
+    return error;
+  }
+  const failure = classifyProviderError(error);
+  return error instanceof Error
+    ? new ProviderError(failure, { cause: error })
+    : new ProviderError(failure);
 }
