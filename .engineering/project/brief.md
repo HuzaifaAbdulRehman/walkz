@@ -127,8 +127,8 @@ The next gate is the Milestone 2 release check. Huzaifa owns every gate.
   caught the broken case, reported no false positives, verified one proof, and
   recorded no provider invocation. The test failed when its measured
   classification was deliberately removed.
-- Ready, release: Milestone 2 has passed a local Windows clean clone. The pushed
-  commit still needs Windows and Ubuntu CI before the release gate can pass.
+- Passed, release: Milestone 2 passed a local Windows clean clone and clean
+  Windows and Ubuntu CI for `9162717`.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
   with CodeRabbit or a composed baseline on precision, recall, latency, and decision
   usefulness.

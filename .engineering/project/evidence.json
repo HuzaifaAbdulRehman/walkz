@@ -5,7 +5,7 @@
   "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-07T18:08:55Z",
+  "refreshedAt": "2026-09-07T18:16:01Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -939,6 +939,13 @@
       "exitCode": 0,
       "summary": "OSV-Scanner found no known issues in 117 locked packages.",
       "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-release-ci",
+      "command": "gh run watch 34150786964 --repo HuzaifaAbdulRehman/walkz --exit-status",
+      "exitCode": 0,
+      "summary": "Windows and Ubuntu passed from clean GitHub runners for exact commit 9162717a86f64b6c6a4a2dd4935c0adea193153a.",
+      "ranAt": "2026-09-07T18:16:01Z"
     }
   ],
   "gates": [
@@ -1076,13 +1083,14 @@
       "stage": "release",
       "trigger": "All five Milestone 2 phases pass.",
       "requiredEvidence": "One identical reproducer passes on base, fails on head, creates VERIFIED evidence, cleans its data, and passes from a clean clone on Windows and Ubuntu.",
-      "status": "planned",
+      "status": "passed",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
       "claimIds": [
         "claim-proof-plan-authority",
         "claim-fixtures-are-not-outcomes",
-        "claim-golden-proof-measurement"
+        "claim-golden-proof-measurement",
+        "claim-locked-proof-containers"
       ],
       "runIds": [
         "run-m2-golden-focused",
@@ -1091,7 +1099,8 @@
         "run-m2-golden-shuffled-tests",
         "run-m2-golden-clean-clone",
         "run-m2-golden-gitleaks",
-        "run-m2-golden-osv"
+        "run-m2-golden-osv",
+        "run-m2-release-ci"
       ]
     },
     {
