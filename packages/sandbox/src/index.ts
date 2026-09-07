@@ -35,3 +35,10 @@ export type {
   ExecuteDockerProofOptions,
   ProofExecutionPair,
 } from './docker-proof.js';
+
+export { prepareProofImage } from './docker-preparation.js';
+export type {
+  DockerPreparationExecutor,
+  PrepareProofImageOptions,
+  ProofImagePreparationResult,
+} from './docker-preparation.js';
