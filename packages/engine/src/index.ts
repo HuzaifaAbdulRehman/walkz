@@ -26,6 +26,7 @@ export {
   fingerprintProofPlan,
   verifyProofPlan,
 } from './proof-plan.js';
+export { runProofPlanInContainers } from './proof-execution.js';
 export type {
   AllocateProofBudgetOptions,
   CreateProofPlanInput,
@@ -35,6 +36,7 @@ export type {
   ProofFileInput,
   ProofPlanAuthorization,
 } from './proof-plan.js';
+export type { RunProofPlanInContainersOptions } from './proof-execution.js';
 export { runLocalReviewPipeline } from './pipeline.js';
 export type {
   FindingRejection,
