@@ -23,3 +23,15 @@ export type {
   OutputSanitizationOptions,
   TerminableProcess,
 } from './runner.js';
+
+export {
+  buildDockerProofArguments,
+  executeProofInContainer,
+  executeProofPair,
+} from './docker-proof.js';
+export type {
+  DockerCommandExecutor,
+  DockerProofWorkspace,
+  ExecuteDockerProofOptions,
+  ProofExecutionPair,
+} from './docker-proof.js';
