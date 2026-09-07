@@ -8,6 +8,9 @@
       "path": "./packages/git"
     },
     {
+      "path": "./packages/providers"
+    },
+    {
       "path": "./packages/sandbox"
     },
     {

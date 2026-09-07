@@ -71,3 +71,15 @@ export type {
   ModelReviewResponse,
   ReviewRequest,
 } from './review.js';
+
+export type {
+  ProviderAccessResult,
+  ProviderAdapter,
+  ProviderModel,
+  ProviderName,
+  ProviderRateLimit,
+  ProviderRequestOptions,
+  ProviderUsage,
+  StructuredReviewRequest,
+  StructuredReviewResult,
+} from './provider.js';
