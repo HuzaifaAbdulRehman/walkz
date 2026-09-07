@@ -21,3 +21,9 @@ export type {
 
 export { runInit } from './init.js';
 export type { InitOptions, InitResult } from './init.js';
+
+export {
+  mapVerdictToExitCode,
+  renderJsonReport,
+  renderTerminalReport,
+} from './review-output.js';
