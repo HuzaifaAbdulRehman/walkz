@@ -83,3 +83,14 @@ export type {
   StructuredReviewRequest,
   StructuredReviewResult,
 } from './provider.js';
+
+export type {
+  Evidence,
+  EvidenceKind,
+  Finding,
+  FindingLifecycleStatus,
+  LocalReviewBudget,
+  LocalReviewRun,
+  ReviewLifecycleStatus,
+  ReviewVerdict,
+} from './engine.js';
