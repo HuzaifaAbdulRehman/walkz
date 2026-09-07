@@ -56,6 +56,7 @@ export type {
   ProofVerdictBinding,
 } from './proof-evidence.js';
 export { runLocalReviewPipeline } from './pipeline.js';
+export { evaluateGoldenProofs } from './golden-evaluation.js';
 export type {
   FindingRejection,
   FindingRejectionReason,
@@ -67,3 +68,7 @@ export type {
   ProviderReviewStep,
   ProviderStepFailureCode,
 } from './pipeline.js';
+export type {
+  GoldenProofEvaluation,
+  GoldenProofMetrics,
+} from './golden-evaluation.js';

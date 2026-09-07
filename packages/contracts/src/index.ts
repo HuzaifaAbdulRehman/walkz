@@ -146,3 +146,17 @@ export type {
   ProofResourceLimits,
   SanitizedProofOutput,
 } from './proof.js';
+
+export {
+  goldenProofClassificationSchema,
+  goldenProofExpectationSchema,
+  goldenProofRecordSchema,
+  goldenProofRecordsSchema,
+  parseGoldenProofRecords,
+} from './golden.js';
+
+export type {
+  GoldenProofClassification,
+  GoldenProofExpectation,
+  GoldenProofRecord,
+} from './golden.js';
