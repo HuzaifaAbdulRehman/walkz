@@ -840,6 +840,41 @@
       "exitCode": 1,
       "summary": "Semgrep remains unavailable locally. It was not added as a project dependency for this optional scan.",
       "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-evidence-focused",
+      "command": "WALKZ_DOCKER_TEST_IMAGE=node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf npm run typecheck; npm test -- --run packages/engine/test/proof-evidence.test.ts packages/engine/test/proof-execution.test.ts",
+      "exitCode": 0,
+      "summary": "The workspace build and test-file typecheck passed. Eighteen focused tests passed, including a real locked-container reproducer that passed on base, failed on head, and produced VERIFIED evidence.",
+      "ranAt": "2026-09-07T17:29:05Z"
+    },
+    {
+      "id": "run-m2-evidence-classifier-mutation",
+      "command": "Run the proof-evidence tests after temporarily treating base-pass and head-pass as verified.",
+      "exitCode": 1,
+      "summary": "The base-pass/head-fail test and equal-pass test failed. The correct classifier condition was restored immediately.",
+      "ranAt": "2026-09-07T17:29:58Z"
+    },
+    {
+      "id": "run-m2-evidence-shuffled-tests",
+      "command": "WALKZ_DOCKER_TEST_IMAGE=node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf npm test -- --sequence.shuffle --sequence.seed=4829031",
+      "exitCode": 0,
+      "summary": "All 31 test files and 278 tests passed in shuffled order with seed 4829031, including the Docker proof cases.",
+      "ranAt": "2026-09-07T17:31:54Z"
+    },
+    {
+      "id": "run-m2-evidence-gitleaks",
+      "command": "gitleaks detect --source . --no-banner",
+      "exitCode": 0,
+      "summary": "Gitleaks scanned 37 commits and found no secrets.",
+      "ranAt": "2026-09-07T17:31:19Z"
+    },
+    {
+      "id": "run-m2-evidence-osv",
+      "command": "osv-scanner --lockfile=package-lock.json",
+      "exitCode": 0,
+      "summary": "OSV-Scanner found no issues in 117 locked packages.",
+      "ranAt": "2026-09-07T17:31:19Z"
     }
   ],
   "gates": [
@@ -956,7 +991,7 @@
       "stage": "during",
       "trigger": "Paired proof outcomes are classified and attached to findings.",
       "requiredEvidence": "Only base-pass and head-fail outcomes create VERIFIED evidence. Exact plan, command, image, revision, sanitized output, and artifact hashes remain bound, while timeout, cancellation, infrastructure failure, truncation, or cleanup failure stay inconclusive.",
-      "status": "ready",
+      "status": "passed",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
       "claimIds": [
@@ -964,7 +999,13 @@
         "claim-locked-proof-containers",
         "claim-models-are-advisory"
       ],
-      "runIds": []
+      "runIds": [
+        "run-m2-evidence-focused",
+        "run-m2-evidence-classifier-mutation",
+        "run-m2-evidence-shuffled-tests",
+        "run-m2-evidence-gitleaks",
+        "run-m2-evidence-osv"
+      ]
     },
     {
       "id": "gate-m2-release",

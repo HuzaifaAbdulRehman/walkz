@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   adjudicateLocalVerdict,
   assessCounterfactualProof,
+  bindProofAssessmentToVerdictInput,
   digestProofCommand,
   fingerprintProofPlan,
+  type CounterfactualProofAssessment,
 } from '../src/index.js';
 
 const BASE_SHA = '1'.repeat(40);
@@ -97,16 +99,26 @@ function result(
   };
 }
 
-function verdict(proofStatus: 'complete' | 'incomplete', proofFinding: Finding) {
-  return adjudicateLocalVerdict({
+function verdict(assessment: CounterfactualProofAssessment) {
+  const binding = bindProofAssessmentToVerdictInput(
+    verdictInput([finding()]),
+    assessment,
+  );
+  return adjudicateLocalVerdict(binding.input);
+}
+
+function verdictInput(findings: Finding[]): Parameters<
+  typeof bindProofAssessmentToVerdictInput
+>[0] {
+  return {
     contextStatus: 'complete',
     checkStatus: 'complete',
     providerStatus: 'complete',
-    proofStatus,
-    findings: [proofFinding],
+    proofStatus: 'not_requested' as const,
+    findings,
     blockingEvidenceLevels: ['VERIFIED'],
     humanJudgmentRequired: false,
-  });
+  };
 }
 
 describe('assessCounterfactualProof', () => {
@@ -133,7 +145,7 @@ describe('assessCounterfactualProof', () => {
         sanitizedSummary: 'base:\nbase stdout\nbase stderr\nhead:\nhead stdout\nhead stderr',
       },
     });
-    expect(verdict(assessment.proofStatus, assessment.finding)).toEqual({
+    expect(verdict(assessment)).toEqual({
       verdict: 'FIX',
       reasons: ['blocking_verified_finding'],
     });
@@ -154,7 +166,7 @@ describe('assessCounterfactualProof', () => {
       proofStatus: 'complete',
       finding: { evidenceLevel: 'UNVERIFIED' },
     });
-    expect(verdict(assessment.proofStatus, assessment.finding)).toEqual({
+    expect(verdict(assessment)).toEqual({
       verdict: 'SHIP',
       reasons: ['no_blocking_evidence'],
     });
@@ -173,7 +185,7 @@ describe('assessCounterfactualProof', () => {
         proofStatus: 'incomplete',
         reason: 'execution_incomplete',
       });
-      expect(verdict(assessment.proofStatus, assessment.finding)).toEqual({
+      expect(verdict(assessment)).toEqual({
         verdict: 'INCONCLUSIVE',
         reasons: ['proof_incomplete'],
       });
@@ -198,7 +210,28 @@ describe('assessCounterfactualProof', () => {
       evidence: null,
       finding: { evidenceLevel: 'UNVERIFIED', evidence: [] },
     });
-    expect(verdict(assessment.proofStatus, assessment.finding)).toEqual({
+    expect(verdict(assessment)).toEqual({
+      verdict: 'INCONCLUSIVE',
+      reasons: ['proof_incomplete'],
+    });
+  });
+
+  it('keeps verdict input inconclusive when no unique finding can receive proof', () => {
+    const assessment = assessCounterfactualProof(finding(), plan(), {
+      base: result('base', 'passed'),
+      head: result('head', 'failed'),
+    });
+    const absentFinding = { ...finding(), fingerprint: 'b'.repeat(64) };
+    const binding = bindProofAssessmentToVerdictInput(
+      verdictInput([absentFinding]),
+      assessment,
+    );
+
+    expect(binding).toMatchObject({
+      bound: false,
+      input: { proofStatus: 'incomplete', findings: [absentFinding] },
+    });
+    expect(adjudicateLocalVerdict(binding.input)).toEqual({
       verdict: 'INCONCLUSIVE',
       reasons: ['proof_incomplete'],
     });

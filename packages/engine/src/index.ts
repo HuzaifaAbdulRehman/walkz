@@ -32,6 +32,7 @@ export {
 } from './proof-execution.js';
 export {
   assessCounterfactualProof,
+  bindProofAssessmentToVerdictInput,
   createIncompleteCounterfactualProofAssessment,
 } from './proof-evidence.js';
 export type {
@@ -52,6 +53,7 @@ export type {
   CounterfactualProofClassification,
   CounterfactualProofPairInput,
   CounterfactualProofReason,
+  ProofVerdictBinding,
 } from './proof-evidence.js';
 export { runLocalReviewPipeline } from './pipeline.js';
 export type {

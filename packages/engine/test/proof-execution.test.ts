@@ -380,4 +380,72 @@ describe('runAndAssessCounterfactualProof', () => {
       },
     });
   });
+
+  dockerTest(
+    'verifies a regression through the real locked container path',
+    async () => {
+      const repository = await fixture();
+      await repository.write('value.txt', 'base\n');
+      const baseSha = await repository.commitAll('base');
+      await repository.write('value.txt', 'broken\n');
+      const headSha = await repository.commitAll('head');
+      const finding = {
+        fingerprint: 'a'.repeat(64),
+        category: 'correctness' as const,
+        severity: 'high' as const,
+        file: 'value.txt',
+        line: 1,
+        claim: 'The change regresses the value.',
+        failureMechanism: 'The head revision fails the reproducer.',
+        suggestedProof: 'Run the reproducer.',
+        lifecycleStatus: 'unverified' as const,
+        evidenceLevel: 'UNVERIFIED' as const,
+        advisoryConfidence: 0.9,
+        evidence: [],
+        dismissal: null,
+        fix: null,
+      };
+      const proofPlan = createProofPlan(
+        {
+          runId: 'real-regression',
+          findingFingerprint: finding.fingerprint,
+          baseSha,
+          headSha,
+          containerImage: dockerImage!,
+          command,
+          files: [
+            {
+              path: '.walkz-proof/reproducer.mjs',
+              content:
+                "import { readFileSync } from 'node:fs';\n" +
+                "process.exit(readFileSync('value.txt', 'utf8') === 'base\\n' ? 0 : 1);\n",
+            },
+          ],
+          limits,
+        },
+        authorization,
+        budget,
+      );
+
+      const result = await runAndAssessCounterfactualProof(finding, proofPlan, {
+        repositoryRoot: repository.root,
+        authorization,
+        budget,
+        workspaceLimits: { maxFiles: 100, maxBytes: 1024 * 1_024 },
+      });
+
+      expect(result).toMatchObject({
+        execution: {
+          base: { outcome: 'passed', sha: baseSha },
+          head: { outcome: 'failed', sha: headSha },
+        },
+        assessment: {
+          classification: 'verified',
+          proofStatus: 'complete',
+          finding: { evidenceLevel: 'VERIFIED' },
+        },
+      });
+    },
+    60_000,
+  );
 });

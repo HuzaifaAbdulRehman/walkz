@@ -1,6 +1,7 @@
 import type {
   Evidence,
   Finding,
+  LocalVerdictInput,
   ProofExecutionResult,
   ProofPlan,
 } from '@walkz/contracts';
@@ -34,6 +35,11 @@ export interface CounterfactualProofAssessment {
 export interface CounterfactualProofPairInput {
   base: unknown;
   head: unknown;
+}
+
+export interface ProofVerdictBinding {
+  bound: boolean;
+  input: LocalVerdictInput;
 }
 
 function equalDigest(left: string, right: string): boolean {
@@ -207,5 +213,38 @@ export function assessCounterfactualProof(
     reason: 'execution_incomplete',
     finding: attachEvidence(finding, evidence),
     evidence,
+  };
+}
+
+export function bindProofAssessmentToVerdictInput(
+  input: LocalVerdictInput,
+  assessment: CounterfactualProofAssessment,
+): ProofVerdictBinding {
+  const matches = input.findings.filter(
+    (finding) =>
+      equalDigest(finding.fingerprint, assessment.finding.fingerprint),
+  );
+  if (matches.length !== 1) {
+    return {
+      bound: false,
+      input: { ...input, proofStatus: 'incomplete' },
+    };
+  }
+
+  return {
+    bound: true,
+    input: {
+      ...input,
+      proofStatus:
+        input.proofStatus === 'incomplete' ||
+        assessment.proofStatus === 'incomplete'
+          ? 'incomplete'
+          : 'complete',
+      findings: input.findings.map((finding) =>
+        equalDigest(finding.fingerprint, assessment.finding.fingerprint)
+          ? assessment.finding
+          : finding,
+      ),
+    },
   };
 }

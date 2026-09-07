@@ -104,7 +104,7 @@ when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is proof evidence classification. Huzaifa owns every gate.
+The next gate is the golden proof evaluation. Huzaifa owns every gate.
 
 - Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
   Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
@@ -118,8 +118,13 @@ The next gate is proof evidence classification. Huzaifa owns every gate.
   The runtime has no network or host secrets, uses bounded resources, and removes its
   containers after success, failure, timeout, or cancellation. The full suite passed
   258 tests, and seven opt-in tests passed against Docker Desktop's Linux engine.
-- Ready, during: paired outcomes must become hashed evidence, and only a base pass with
-  a head failure may produce a `VERIFIED` finding.
+- Passed, during: matching plan, command, revision, and SHA records now bind paired
+  results to findings. A base pass and head failure creates `VERIFIED` evidence. Equal,
+  inverse, cancelled, timed-out, infrastructure, and forged-provenance cases stay
+  non-blocking. The full shuffled suite passed 278 tests, including the real Docker
+  regression proof.
+- Ready, during: golden changes must measure proof catch rate, false positives, proof
+  rate, latency, and provider use.
 - Planned, release: Milestone 2 must produce one `VERIFIED` finding from identical
   base/head execution and pass from a clean clone on Windows and Ubuntu.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
