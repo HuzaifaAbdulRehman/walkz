@@ -60,6 +60,7 @@ describe('proof plan contracts', () => {
     '../outside.mjs',
     'nested/../outside.mjs',
     'windows\\outside.mjs',
+    'src/reproducer.mjs',
   ])('rejects unsafe proof file path %s', (path) => {
     const input = plan() as ReturnType<typeof plan> & {
       files: Array<{ path: string }>;

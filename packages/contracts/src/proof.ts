@@ -29,6 +29,9 @@ const proofFilePathSchema = noControlString
   .max(1_024)
   .refine(isSafeContainerPath, {
     message: 'Proof file paths must be normalized container-relative paths.',
+  })
+  .refine((value) => value.startsWith('.walkz-proof/'), {
+    message: 'Proof files must stay inside the reserved .walkz-proof directory.',
   });
 
 const proofWorkingDirectorySchema = noControlString
