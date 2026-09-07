@@ -11,11 +11,12 @@ import {
   buildReviewBudget,
   buildReviewPrompt,
   createLocalReviewRun,
+  hashWalkzConfig,
 } from '../src/index.js';
 
 const BASE_SHA = '1'.repeat(40);
 const HEAD_SHA = '2'.repeat(40);
-const CONFIG_HASH = '3'.repeat(64);
+const CONFIG_HASH = hashWalkzConfig(createDefaultWalkzConfig());
 
 function request(
   overrides: Partial<ReviewRequest> = {},
@@ -132,6 +133,15 @@ describe('createLocalReviewRun', () => {
       ),
     ).toThrow('versions do not match');
   });
+
+  it('rejects a mismatched configuration hash', () => {
+    expect(() =>
+      createLocalReviewRun(
+        request({ configHash: '3'.repeat(64) }),
+        createDefaultWalkzConfig(),
+      ),
+    ).toThrow('hashes do not match');
+  });
 });
 
 describe('buildReviewBudget', () => {
@@ -181,6 +191,24 @@ describe('buildReviewPrompt', () => {
     });
     expect(prompt.maxOutputTokens).toBe(2_000);
     expect(prompt.promptVersion).toBe('walkz-review-v1');
+  });
+
+  it('makes invisible repository instructions visible to the model', () => {
+    const prompt = buildReviewPrompt(
+      context('safe\u202Ehidden'),
+      emptyChecks,
+      buildReviewBudget(
+        request(),
+        createDefaultWalkzConfig(),
+        1_000,
+      ),
+      { model: 'mock/reviewer' },
+    );
+
+    expect(prompt.userPrompt).not.toContain('\u202E');
+    expect(JSON.parse(prompt.userPrompt)).toMatchObject({
+      diff: 'safe\\u{202E}hidden',
+    });
   });
 
   it('packs oversized text within a conservative token ceiling', () => {

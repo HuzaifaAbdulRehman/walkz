@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   parseWalkzConfig,
@@ -14,6 +14,13 @@ export interface CreateLocalReviewRunOptions {
   runIdFactory?: () => string;
 }
 
+export function hashWalkzConfig(configInput: unknown): string {
+  const config = parseWalkzConfig(configInput);
+  return createHash('sha256')
+    .update(JSON.stringify(config), 'utf8')
+    .digest('hex');
+}
+
 export function createLocalReviewRun(
   requestInput: unknown,
   configInput: unknown,
@@ -23,6 +30,9 @@ export function createLocalReviewRun(
   const config = parseWalkzConfig(configInput);
   if (request.configVersion !== config.schemaVersion) {
     throw new Error('Review request and configuration versions do not match.');
+  }
+  if (request.configHash !== hashWalkzConfig(config)) {
+    throw new Error('Review request and configuration hashes do not match.');
   }
 
   const now = options.clock?.() ?? new Date();
