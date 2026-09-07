@@ -4,6 +4,7 @@ import type {
   LocalReviewBudget,
   LocalReviewRun,
   ProviderAdapter,
+  ProviderAccessResult,
   ProviderUsage,
   StructuredReviewResult,
 } from '@walkz/contracts';
@@ -75,6 +76,15 @@ function isCancelled(error: unknown, signal: AbortSignal): boolean {
   );
 }
 
+function isInvalidResponse(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'invalid_response'
+  );
+}
+
 function incompleteProvider(
   provider: ProviderAdapter | undefined,
   failureCode: ProviderStepFailureCode,
@@ -97,6 +107,9 @@ export async function reviewWithProvider(
   provider: ProviderAdapter | undefined,
   signal: AbortSignal,
   recordedAt: string,
+  onAccess?: (
+    access: ProviderAccessResult,
+  ) => void | Promise<void>,
 ): Promise<{
   step: ProviderReviewStep;
   findings: Finding[];
@@ -133,6 +146,7 @@ export async function reviewWithProvider(
     const access = await provider.validateAccess(run.config.provider.model, {
       signal,
     });
+    await onAccess?.(access);
     selectedModel = access.selectedModel;
     maxCompletionTokens =
       access.models.find((model) => model.id === selectedModel)
@@ -181,7 +195,11 @@ export async function reviewWithProvider(
       step: {
         ...incompleteProvider(
           provider,
-          cancelled ? 'cancelled' : 'request_failed',
+          cancelled
+            ? 'cancelled'
+            : isInvalidResponse(error)
+              ? 'invalid_response'
+              : 'request_failed',
           true,
         ),
         model: selectedModel,

@@ -4,6 +4,7 @@ import type {
   LocalReviewRun,
   LocalVerdictDecision,
   ProviderAdapter,
+  ProviderAccessResult,
   RepositoryConfig,
 } from '@walkz/contracts';
 import {
@@ -76,6 +77,9 @@ export interface LocalReviewPipelineInput
   config: unknown;
   provider?: ProviderAdapter;
   requestCommandApproval?: CommandApprovalRequester;
+  onProviderAccess?: (
+    access: ProviderAccessResult,
+  ) => void | Promise<void>;
   signal?: AbortSignal;
   dependencies?: LocalReviewPipelineDependencies;
 }
@@ -333,6 +337,7 @@ export async function runLocalReviewPipeline(
       input.provider,
       signal,
       (input.clock?.() ?? new Date()).toISOString(),
+      input.onProviderAccess,
     );
     if (
       deadlineReached &&

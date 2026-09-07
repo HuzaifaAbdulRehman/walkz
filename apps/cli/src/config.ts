@@ -6,6 +6,7 @@ import {
   parseWalkzConfig,
   type RepositoryConfig,
 } from '@walkz/contracts';
+import { readRepositoryFileAtRevision } from '@walkz/git';
 import { ZodError } from 'zod';
 
 export const WALKZ_CONFIG_FILENAME = 'walkz.config.json';
@@ -46,6 +47,30 @@ function formatSchemaError(error: ZodError): string {
       return path + ': ' + issue.message;
     })
     .join(' ');
+}
+
+function parseConfigContents(contents: string): RepositoryConfig {
+  let input: unknown;
+  try {
+    input = JSON.parse(contents);
+  } catch {
+    throw new WalkzConfigError(
+      'invalid',
+      WALKZ_CONFIG_FILENAME + ' is not valid JSON.',
+    );
+  }
+
+  try {
+    return parseWalkzConfig(input);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw new WalkzConfigError(
+        'invalid',
+        WALKZ_CONFIG_FILENAME + ' is invalid. ' + formatSchemaError(error),
+      );
+    }
+    throw error;
+  }
 }
 
 async function readBoundedConfig(configPath: string): Promise<string> {
@@ -146,30 +171,29 @@ export async function loadWalkzConfig(
     );
   }
 
-  let input: unknown;
-  try {
-    input = JSON.parse(await readBoundedConfig(resolvedConfigPath));
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new WalkzConfigError(
-        'invalid',
-        WALKZ_CONFIG_FILENAME + ' is not valid JSON.',
-      );
-    }
-    throw error;
-  }
+  return parseConfigContents(await readBoundedConfig(resolvedConfigPath));
+}
 
-  try {
-    return parseWalkzConfig(input);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      throw new WalkzConfigError(
-        'invalid',
-        WALKZ_CONFIG_FILENAME + ' is invalid. ' + formatSchemaError(error),
-      );
-    }
-    throw error;
+export async function loadWalkzConfigAtRevision(
+  repositoryRoot: string,
+  sha: string,
+  signal?: AbortSignal,
+): Promise<RepositoryConfig> {
+  const contents = await readRepositoryFileAtRevision(
+    repositoryRoot,
+    sha,
+    WALKZ_CONFIG_FILENAME,
+    CONFIG_LIMIT_BYTES,
+    signal,
+  );
+  if (contents === null) {
+    throw new WalkzConfigError(
+      'missing',
+      WALKZ_CONFIG_FILENAME +
+        ' does not exist at the trusted base revision.',
+    );
   }
+  return parseConfigContents(contents);
 }
 
 export async function writeWalkzConfig(

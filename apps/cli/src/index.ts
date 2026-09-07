@@ -3,6 +3,7 @@ export type { CliIo, RunCliOptions } from './cli.js';
 
 export {
   loadWalkzConfig,
+  loadWalkzConfigAtRevision,
   WALKZ_CONFIG_FILENAME,
   WalkzConfigError,
   writeWalkzConfig,
@@ -27,3 +28,8 @@ export {
   renderJsonReport,
   renderTerminalReport,
 } from './review-output.js';
+export { runReview } from './review.js';
+export type {
+  ReviewOptions,
+  ReviewResult,
+} from './review.js';

@@ -11,6 +11,7 @@ export {
 } from './process.js';
 export { resolveGitReferences } from './references.js';
 export { locateRepositoryRoot } from './repository.js';
+export { readRepositoryFileAtRevision } from './revision-file.js';
 export { calculateChangeRisk } from './risk.js';
 export type { CollectReviewContextOptions } from './context.js';
 export type { CollectUnifiedDiffOptions } from './diff.js';
