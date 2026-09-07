@@ -5,7 +5,7 @@
   "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-06T20:44:48Z",
+  "refreshedAt": "2026-09-07T14:58:22Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -19,7 +19,8 @@
       "npm 11.6.2 workspaces",
       "Git 2.52.0",
       "Groq OpenAI-compatible HTTP API",
-      "Vitest"
+      "Vitest",
+      "Docker 29.7.2"
     ],
     "deliverySurface": "Local cross-platform CLI used inside a Git repository",
     "riskClass": "high",
@@ -29,7 +30,7 @@
       "External dependency",
       "AI-assisted implementation"
     ],
-    "overlayDecision": "Private source may cross a provider boundary, a provider key is required, repository commands execute locally, and the project depends on Git, Node, Groq, and selected npm packages. The work is AI-assisted, so small evidence-backed slices and independent review are required. Hosted, distributed, migration, and graphical-interface overlays do not apply to Milestone 1."
+    "overlayDecision": "Private source may cross a provider boundary, a provider key is required, and repository commands execute locally. Milestone 2 also runs hostile proof code through a local Docker daemon. Small evidence-backed slices and independent review remain required. Hosted, distributed, migration, and graphical-interface overlays do not apply yet."
   },
   "repositorySearch": {
     "status": "completed",
@@ -113,6 +114,18 @@
       "runIds": [
         "run-repository-validation-existing",
         "run-repository-validation-new"
+      ]
+    },
+    {
+      "id": "claim-proof-plan-authority",
+      "text": "A proof plan cannot authorize its own command. The exact command digest must appear in an approval set supplied outside the plan, and every proof byte and resource limit is bound to a stable plan digest.",
+      "status": "verified",
+      "sourceIds": [
+        "source-nist-ai-ssdf"
+      ],
+      "runIds": [
+        "run-m2-proof-focused",
+        "run-m2-authorization-mutation"
       ]
     }
   ],
@@ -370,10 +383,10 @@
     },
     {
       "id": "assumption-runner-meets-local-boundary",
-      "status": "open",
+      "status": "tested",
       "text": "Execa can execute approved commands without shell interpolation and terminate the tested descendant trees on Windows and Linux.",
       "impact": "A failure blocks the runner contract and may require a narrower command policy.",
-      "nextCheck": "Build the first slice around hostile arguments, stripped secrets, timeouts, cancellation, and child-grandchild heartbeats."
+      "nextCheck": "Repeat the process-tree and secret tests whenever the execution adapter or supported platform set changes."
     },
     {
       "id": "assumption-free-model-is-usable",
@@ -457,6 +470,15 @@
         "claim-private-code-crosses-boundary",
         "claim-model-capability-is-mutable"
       ]
+    },
+    {
+      "id": "decision-proof-plan-external-authority",
+      "status": "accepted",
+      "text": "Keep command approval outside the proof plan. Bind the approved command, exact revisions, reproducer bytes, pinned image, isolation settings, and limits into one stable digest before execution.",
+      "claimIds": [
+        "claim-proof-plan-authority",
+        "claim-models-are-advisory"
+      ]
     }
   ],
   "runs": [
@@ -522,6 +544,76 @@
       "exitCode": 0,
       "summary": "The corrected project evidence pack passed strict validation.",
       "ranAt": "2026-09-06T20:44:48Z"
+    },
+    {
+      "id": "run-m1-release-verification",
+      "command": "npm ci --ignore-scripts; npm run verify; npm run demo in a disposable clean clone",
+      "exitCode": 0,
+      "summary": "The Milestone 1 clean clone built, passed 189 tests, and returned FIX for the local demo in 3.2 seconds.",
+      "ranAt": "2026-09-07T13:00:00Z"
+    },
+    {
+      "id": "run-m1-ci",
+      "command": "gh run watch 34124921616 --repo HuzaifaAbdulRehman/walkz --exit-status",
+      "exitCode": 0,
+      "summary": "Windows and Ubuntu jobs passed for exact commit c24c99356dedb5edf596f8504a9e441e36995161.",
+      "ranAt": "2026-09-07T13:05:00Z"
+    },
+    {
+      "id": "run-m2-proof-focused",
+      "command": "npm exec vitest run packages/contracts/test/proof.test.ts packages/engine/test/proof-plan.test.ts -- --reporter=dot",
+      "exitCode": 0,
+      "summary": "Two proof test files passed 29 contract, authority, integrity, digest, and budget tests.",
+      "ranAt": "2026-09-07T14:56:15Z"
+    },
+    {
+      "id": "run-m2-authorization-mutation",
+      "command": "npm exec vitest run packages/engine/test/proof-plan.test.ts after disabling the external approval rejection",
+      "exitCode": 1,
+      "summary": "The authorization test failed because the unauthorized plan no longer threw. The gate was restored immediately.",
+      "ranAt": "2026-09-07T14:53:40Z"
+    },
+    {
+      "id": "run-m2-typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "summary": "The workspace build and test-file typecheck passed with the proof contracts and planner.",
+      "ranAt": "2026-09-07T14:56:15Z"
+    },
+    {
+      "id": "run-m2-full-tests",
+      "command": "npm test -- --reporter=dot",
+      "exitCode": 0,
+      "summary": "All 24 test files and 218 tests passed.",
+      "ranAt": "2026-09-07T14:59:02Z"
+    },
+    {
+      "id": "run-m2-shuffled-tests",
+      "command": "npm exec vitest run -- --sequence.shuffle --sequence.seed=7092026 --reporter=dot",
+      "exitCode": 0,
+      "summary": "All 24 test files and 218 tests passed in shuffled order with seed 7092026.",
+      "ranAt": "2026-09-07T14:59:40Z"
+    },
+    {
+      "id": "run-m2-gitleaks",
+      "command": "gitleaks dir --no-banner --redact --exit-code 1 .",
+      "exitCode": 0,
+      "summary": "Gitleaks found no secrets in the proof-contract checkpoint.",
+      "ranAt": "2026-09-07T14:56:15Z"
+    },
+    {
+      "id": "run-m2-osv",
+      "command": "osv-scanner scan source --lockfile=package-lock.json",
+      "exitCode": 0,
+      "summary": "OSV-Scanner found no known issues in the locked dependencies.",
+      "ranAt": "2026-09-07T14:56:15Z"
+    },
+    {
+      "id": "run-m2-semgrep",
+      "command": "semgrep scan --config auto packages/contracts/src/proof.ts packages/engine/src/proof-plan.ts",
+      "exitCode": 1,
+      "summary": "The scan did not run because Semgrep is not installed. No dependency was added for this optional local scanner.",
+      "ranAt": "2026-09-07T14:56:15Z"
     }
   ],
   "gates": [
@@ -530,27 +622,83 @@
       "stage": "during",
       "trigger": "The runtime foundation and safe runner slice are implemented.",
       "requiredEvidence": "Windows build plus hostile-argument, stripped-secret, bounded-output, cancellation, timeout, and child-grandchild termination tests; Linux process-tree coverage configured for CI.",
-      "status": "ready",
+      "status": "passed",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
       "claimIds": [
         "claim-runner-is-not-sandbox",
         "claim-git-metadata-trust"
       ],
-      "runIds": []
+      "runIds": [
+        "run-m1-release-verification",
+        "run-m1-ci"
+      ]
     },
     {
       "id": "gate-m1-release",
       "stage": "release",
       "trigger": "All six Milestone 1 phases and their focused reviews pass.",
       "requiredEvidence": "Clean npm ci, build, unit and integration suites, provider error matrix, CLI fixture verdicts, Windows paths with spaces, and a 60-second local demo tied to one commit.",
-      "status": "planned",
+      "status": "passed",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
       "claimIds": [
         "claim-models-are-advisory",
         "claim-private-code-crosses-boundary",
         "claim-model-capability-is-mutable"
+      ],
+      "runIds": [
+        "run-m1-release-verification",
+        "run-m1-ci"
+      ]
+    },
+    {
+      "id": "gate-proof-contracts",
+      "stage": "during",
+      "trigger": "Proof contracts, authorization, hashing, and budget allocation are implemented.",
+      "requiredEvidence": "Focused boundary tests, a red authorization mutation, workspace typecheck, full and shuffled suites, and available security scans.",
+      "status": "passed",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-proof-plan-authority"
+      ],
+      "runIds": [
+        "run-m2-proof-focused",
+        "run-m2-authorization-mutation",
+        "run-m2-typecheck",
+        "run-m2-full-tests",
+        "run-m2-shuffled-tests",
+        "run-m2-gitleaks",
+        "run-m2-osv",
+        "run-m2-semgrep"
+      ]
+    },
+    {
+      "id": "gate-proof-workspaces",
+      "stage": "during",
+      "trigger": "Exact base and head proof workspaces are implemented.",
+      "requiredEvidence": "Dirty-tree preservation, exact SHA binding, path and link rejection, unusual-name coverage, paths with spaces, cancellation, and cleanup tests.",
+      "status": "ready",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-git-metadata-trust",
+        "claim-proof-plan-authority"
+      ],
+      "runIds": []
+    },
+    {
+      "id": "gate-m2-release",
+      "stage": "release",
+      "trigger": "All five Milestone 2 phases pass.",
+      "requiredEvidence": "One identical reproducer passes on base, fails on head, creates VERIFIED evidence, cleans its data, and passes from a clean clone on Windows and Ubuntu.",
+      "status": "planned",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-proof-plan-authority",
+        "claim-fixtures-are-not-outcomes"
       ],
       "runIds": []
     },

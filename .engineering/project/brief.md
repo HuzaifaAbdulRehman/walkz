@@ -1,15 +1,15 @@
 # Project brief
 
-Status: researched
+Status: building Milestone 2
 Owner: Huzaifa Abdul Rehman
 Decision date: 2026-09-07
 
 ## Project profile
 
-Walkz is a high-risk developer tool delivered first as a local CLI. Milestone 1 uses
-Node.js 24+, TypeScript, npm workspaces, Git, Groq, Zod, Vitest, `diff`, and Execa.
-The triggered overlays cover private source, secrets, external dependencies, and
-AI-assisted implementation.
+Walkz is a high-risk developer tool delivered first as a local CLI. Milestone 2 adds
+Docker-based proof execution to the existing Node.js 24+, TypeScript, Git, Groq, Zod,
+Vitest, `diff`, and Execa stack. The triggered overlays cover private source, secrets,
+external dependencies, local code execution, and AI-assisted implementation.
 
 ## Problem
 
@@ -42,16 +42,15 @@ and a clear private-code disclosure. The full claim and source records are in
 
 ## Scope
 
-Milestone 1 is one complete local review path. It includes `walkz init`, `doctor`,
-branch and staged review, approved deterministic commands, bounded Git context, one Groq
-review, changed-line validation, terminal and JSON reports, and deterministic exit codes.
-A mock provider and temporary fixture repositories make the path reproducible.
+Milestone 2 adds counterfactual proof to the working local reviewer. One approved,
+bounded reproducer runs against exact base and head revisions under the same isolated
+conditions. Only base-pass and head-fail evidence may become `VERIFIED`.
 
 ## Non-goals
 
-This milestone excludes counterfactual proof, PostgreSQL, Redis, Docker proof execution,
-GitHub integration, a dashboard, automatic fixes, and multi-model arbitration. It will
-not claim superiority over existing reviewers.
+This milestone excludes PostgreSQL, Redis, GitHub integration, a dashboard, automatic
+fixes, and multi-model arbitration. It will not claim usefulness on real pull requests
+until the later 10 to 20 change comparison is complete.
 
 ## Constraints
 
@@ -63,9 +62,10 @@ deadline was supplied, so progress is gated by evidence rather than calendar dat
 
 ## Risks and assumptions
 
-The largest costs are credential exposure or arbitrary execution, a false `SHIP` after
-missing evidence, and descendants surviving a timeout. Those risks can be reduced, but
-not removed in Milestone 1.
+The largest costs are hostile proof code escaping its limits, base and head running under
+different conditions, cleanup leaving private source behind, and incomplete proof being
+treated as success. Docker narrows the runtime boundary but does not make the local daemon
+or selected image risk-free.
 
 The riskiest product assumption is that evidence makes a review more useful than the
 same checks plus an existing assistant. Test it on 10 to 20 historical defects once
@@ -86,32 +86,34 @@ not improve decision usefulness over CodeRabbit or checks plus an assistant.
 
 ## First slice
 
-Create the npm workspace, the minimum command contracts, and the safe runner boundary.
-Pass literal arguments with `shell: false`, strip provider credentials from child
-environments, cap and redact output, and terminate descendants on timeout or cancellation.
-The slice passes when its package build and tests succeed on Windows, with the Linux
-process-tree test ready for CI.
+Define proof plans, execution results, resource budgets, and stable digests. A plan binds
+exact revisions, a digest-pinned image, reproducer bytes, locked isolation settings, and
+one command approved outside the plan. The slice passes when boundary tests, a red
+authorization mutation, the full suite, and cross-platform CI succeed.
 
 ## Delivery path
 
-1. Build and verify the runtime foundation and safe runner.
-2. Add configuration, shared contracts, `init`, and `doctor`.
-3. Add bounded Git collection, changed-line indexing, and risk ranking.
-4. Add the Groq and mock providers with explicit failure classes.
-5. Add the review pipeline, finding validation, and verdict table.
-6. Integrate every CLI mode, fixture, clean-clone check, and 60-second demo.
+1. Define proof contracts, external command approval, stable digests, and budgets.
+2. Materialize exact base and head workspaces without changing the developer's tree.
+3. Prepare dependencies separately and run both revisions in locked containers.
+4. Classify paired outcomes and bind verified evidence to the verdict engine.
+5. Add golden changes, measurements, a clean-clone check, and the short demo.
 
 Each phase receives a focused playbook review after the code exists. A phase ends only
 when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is the runner slice. Huzaifa owns every gate.
+The next gate is exact proof workspace materialization. Huzaifa owns every gate.
 
-- Ready, during: after the runner slice exists, require a Windows build plus
-  hostile-argument, secret, output, cancellation, and descendant tests.
-- Planned, release: after all Milestone 1 phases pass, require a clean `npm ci`,
-  build, full test matrix, CLI fixtures, and the 60-second demo.
-- Planned, outcome: after Milestone 2 and 10 to 20 real diffs exist, compare Walkz
+- Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
+  Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
+- Passed, during: proof contracts and planning passed 218 tests in normal and shuffled
+  order. The authorization test failed when its gate was deliberately disabled.
+- Ready, during: exact base and head workspaces must leave the developer's dirty tree
+  unchanged, reject unsafe links and paths, and clean up on every terminal path.
+- Planned, release: Milestone 2 must produce one `VERIFIED` finding from identical
+  base/head execution and pass from a clean clone on Windows and Ubuntu.
+- Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
   with CodeRabbit or a composed baseline on precision, recall, latency, and decision
   usefulness.
