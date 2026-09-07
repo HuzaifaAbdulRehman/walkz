@@ -12,10 +12,21 @@ export {
 export { resolveGitReferences } from './references.js';
 export { locateRepositoryRoot } from './repository.js';
 export { readRepositoryFileAtRevision } from './revision-file.js';
+export {
+  assertProofWorkspacePath,
+  assertProofWorkspacePaths,
+  withProofWorkspaces,
+} from './proof-workspace.js';
 export { calculateChangeRisk } from './risk.js';
 export type { CollectReviewContextOptions } from './context.js';
 export type { CollectUnifiedDiffOptions } from './diff.js';
 export type { LoadRepositoryGuidanceOptions } from './guidance.js';
+export type {
+  ProofWorkspace,
+  ProofWorkspaceLimits,
+  ProofWorkspacePair,
+  WithProofWorkspacesOptions,
+} from './proof-workspace.js';
 export type { ResolveGitReferencesOptions } from './references.js';
 export type {
   ChangedFile,
