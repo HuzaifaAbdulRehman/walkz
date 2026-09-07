@@ -5,7 +5,7 @@
   "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-07T16:58:46Z",
+  "refreshedAt": "2026-09-07T18:08:55Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -158,6 +158,21 @@
         "run-m2-container-network-mutation",
         "run-m2-container-full-tests",
         "run-m2-container-shuffled-tests"
+      ]
+    },
+    {
+      "id": "claim-golden-proof-measurement",
+      "text": "Walkz can measure two golden proof fixtures, including catch rate, false positives, proof rate, proof duration, and model metadata, without treating synthetic results as product evidence.",
+      "status": "verified",
+      "sourceIds": [
+        "source-real-pr-gap"
+      ],
+      "runIds": [
+        "run-m2-golden-focused",
+        "run-m2-golden-mutation",
+        "run-m2-golden-full-tests",
+        "run-m2-golden-shuffled-tests",
+        "run-m2-golden-clean-clone"
       ]
     }
   ],
@@ -875,6 +890,55 @@
       "exitCode": 0,
       "summary": "OSV-Scanner found no issues in 117 locked packages.",
       "ranAt": "2026-09-07T17:31:19Z"
+    },
+    {
+      "id": "run-m2-golden-focused",
+      "command": "WALKZ_DOCKER_TEST_IMAGE=node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf npm run typecheck; npm test -- --run packages/contracts/test/golden.test.ts packages/engine/test/golden-evaluation.test.ts packages/engine/test/golden-evaluation.integration.test.ts",
+      "exitCode": 0,
+      "summary": "The workspace build and test-file typecheck passed. Eight focused tests passed, including a Docker-backed run of the broken and clean fixtures.",
+      "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-golden-mutation",
+      "command": "Run the golden fixture integration test after temporarily recording every proof as not_verified.",
+      "exitCode": 1,
+      "summary": "The integration test failed because the broken fixture was no longer reported as verified. The measured classification was restored immediately.",
+      "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-golden-full-tests",
+      "command": "WALKZ_DOCKER_TEST_IMAGE=node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf npm run verify",
+      "exitCode": 0,
+      "summary": "The build, test-file typecheck, and full suite passed with the Docker-backed golden proof test enabled.",
+      "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-golden-shuffled-tests",
+      "command": "WALKZ_DOCKER_TEST_IMAGE=node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf npm test -- --sequence.shuffle --sequence.seed=4829032 --reporter=dot",
+      "exitCode": 0,
+      "summary": "The full suite passed in shuffled order with seed 4829032, including the Docker-backed golden proof test.",
+      "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-golden-clean-clone",
+      "command": "npm ci; npm run verify; npm run demo:proof in a disposable local clone",
+      "exitCode": 0,
+      "summary": "A fresh Windows clone installed the lockfile, passed verification, ran the proof demo, and removed its temporary clone and proof containers.",
+      "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-golden-gitleaks",
+      "command": "gitleaks detect --source . --no-banner",
+      "exitCode": 0,
+      "summary": "Gitleaks scanned 40 commits and found no secrets.",
+      "ranAt": "2026-09-07T18:08:55Z"
+    },
+    {
+      "id": "run-m2-golden-osv",
+      "command": "osv-scanner --lockfile=package-lock.json",
+      "exitCode": 0,
+      "summary": "OSV-Scanner found no known issues in 117 locked packages.",
+      "ranAt": "2026-09-07T18:08:55Z"
     }
   ],
   "gates": [
@@ -1017,9 +1081,18 @@
       "targetDate": null,
       "claimIds": [
         "claim-proof-plan-authority",
-        "claim-fixtures-are-not-outcomes"
+        "claim-fixtures-are-not-outcomes",
+        "claim-golden-proof-measurement"
       ],
-      "runIds": []
+      "runIds": [
+        "run-m2-golden-focused",
+        "run-m2-golden-mutation",
+        "run-m2-golden-full-tests",
+        "run-m2-golden-shuffled-tests",
+        "run-m2-golden-clean-clone",
+        "run-m2-golden-gitleaks",
+        "run-m2-golden-osv"
+      ]
     },
     {
       "id": "gate-product-outcome",

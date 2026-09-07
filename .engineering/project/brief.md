@@ -104,7 +104,7 @@ when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is the golden proof evaluation. Huzaifa owns every gate.
+The next gate is the Milestone 2 release check. Huzaifa owns every gate.
 
 - Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
   Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
@@ -123,10 +123,12 @@ The next gate is the golden proof evaluation. Huzaifa owns every gate.
   inverse, cancelled, timed-out, infrastructure, and forged-provenance cases stay
   non-blocking. The full shuffled suite passed 278 tests, including the real Docker
   regression proof.
-- Ready, during: golden changes must measure proof catch rate, false positives, proof
-  rate, latency, and provider use.
-- Planned, release: Milestone 2 must produce one `VERIFIED` finding from identical
-  base/head execution and pass from a clean clone on Windows and Ubuntu.
+- Passed, during: the golden proof demo ran one broken and one clean change. It
+  caught the broken case, reported no false positives, verified one proof, and
+  recorded no provider invocation. The test failed when its measured
+  classification was deliberately removed.
+- Ready, release: Milestone 2 has passed a local Windows clean clone. The pushed
+  commit still needs Windows and Ubuntu CI before the release gate can pass.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
   with CodeRabbit or a composed baseline on precision, recall, latency, and decision
   usefulness.
