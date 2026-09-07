@@ -124,3 +124,25 @@ export type {
   ReviewVerdict,
   VerdictReason,
 } from './engine.js';
+
+export {
+  parseProofExecutionResult,
+  parseProofPlan,
+  proofArtifactSchema,
+  proofCommandSchema,
+  proofExecutionResultSchema,
+  proofFileSchema,
+  proofPlanSchema,
+  proofResourceLimitsSchema,
+  sanitizedProofOutputSchema,
+} from './proof.js';
+
+export type {
+  ProofArtifact,
+  ProofCommand,
+  ProofExecutionResult,
+  ProofFile,
+  ProofPlan,
+  ProofResourceLimits,
+  SanitizedProofOutput,
+} from './proof.js';
