@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "broken-boundary",
+      "fixture": "broken",
+      "expected": "verified",
+      "finding": {
+        "category": "correctness",
+        "severity": "high",
+        "file": "src/value.mjs",
+        "line": 1,
+        "claim": "Zero crosses the wrong boundary.",
+        "failureMechanism": "The strict comparison returns one for zero.",
+        "suggestedProof": "Run the boundary case.",
+        "confidence": 0.98
+      },
+      "reproducerSource": "import { boundary } from '../src/value.mjs';\n\nprocess.exit(boundary(0) === 0 ? 0 : 1);\n"
+    },
+    {
+      "id": "clean-positive-value",
+      "fixture": "clean",
+      "expected": "not_verified",
+      "finding": {
+        "category": "correctness",
+        "severity": "medium",
+        "file": "src/value.mjs",
+        "line": 1,
+        "claim": "The changed value becomes non-positive.",
+        "failureMechanism": "A later consumer receives a non-positive value.",
+        "suggestedProof": "Check that the exported value remains positive.",
+        "confidence": 0.55
+      },
+      "reproducerSource": "import { value } from '../src/value.mjs';\n\nprocess.exit(value > 0 ? 0 : 1);\n"
+    }
+  ]
+}

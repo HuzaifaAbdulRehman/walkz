@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseGoldenProofRecords } from '../src/index.js';
+import {
+  parseGoldenProofFixtureManifest,
+  parseGoldenProofRecords,
+} from '../src/index.js';
 
 function record() {
   return {
@@ -38,5 +41,31 @@ describe('parseGoldenProofRecords', () => {
         { ...record(), baseSha: '2'.repeat(40) },
       ]),
     ).toThrow(/differ|unique/i);
+  });
+
+  it('requires an explicit, unique fixture expectation and reproducer', () => {
+    expect(
+      parseGoldenProofFixtureManifest({
+        schemaVersion: 1,
+        cases: [
+          {
+            id: 'broken-boundary',
+            fixture: 'broken',
+            expected: 'verified',
+            finding: {
+              category: 'correctness',
+              severity: 'high',
+              file: 'src/value.mjs',
+              line: 1,
+              claim: 'The boundary is wrong.',
+              failureMechanism: 'Zero crosses the boundary.',
+              suggestedProof: 'Run the boundary case.',
+              confidence: 0.9,
+            },
+            reproducerSource: 'process.exit(0);\n',
+          },
+        ],
+      }),
+    ).toMatchObject({ cases: [{ id: 'broken-boundary' }] });
   });
 });

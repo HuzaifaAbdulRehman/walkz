@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { modelFindingSchema } from './review.js';
+
 const sha1Schema = z
   .string()
   .regex(/^[a-f0-9]{40}$/i)
@@ -89,6 +91,39 @@ export const goldenProofRecordsSchema = z
     });
   });
 
+export const goldenProofFixtureManifestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    cases: z
+      .array(
+        z
+          .object({
+            id: identifierSchema,
+            fixture: identifierSchema,
+            expected: goldenProofExpectationSchema,
+            finding: modelFindingSchema,
+            reproducerSource: z.string().min(1).max(8_192),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict()
+  .superRefine((manifest, context) => {
+    const ids = new Set<string>();
+    manifest.cases.forEach((fixture, index) => {
+      if (ids.has(fixture.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Golden proof fixture IDs must be unique.',
+          path: ['cases', index, 'id'],
+        });
+      }
+      ids.add(fixture.id);
+    });
+  });
+
 export type GoldenProofExpectation = z.infer<
   typeof goldenProofExpectationSchema
 >;
@@ -96,9 +131,18 @@ export type GoldenProofClassification = z.infer<
   typeof goldenProofClassificationSchema
 >;
 export type GoldenProofRecord = z.infer<typeof goldenProofRecordSchema>;
+export type GoldenProofFixtureManifest = z.infer<
+  typeof goldenProofFixtureManifestSchema
+>;
 
 export function parseGoldenProofRecords(
   input: unknown,
 ): GoldenProofRecord[] {
   return goldenProofRecordsSchema.parse(input);
+}
+
+export function parseGoldenProofFixtureManifest(
+  input: unknown,
+): GoldenProofFixtureManifest {
+  return goldenProofFixtureManifestSchema.parse(input);
 }

@@ -14,6 +14,8 @@
   "scripts": {
     "build": "tsc -b",
     "demo": "npm run build --silent && node scripts/demo-local.mjs",
+    "demo:proof": "npm run build --silent && node scripts/evaluate-golden.mjs",
+    "evaluate:golden": "npm run build --silent && node scripts/evaluate-golden.mjs --json",
     "test": "vitest run",
     "test:types": "tsc -p tsconfig.test.json --noEmit --pretty false",
     "typecheck": "npm run build && npm run test:types",

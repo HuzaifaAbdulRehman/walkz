@@ -150,13 +150,16 @@ export type {
 export {
   goldenProofClassificationSchema,
   goldenProofExpectationSchema,
+  goldenProofFixtureManifestSchema,
   goldenProofRecordSchema,
   goldenProofRecordsSchema,
+  parseGoldenProofFixtureManifest,
   parseGoldenProofRecords,
 } from './golden.js';
 
 export type {
   GoldenProofClassification,
   GoldenProofExpectation,
+  GoldenProofFixtureManifest,
   GoldenProofRecord,
 } from './golden.js';
