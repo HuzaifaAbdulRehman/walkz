@@ -42,6 +42,31 @@ export interface CommandExecutionResult {
   errorMessage?: string;
 }
 
+export type CommandApprovalStatus =
+  | 'approved'
+  | 'declined'
+  | 'unavailable'
+  | 'not_required';
+
+export interface CommandApprovalDecision {
+  status: CommandApprovalStatus;
+  source: 'trusted_config' | 'user' | 'none';
+}
+
+export interface DeterministicCheckResult {
+  commandId: string;
+  required: boolean;
+  command: CommandSpec;
+  execution: CommandExecutionResult;
+}
+
+export interface DeterministicCheckRun {
+  approval: CommandApprovalDecision;
+  plannedCount: number;
+  checks: DeterministicCheckResult[];
+  status: 'complete' | 'incomplete' | 'error';
+}
+
 export {
   approvedCommandSchema,
   createDefaultWalkzConfig,
