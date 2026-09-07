@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "baseBranch": null,
+  "paths": {
+    "include": ["**/*"],
+    "exclude": [".git/**", "coverage/**", "dist/**", "node_modules/**"]
+  },
+  "commands": [
+    {
+      "id": "test",
+      "executable": "node",
+      "args": ["check.mjs"],
+      "cwd": ".",
+      "required": true
+    }
+  ],
+  "commandTimeoutMs": 10000,
+  "commandOutputBytesPerStream": 16384,
+  "diffBudgetBytes": 65536,
+  "fileBudget": 20,
+  "tokenBudget": 4000,
+  "provider": {
+    "name": "groq",
+    "model": "auto"
+  },
+  "triggerPolicy": "manual",
+  "blockingEvidenceLevels": ["VERIFIED", "SUPPORTED"],
+  "commandApprovalPolicy": "trusted_config",
+  "premiumEnabled": false,
+  "spendingLimitUsd": 0
+}
