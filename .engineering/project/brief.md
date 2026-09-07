@@ -104,7 +104,7 @@ when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is locked container execution. Huzaifa owns every gate.
+The next gate is proof evidence classification. Huzaifa owns every gate.
 
 - Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
   Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
@@ -114,8 +114,12 @@ The next gate is locked container execution. Huzaifa owns every gate.
   unchanged, preserve committed bytes, reject unsafe links and paths, and clean up
   after success, failure, or cancellation. The full suite passed 236 tests, and the
   cleanup test failed when cleanup was deliberately disabled.
-- Ready, during: the same pinned image and command must run for base and head with no
-  runtime network or secrets, bounded resources, timeout handling, and process cleanup.
+- Passed, during: exact base and head trees run with the same pinned image and command.
+  The runtime has no network or host secrets, uses bounded resources, and removes its
+  containers after success, failure, timeout, or cancellation. The full suite passed
+  258 tests, and seven opt-in tests passed against Docker Desktop's Linux engine.
+- Ready, during: paired outcomes must become hashed evidence, and only a base pass with
+  a head failure may produce a `VERIFIED` finding.
 - Planned, release: Milestone 2 must produce one `VERIFIED` finding from identical
   base/head execution and pass from a clean clone on Windows and Ubuntu.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz

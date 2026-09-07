@@ -5,7 +5,7 @@
   "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-07T15:41:35Z",
+  "refreshedAt": "2026-09-07T16:58:46Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -142,6 +142,23 @@
         "run-m2-workspace-full-tests",
         "run-m2-workspace-shuffled-tests"
       ]
+    },
+    {
+      "id": "claim-locked-proof-containers",
+      "text": "Walkz can run the same approved proof against exact base and head trees in non-root containers with no runtime network or host secrets, bounded resources, and verified cleanup.",
+      "status": "verified",
+      "sourceIds": [
+        "source-docker-run",
+        "source-docker-network-none",
+        "source-docker-resource-constraints",
+        "source-docker-logging"
+      ],
+      "runIds": [
+        "run-m2-container-real-docker",
+        "run-m2-container-network-mutation",
+        "run-m2-container-full-tests",
+        "run-m2-container-shuffled-tests"
+      ]
     }
   ],
   "sources": [
@@ -270,6 +287,34 @@
       "url": "https://git-scm.com/docs/git-cat-file",
       "accessedAt": "2026-09-07T15:41:35Z",
       "decisionImpact": "Defines the batch protocol used to read exact object bytes through one bounded Git process."
+    },
+    {
+      "id": "source-docker-run",
+      "title": "Docker container run reference",
+      "url": "https://docs.docker.com/reference/cli/docker/container/run/",
+      "accessedAt": "2026-09-07T16:58:46Z",
+      "decisionImpact": "Defines read-only filesystems, pull policy, numeric users, capability removal, process limits, security options, tmpfs mounts, entrypoint overrides, and other runtime flags."
+    },
+    {
+      "id": "source-docker-network-none",
+      "title": "Docker none network driver",
+      "url": "https://docs.docker.com/engine/network/drivers/none/",
+      "accessedAt": "2026-09-07T16:58:46Z",
+      "decisionImpact": "Confirms that the none driver creates only the loopback device inside the proof container."
+    },
+    {
+      "id": "source-docker-resource-constraints",
+      "title": "Docker container resource constraints",
+      "url": "https://docs.docker.com/engine/containers/resource_constraints/",
+      "accessedAt": "2026-09-07T16:58:46Z",
+      "decisionImpact": "Defines CPU and memory limits and confirms that equal memory and memory-swap values disable container swap."
+    },
+    {
+      "id": "source-docker-logging",
+      "title": "Docker logging configuration",
+      "url": "https://docs.docker.com/engine/logging/configure/",
+      "accessedAt": "2026-09-07T16:58:46Z",
+      "decisionImpact": "Documents that the default json-file driver can exhaust disk and that the none driver prevents daemon-side log retention."
     }
   ],
   "repositories": [
@@ -517,6 +562,16 @@
         "claim-exact-proof-workspaces",
         "claim-git-metadata-trust"
       ]
+    },
+    {
+      "id": "decision-lock-proof-containers",
+      "status": "accepted",
+      "text": "Prepare a digest-pinned image without host credentials, then run the approved command with no pull or network, reduced authority, bounded resources, direct output capture, and verified container cleanup.",
+      "claimIds": [
+        "claim-proof-plan-authority",
+        "claim-exact-proof-workspaces",
+        "claim-locked-proof-containers"
+      ]
     }
   ],
   "runs": [
@@ -701,6 +756,90 @@
       "exitCode": 0,
       "summary": "OSV-Scanner found no known issues in the locked dependencies.",
       "ranAt": "2026-09-07T15:41:35Z"
+    },
+    {
+      "id": "run-m2-container-engine-check",
+      "command": "docker version --format '{{json .}}'; docker info --format '{{json .SecurityOptions}}'",
+      "exitCode": 0,
+      "summary": "Docker Desktop 4.89.0 exposed Docker Engine 29.7.2 on its Linux backend with the built-in seccomp profile and cgroup namespaces.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-image-preparation",
+      "command": "docker image pull node:24-alpine; docker image inspect node:24-alpine --format '{{json .RepoDigests}}'",
+      "exitCode": 0,
+      "summary": "Prepared Node 24 Alpine and resolved immutable digest e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-full-tests",
+      "command": "npm run verify",
+      "exitCode": 0,
+      "summary": "The build, typecheck, 29 test files, and 258 default tests passed. Five opt-in Docker tests were skipped because the image variable was absent.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-real-docker",
+      "command": "WALKZ_DOCKER_TEST_IMAGE=node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf npm exec vitest run packages/sandbox/test/docker-proof.integration.test.ts packages/engine/test/proof-execution.test.ts",
+      "exitCode": 0,
+      "summary": "Seven tests passed against the real Linux engine, covering credential-free image preparation, exact base and head trees, no network or secrets, non-root execution, read-only mounts, cgroup limits, timeout, cancellation, process trees, and cleanup.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-shuffled-tests",
+      "command": "npm exec vitest run -- --sequence.shuffle --sequence.seed=7092029 --reporter=dot",
+      "exitCode": 0,
+      "summary": "All 29 default test files and 258 tests passed in shuffled order with seed 7092029; the five opt-in Docker cases remained explicitly skipped.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-network-mutation",
+      "command": "Run the locked-runtime Docker test after temporarily changing the network from none to bridge.",
+      "exitCode": 1,
+      "summary": "The base proof failed because the container gained a non-loopback interface. The none network setting was restored immediately.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-cancellation-harness-initial",
+      "command": "Run the condition-based cancellation test using docker top process-name output.",
+      "exitCode": 1,
+      "summary": "The harness assumed a process-name format that Docker Desktop did not return, then stopped awaiting the active proof. The exact leftover container and temporary directory were removed before the harness was corrected to query container state.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-cancellation-harness-final",
+      "command": "Run the cancellation test after waiting for docker inspect to report a running container.",
+      "exitCode": 0,
+      "summary": "The corrected test cancelled a running proof and verified that no named container or temporary workspace remained.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-playbook-hook",
+      "command": "node D:/Programming/Projects/engineering-playbook/hooks/typecheck.mjs",
+      "exitCode": 0,
+      "summary": "The playbook typecheck hook passed after the container implementation review.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-gitleaks",
+      "command": "gitleaks dir --no-banner --redact --exit-code 1 .",
+      "exitCode": 0,
+      "summary": "Gitleaks found no secrets in the locked-container checkpoint.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-osv",
+      "command": "osv-scanner scan source --lockfile=package-lock.json",
+      "exitCode": 0,
+      "summary": "OSV-Scanner found no known issues across 117 locked packages.",
+      "ranAt": "2026-09-07T16:58:46Z"
+    },
+    {
+      "id": "run-m2-container-semgrep",
+      "command": "semgrep --version",
+      "exitCode": 1,
+      "summary": "Semgrep remains unavailable locally. It was not added as a project dependency for this optional scan.",
+      "ranAt": "2026-09-07T16:58:46Z"
     }
   ],
   "gates": [
@@ -788,13 +927,42 @@
       "id": "gate-proof-containers",
       "stage": "during",
       "trigger": "Locked container execution is implemented for proof plans.",
-      "requiredEvidence": "The same pinned image and approved command run for base and head after separate secret-free dependency preparation, with runtime networking disabled, no inherited secrets, bounded CPU, memory, disk, output and process count, timeout handling, and cleanup.",
+      "requiredEvidence": "Self-contained proof files run against base and head after separate credential-free image preparation, with the same pinned image and approved command, no runtime network or inherited secrets, bounded CPU, memory, disk, output and process count, timeout handling, and cleanup. Repository package installation remains unsupported and cannot run implicitly.",
+      "status": "passed",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-proof-plan-authority",
+        "claim-exact-proof-workspaces",
+        "claim-locked-proof-containers"
+      ],
+      "runIds": [
+        "run-m2-container-engine-check",
+        "run-m2-container-image-preparation",
+        "run-m2-container-full-tests",
+        "run-m2-container-real-docker",
+        "run-m2-container-shuffled-tests",
+        "run-m2-container-network-mutation",
+        "run-m2-container-cancellation-harness-initial",
+        "run-m2-container-cancellation-harness-final",
+        "run-m2-container-playbook-hook",
+        "run-m2-container-gitleaks",
+        "run-m2-container-osv",
+        "run-m2-container-semgrep"
+      ]
+    },
+    {
+      "id": "gate-proof-evidence",
+      "stage": "during",
+      "trigger": "Paired proof outcomes are classified and attached to findings.",
+      "requiredEvidence": "Only base-pass and head-fail outcomes create VERIFIED evidence. Exact plan, command, image, revision, sanitized output, and artifact hashes remain bound, while timeout, cancellation, infrastructure failure, truncation, or cleanup failure stay inconclusive.",
       "status": "ready",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
       "claimIds": [
         "claim-proof-plan-authority",
-        "claim-exact-proof-workspaces"
+        "claim-locked-proof-containers",
+        "claim-models-are-advisory"
       ],
       "runIds": []
     },
