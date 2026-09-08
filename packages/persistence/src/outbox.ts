@@ -45,6 +45,7 @@ export interface OutboxEventLeaseInput {
 export interface OutboxEventStore {
   claim(input: OutboxEventLeaseInput): Promise<ClaimedOutboxEvent | null>;
   markPublished(input: OutboxEventLeaseInput): Promise<boolean>;
+  listRecoverableEventIds(limit: number): Promise<string[]>;
 }
 
 export async function withTransaction<T>(
@@ -124,13 +125,33 @@ export async function markOutboxEventPublished(
   return result.rows.length === 1;
 }
 
+export async function listRecoverableOutboxEventIds(
+  pool: Pick<Pool, 'query'>,
+  input: unknown,
+): Promise<string[]> {
+  const limit = z.number().int().min(1).max(1_000).parse(input);
+  const result = await pool.query<{ id: string }>(
+    `
+      SELECT id
+      FROM outbox_events
+      WHERE published_at IS NULL
+        AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+      ORDER BY created_at ASC
+      LIMIT $1
+    `,
+    [limit],
+  );
+  return result.rows.map((row) => row.id);
+}
+
 export function createOutboxEventStore(
-  pool: Pick<Pool, 'connect'>,
+  pool: Pick<Pool, 'connect' | 'query'>,
 ): OutboxEventStore {
   return {
     claim: (input) =>
       withTransaction(pool, (client) => claimOutboxEvent(client, input)),
     markPublished: (input) =>
       withTransaction(pool, (client) => markOutboxEventPublished(client, input)),
+    listRecoverableEventIds: (limit) => listRecoverableOutboxEventIds(pool, limit),
   };
 }

@@ -4,9 +4,33 @@ import {
   createOutboxQueue,
   dispatchOutboxEvent,
   enqueueOutboxEvent,
+  recoverOutboxEvents,
 } from '../src/index.js';
 
 describe('outbox queue', () => {
+  it('requeues recoverable events with stable job IDs', async () => {
+    const queue = { add: vi.fn().mockResolvedValue(undefined) };
+    const store = {
+      listRecoverableEventIds: vi
+        .fn()
+        .mockResolvedValue(['event-one', 'event-two']),
+    };
+
+    await expect(recoverOutboxEvents(queue, store, 10)).resolves.toBe(2);
+    expect(queue.add).toHaveBeenNthCalledWith(
+      1,
+      'dispatch',
+      { eventId: 'event-one' },
+      { jobId: 'event-one' },
+    );
+    expect(queue.add).toHaveBeenNthCalledWith(
+      2,
+      'dispatch',
+      { eventId: 'event-two' },
+      { jobId: 'event-two' },
+    );
+  });
+
   it('uses the outbox ID as the stable job ID', async () => {
     const add = vi.fn().mockResolvedValue(undefined);
 
@@ -36,6 +60,7 @@ describe('outbox queue', () => {
     const store = {
       claim: vi.fn().mockResolvedValue(event),
       markPublished: vi.fn().mockResolvedValue(true),
+      listRecoverableEventIds: vi.fn().mockResolvedValue([]),
     };
     const handler = { handle: vi.fn().mockResolvedValue(undefined) };
 

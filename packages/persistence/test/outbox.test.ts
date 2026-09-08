@@ -113,6 +113,7 @@ describe('transactional outbox', () => {
     const release = vi.fn();
     const store = createOutboxEventStore({
       connect: vi.fn().mockResolvedValue({ query, release }),
+      query: vi.fn(),
     });
 
     await expect(

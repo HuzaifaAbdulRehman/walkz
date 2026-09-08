@@ -36,6 +36,7 @@ describe('BullMQ outbox worker', () => {
     const store = {
       claim: vi.fn().mockResolvedValue(event),
       markPublished: vi.fn().mockResolvedValue(true),
+      listRecoverableEventIds: vi.fn().mockResolvedValue([]),
     };
     const handler = { handle: vi.fn().mockResolvedValue(undefined) };
     const connection = redisConnection();

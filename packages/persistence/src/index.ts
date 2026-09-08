@@ -14,6 +14,7 @@ export {
   claimOutboxEvent,
   createOutboxEventStore,
   createReviewRunQueuedOutboxEvent,
+  listRecoverableOutboxEventIds,
   markOutboxEventPublished,
   reviewRunQueuedOutboxEventSchema,
   withTransaction,

@@ -18,6 +18,16 @@ export async function enqueueOutboxEvent(
   await queue.add('dispatch', { eventId }, { jobId: eventId });
 }
 
+export async function recoverOutboxEvents(
+  queue: OutboxQueue,
+  store: Pick<OutboxEventStore, 'listRecoverableEventIds'>,
+  limit: number,
+): Promise<number> {
+  const eventIds = await store.listRecoverableEventIds(limit);
+  await Promise.all(eventIds.map((eventId) => enqueueOutboxEvent(queue, eventId)));
+  return eventIds.length;
+}
+
 export function createOutboxQueue(connection: ConnectionOptions): Queue {
   return new Queue(outboxQueueName, { connection });
 }
@@ -33,6 +43,7 @@ export interface OutboxEventStore {
     workerId: string;
     leaseMs: number;
   }): Promise<boolean>;
+  listRecoverableEventIds(limit: number): Promise<string[]>;
 }
 
 export interface OutboxEventHandler {
