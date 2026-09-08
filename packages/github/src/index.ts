@@ -17,3 +17,10 @@ export type { ReviewCheckPayload } from './checks.js';
 
 export { createReviewCheckPublisher } from './publisher.js';
 export type { GitHubChecksClient, ReviewCheckPublisher } from './publisher.js';
+
+export {
+  reviewTriggerPolicySchema,
+  reviewTriggerSchema,
+  shouldStartReview,
+} from './review-action.js';
+export type { ReviewTrigger, ReviewTriggerPolicy } from './review-action.js';
