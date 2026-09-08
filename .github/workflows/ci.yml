@@ -34,11 +34,24 @@ jobs:
       - if: runner.os == 'Linux'
         run: docker run --detach --rm --name walkz-ci-redis --publish 127.0.0.1:56379:6379 redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
       - if: runner.os == 'Linux'
+        run: docker image pull postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+      - if: runner.os == 'Linux'
+        run: docker run --detach --rm --name walkz-ci-postgres --publish 127.0.0.1:55435:5432 --env POSTGRES_USER=walkz --env POSTGRES_PASSWORD=walkz --env POSTGRES_DB=walkz --health-cmd "pg_isready -U walkz -d walkz" --health-interval 1s --health-timeout 5s --health-retries 15 postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+      - if: runner.os == 'Linux'
+        run: until [ "$(docker inspect --format '{{.State.Health.Status}}' walkz-ci-postgres)" = healthy ]; do sleep 1; done
+      - if: runner.os == 'Linux'
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: postgresql://walkz:walkz@127.0.0.1:55435/walkz
+      - if: runner.os == 'Linux'
         run: npm test
         env:
           WALKZ_DOCKER_TEST_IMAGE: node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
           WALKZ_REDIS_TEST_URL: redis://127.0.0.1:56379
+          WALKZ_POSTGRES_TEST_URL: postgresql://walkz:walkz@127.0.0.1:55435/walkz
       - if: always() && runner.os == 'Linux'
         run: docker rm --force walkz-ci-redis
+      - if: always() && runner.os == 'Linux'
+        run: docker rm --force walkz-ci-postgres
       - if: runner.os == 'Windows'
         run: npm test
