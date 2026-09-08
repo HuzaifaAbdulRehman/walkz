@@ -20,6 +20,9 @@
       "path": "./packages/sandbox"
     },
     {
+      "path": "./packages/github"
+    },
+    {
       "path": "./apps/cli"
     },
     {
