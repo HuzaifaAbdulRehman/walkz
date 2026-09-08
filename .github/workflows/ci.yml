@@ -30,8 +30,15 @@ jobs:
       - if: runner.os == 'Linux'
         run: docker image pull node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
       - if: runner.os == 'Linux'
+        run: docker image pull redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+      - if: runner.os == 'Linux'
+        run: docker run --detach --rm --name walkz-ci-redis --publish 127.0.0.1:56379:6379 redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+      - if: runner.os == 'Linux'
         run: npm test
         env:
           WALKZ_DOCKER_TEST_IMAGE: node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+          WALKZ_REDIS_TEST_URL: redis://127.0.0.1:56379
+      - if: always() && runner.os == 'Linux'
+        run: docker rm --force walkz-ci-redis
       - if: runner.os == 'Windows'
         run: npm test
