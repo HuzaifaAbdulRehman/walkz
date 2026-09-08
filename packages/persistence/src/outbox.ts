@@ -21,6 +21,21 @@ export type ReviewRunQueuedOutboxEvent = z.infer<
   typeof reviewRunQueuedOutboxEventSchema
 >;
 
+const outboxLeaseSchema = z
+  .object({
+    eventId: z.uuid(),
+    workerId: z.string().trim().min(1).max(128),
+    leaseMs: z.number().int().min(1_000).max(300_000),
+  })
+  .strict();
+
+export interface ClaimedOutboxEvent {
+  id: string;
+  aggregateId: string;
+  eventType: string;
+  payload: unknown;
+}
+
 export async function withTransaction<T>(
   pool: Pick<Pool, 'connect'>,
   operation: (client: Pick<PoolClient, 'query'>) => Promise<T>,
@@ -57,4 +72,43 @@ export async function createReviewRunQueuedOutboxEvent(
     throw new Error('Outbox event insert did not return an ID.');
   }
   return row.id;
+}
+
+export async function claimOutboxEvent(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<ClaimedOutboxEvent | null> {
+  const lease = outboxLeaseSchema.parse(input);
+  const result = await client.query<ClaimedOutboxEvent>(
+    `
+      UPDATE outbox_events
+      SET attempts = attempts + 1,
+          lease_owner = $2,
+          lease_expires_at = now() + ($3 * interval '1 millisecond'),
+          last_error = NULL
+      WHERE id = $1
+        AND published_at IS NULL
+        AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+      RETURNING id, aggregate_id AS "aggregateId", event_type AS "eventType", payload
+    `,
+    [lease.eventId, lease.workerId, lease.leaseMs],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function markOutboxEventPublished(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<boolean> {
+  const lease = outboxLeaseSchema.parse(input);
+  const result = await client.query(
+    `
+      UPDATE outbox_events
+      SET published_at = now(), lease_expires_at = NULL
+      WHERE id = $1 AND lease_owner = $2 AND published_at IS NULL
+      RETURNING id
+    `,
+    [lease.eventId, lease.workerId],
+  );
+  return result.rows.length === 1;
 }

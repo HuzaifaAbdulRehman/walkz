@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  claimOutboxEvent,
   createReviewRunQueuedOutboxEvent,
+  markOutboxEventPublished,
   withTransaction,
 } from '../src/index.js';
 
@@ -58,5 +60,46 @@ describe('transactional outbox', () => {
       'ROLLBACK',
     ]);
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('claims only an unpublished event with an expired lease', async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          id: 'event-id',
+          aggregateId: reviewRunId,
+          eventType: 'review_run.queued',
+          payload: { reviewRunId },
+        },
+      ],
+    });
+
+    await expect(
+      claimOutboxEvent({ query }, {
+        eventId: reviewRunId,
+        workerId: 'worker-1',
+        leaseMs: 30_000,
+      }),
+    ).resolves.toMatchObject({ id: 'event-id' });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('lease_expires_at <= now()'),
+      [reviewRunId, 'worker-1', 30_000],
+    );
+  });
+
+  it('marks an event published only for its lease holder', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 'event-id' }] });
+
+    await expect(
+      markOutboxEventPublished({ query }, {
+        eventId: reviewRunId,
+        workerId: 'worker-1',
+        leaseMs: 30_000,
+      }),
+    ).resolves.toBe(true);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('lease_owner = $2'),
+      [reviewRunId, 'worker-1'],
+    );
   });
 });

@@ -11,9 +11,14 @@ export { recordWebhookDelivery } from './webhook-delivery.js';
 export type { WebhookDeliveryInput } from './webhook-delivery.js';
 
 export {
+  claimOutboxEvent,
   createReviewRunQueuedOutboxEvent,
+  markOutboxEventPublished,
   reviewRunQueuedOutboxEventSchema,
   withTransaction,
 } from './outbox.js';
 
-export type { ReviewRunQueuedOutboxEvent } from './outbox.js';
+export type {
+  ClaimedOutboxEvent,
+  ReviewRunQueuedOutboxEvent,
+} from './outbox.js';
