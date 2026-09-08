@@ -29,3 +29,6 @@ export { createGitHubReadClient } from './client.js';
 export type { GitHubReadClient } from './client.js';
 
 export { buildReviewCheckPayload } from './review-result.js';
+
+export { parsePullRequestReviewTrigger } from './pull-request-event.js';
+export type { PullRequestReviewTrigger } from './pull-request-event.js';
