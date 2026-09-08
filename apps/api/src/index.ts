@@ -16,3 +16,10 @@ export type {
   RepositoryConfigHistoryStore,
   ReviewHistoryStore,
 } from './repository-api.js';
+
+export { createGitHubAuthApi } from './github-auth.js';
+export type {
+  GitHubAuthApiOptions,
+  GitHubOAuthClient,
+  GitHubSessionIssuer,
+} from './github-auth.js';
