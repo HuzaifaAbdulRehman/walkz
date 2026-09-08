@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   claimOutboxEvent,
+  createOutboxEventStore,
   createReviewRunQueuedOutboxEvent,
   markOutboxEventPublished,
   withTransaction,
@@ -101,5 +102,27 @@ describe('transactional outbox', () => {
       expect.stringContaining('lease_owner = $2'),
       [reviewRunId, 'worker-1'],
     );
+  });
+
+  it('wraps each durable lease operation in a transaction', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const release = vi.fn();
+    const store = createOutboxEventStore({
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    });
+
+    await expect(
+      store.claim({ eventId: reviewRunId, workerId: 'worker-1', leaseMs: 30_000 }),
+    ).resolves.toBeNull();
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN',
+      expect.stringContaining('UPDATE outbox_events'),
+      'COMMIT',
+    ]);
+    expect(release).toHaveBeenCalledOnce();
   });
 });

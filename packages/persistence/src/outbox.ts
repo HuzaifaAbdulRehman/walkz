@@ -36,6 +36,17 @@ export interface ClaimedOutboxEvent {
   payload: unknown;
 }
 
+export interface OutboxEventLeaseInput {
+  eventId: string;
+  workerId: string;
+  leaseMs: number;
+}
+
+export interface OutboxEventStore {
+  claim(input: OutboxEventLeaseInput): Promise<ClaimedOutboxEvent | null>;
+  markPublished(input: OutboxEventLeaseInput): Promise<boolean>;
+}
+
 export async function withTransaction<T>(
   pool: Pick<Pool, 'connect'>,
   operation: (client: Pick<PoolClient, 'query'>) => Promise<T>,
@@ -111,4 +122,15 @@ export async function markOutboxEventPublished(
     [lease.eventId, lease.workerId],
   );
   return result.rows.length === 1;
+}
+
+export function createOutboxEventStore(
+  pool: Pick<Pool, 'connect'>,
+): OutboxEventStore {
+  return {
+    claim: (input) =>
+      withTransaction(pool, (client) => claimOutboxEvent(client, input)),
+    markPublished: (input) =>
+      withTransaction(pool, (client) => markOutboxEventPublished(client, input)),
+  };
 }
