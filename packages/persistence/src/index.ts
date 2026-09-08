@@ -40,3 +40,7 @@ export {
   cancelReviewRun,
   supersedeActiveReviewRuns,
 } from './review-run-control.js';
+
+export { createQueuedReviewRun, queuedReviewRunSchema } from './review-run.js';
+
+export type { CreatedQueuedReviewRun } from './review-run.js';
