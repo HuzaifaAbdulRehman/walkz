@@ -1,0 +1,24 @@
+:root {
+  color-scheme: dark;
+  background: #09111f;
+  color: #e7edf7;
+  font-family: Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+.shell { margin: 0 auto; max-width: 960px; padding: 72px 24px; }
+.hero { border-bottom: 1px solid #23334c; padding-bottom: 48px; }
+.eyebrow { color: #73a7ff; font-size: 12px; letter-spacing: .16em; }
+h1 { font-size: clamp(42px, 8vw, 76px); line-height: .98; margin: 24px 0; max-width: 700px; }
+.lede { color: #a8b8cf; font-size: 20px; max-width: 540px; }
+section { padding-top: 42px; }
+.section-heading { align-items: center; display: flex; justify-content: space-between; }
+h2 { font-size: 26px; }
+.badge, .status { border: 1px solid #385276; border-radius: 999px; color: #a8c8ff; font-size: 12px; padding: 6px 10px; }
+.review-list { display: grid; gap: 12px; }
+.review-card { align-items: center; background: #101c30; border: 1px solid #23334c; border-radius: 14px; display: flex; justify-content: space-between; padding: 20px; }
+.repository, .detail { color: #91a4bf; font-size: 14px; margin: 0 0 8px; }
+h3 { font-size: 20px; margin: 0 0 8px; }
+.status-ship { color: #8ce0ac; border-color: #2c7148; }
+.status-inconclusive { color: #ffd58a; border-color: #806128; }
