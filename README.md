@@ -24,7 +24,16 @@ The demo builds a disposable Git repository, introduces a boundary regression,
 and returns `FIX` only after a failed check points to the changed line. It uses
 the built-in mock provider, so it needs no API key or network access.
 
-## Review a repository
+## Use Walkz locally
+
+The local CLI is the usable path today. A normal review looks like this:
+
+1. Create or check out a branch in the repository you want to review.
+2. Initialize Walkz once and let it inspect the repository commands.
+3. Run `doctor` to catch missing Git, Node, configuration, or provider setup.
+4. Run `review` before opening a pull request, or use `--staged` for work that is not committed yet.
+5. Read the checks, changed-line findings, coverage notes, and final verdict.
+6. Fix the branch, run the review again, and open the pull request when the result is ready.
 
 Walkz is currently run from source. This example assumes the Walkz checkout and
 the target repository share a parent directory:
@@ -42,6 +51,42 @@ node ..\Walkz\apps\cli\dist\bin.js review
 `review` compares the current branch with its merge base. Use `--staged` for
 staged changes, `--no-model` for deterministic checks only, or `--json` for
 machine-readable output.
+
+Useful command examples:
+
+```powershell
+# Review committed changes against the merge base
+node ..\Walkz\apps\cli\dist\bin.js review
+
+# Review only what is staged
+node ..\Walkz\apps\cli\dist\bin.js review --staged
+
+# Run repository checks without a model call
+node ..\Walkz\apps\cli\dist\bin.js review --no-model
+
+# Save a machine-readable result for CI or another tool
+node ..\Walkz\apps\cli\dist\bin.js review --json
+```
+
+The process exits with `0` for `SHIP`, `1` for `FIX`, `2` for `HUMAN` or
+`INCONCLUSIVE`, and `3` for configuration or infrastructure errors. A `FIX`
+result means the configured evidence policy found something that needs attention;
+it does not apply a patch automatically.
+
+## Planned GitHub workflow
+
+The hosted GitHub App is still in development. When that milestone is complete,
+the intended developer flow will be:
+
+1. Sign in with GitHub and install Walkz on selected repositories.
+2. Open a pull request or mark a draft pull request ready for review.
+3. Walkz creates a pending `Walkz / review` check. Every-push reviews remain an explicit repository setting.
+4. Walkz runs repository checks, reviews bounded changed-file context, and publishes one summary with bounded annotations.
+5. Open the check to see the verdict, evidence level, exact base/head commits, and any incomplete coverage.
+6. If a fix is proposed later, approve it explicitly. Walkz will re-run the proof and regression checks before the branch is considered ready.
+
+There is no required comment tag in the current CLI. The GitHub trigger and
+dashboard commands will be documented here when they are implemented.
 
 Walkz reads command authority from the trusted base revision, runs approved
 commands without a shell, validates findings against changed lines, and reports
