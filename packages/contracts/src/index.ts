@@ -163,3 +163,18 @@ export type {
   GoldenProofFixtureManifest,
   GoldenProofRecord,
 } from './golden.js';
+
+export {
+  canTransitionReviewRun,
+  isTerminalReviewRunStatus,
+  parseGithubId,
+  parseHostedReviewRun,
+  hostedReviewRunSchema,
+  reviewRunStatusSchema,
+} from './hosted.js';
+
+export type {
+  GithubId,
+  HostedReviewRun,
+  ReviewRunStatus,
+} from './hosted.js';
