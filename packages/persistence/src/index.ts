@@ -45,3 +45,5 @@ export {
 export { createQueuedReviewRun, queuedReviewRunSchema } from './review-run.js';
 
 export type { CreatedQueuedReviewRun } from './review-run.js';
+
+export { purgeExpiredAuditEvents, recordAuditEvent } from './audit.js';
