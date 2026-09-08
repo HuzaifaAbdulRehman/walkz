@@ -14,3 +14,6 @@ export {
   reviewCheckPayloadSchema,
 } from './checks.js';
 export type { ReviewCheckPayload } from './checks.js';
+
+export { createReviewCheckPublisher } from './publisher.js';
+export type { GitHubChecksClient, ReviewCheckPublisher } from './publisher.js';
