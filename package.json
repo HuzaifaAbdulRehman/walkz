@@ -16,6 +16,7 @@
     "demo": "npm run build --silent && node scripts/demo-local.mjs",
     "demo:proof": "npm run build --silent && node scripts/evaluate-golden.mjs",
     "evaluate:golden": "npm run build --silent && node scripts/evaluate-golden.mjs --json",
+    "migrate:up": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir migrations --migrations-table walkz_migrations --advisory-lock-mode fail up",
     "test": "vitest run",
     "test:types": "tsc -p tsconfig.test.json --noEmit --pretty false",
     "typecheck": "npm run build && npm run test:types",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@types/node": "24.13.3",
     "@types/pg": "^8.23.1",
+    "node-pg-migrate": "^9.0.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
   }
