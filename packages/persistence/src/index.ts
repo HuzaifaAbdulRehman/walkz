@@ -25,3 +25,13 @@ export type {
   OutboxEventStore,
   ReviewRunQueuedOutboxEvent,
 } from './outbox.js';
+
+export {
+  createCredentialVault,
+  credentialEncryptionConfigSchema,
+  decryptCredential,
+  encryptCredential,
+  storeProviderCredential,
+} from './credential-vault.js';
+
+export type { CredentialVault, EncryptedCredential } from './credential-vault.js';
