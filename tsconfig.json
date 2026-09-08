@@ -24,6 +24,9 @@
     },
     {
       "path": "./apps/api"
+    },
+    {
+      "path": "./apps/worker"
     }
   ]
 }
