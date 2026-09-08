@@ -35,3 +35,8 @@ export {
 } from './credential-vault.js';
 
 export type { CredentialVault, EncryptedCredential } from './credential-vault.js';
+
+export {
+  cancelReviewRun,
+  supersedeActiveReviewRuns,
+} from './review-run-control.js';
