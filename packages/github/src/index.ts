@@ -24,3 +24,6 @@ export {
   shouldStartReview,
 } from './review-action.js';
 export type { ReviewTrigger, ReviewTriggerPolicy } from './review-action.js';
+
+export { createGitHubReadClient } from './client.js';
+export type { GitHubReadClient } from './client.js';
