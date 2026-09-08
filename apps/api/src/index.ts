@@ -8,3 +8,10 @@ export type {
   PendingReviewRunStarter,
   WebhookDeliveryStore,
 } from './webhook.js';
+
+export { createRepositoryApi } from './repository-api.js';
+export type {
+  RepositoryApiAuthenticator,
+  RepositoryApiOptions,
+  RepositoryConfigHistoryStore,
+} from './repository-api.js';
