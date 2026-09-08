@@ -5,6 +5,10 @@
 Walkz reviews diffs, runs repository checks, and uses evidence instead of
 model confidence to decide whether a change is ready to ship.
 
+The rule is simple: models choose what to investigate; evidence decides what to
+trust. A finding becomes blocking only when the same reproducer passes on the
+base commit and fails on the pull-request head.
+
 ![Walkz finding a supported regression](docs/walkz-demo.svg)
 
 ## Try the local demo
@@ -44,12 +48,26 @@ commands without a shell, validates findings against changed lines, and reports
 incomplete coverage. Provider-backed review sends bounded context to Groq only
 after the repository checks run.
 
+## What is implemented
+
+- Local CLI review with deterministic checks, mock and Groq providers, changed-line validation, and `SHIP`, `FIX`, `HUMAN`, `INCONCLUSIVE`, and `ERROR` verdicts.
+- Counterfactual proof that runs a bounded reproducer against exact base and head revisions.
+- Hosted PostgreSQL state, Redis and BullMQ workers, transactional outbox delivery, leases, restart recovery, encrypted provider credentials, audit retention, cancellation, and stale-run supersession.
+- GitHub integration foundations: signed OAuth sessions, read-only installation discovery, explicit review triggers, exact-SHA check payloads, authenticated configuration history, and review-history routes.
+
+The hosted GitHub App and dashboard are still being built. The current code does
+not claim a deployed App, a live production check, automatic fixes, or automatic
+merges.
+
 ## Verify the project
 
 ```powershell
 npm run verify
 ```
 
-The current release is the local reviewer. Counterfactual base/head proof,
-GitHub integration, hosted workers, a dashboard, and fix generation are not
-implemented yet.
+## Roadmap
+
+Milestones 1 through 3 are complete. Milestone 4 is in progress and covers the
+live GitHub App, check publishing, configuration, review history, and dashboard.
+Milestone 5 adds approved fix branches and reproof. Milestone 6 adds deeper
+reliability, specialist review passes, evaluation, and more languages.

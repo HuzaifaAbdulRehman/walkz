@@ -1,0 +1,42 @@
+import Fastify, { type FastifyInstance } from 'fastify';
+import { z } from 'zod';
+
+const paramsSchema = z.object({ installationId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict();
+const selectionSchema = z.object({ repositoryId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict();
+
+export interface InstallationRepositoryStore {
+  list(installationId: string): Promise<readonly unknown[]>;
+  select(input: { installationId: string; repositoryId: string }): Promise<void>;
+}
+
+export interface InstallationAuthenticator {
+  authenticate(request: unknown): Promise<{ installationIds: readonly string[] }>;
+}
+
+export interface InstallationApiOptions {
+  authenticator: InstallationAuthenticator;
+  repositories: InstallationRepositoryStore;
+}
+
+export function createInstallationApi(options: InstallationApiOptions): FastifyInstance {
+  const app = Fastify({ logger: false });
+  app.get('/api/installations/:installationId/repositories', async (request, reply) => {
+    const { installationId } = paramsSchema.parse(request.params);
+    const identity = await options.authenticator.authenticate(request);
+    if (!identity.installationIds.includes(installationId)) {
+      return reply.code(403).send({ error: 'installation_forbidden' });
+    }
+    return reply.send({ repositories: await options.repositories.list(installationId) });
+  });
+  app.post('/api/installations/:installationId/repositories', async (request, reply) => {
+    const { installationId } = paramsSchema.parse(request.params);
+    const { repositoryId } = selectionSchema.parse(request.body);
+    const identity = await options.authenticator.authenticate(request);
+    if (!identity.installationIds.includes(installationId)) {
+      return reply.code(403).send({ error: 'installation_forbidden' });
+    }
+    await options.repositories.select({ installationId, repositoryId });
+    return reply.code(204).send();
+  });
+  return app;
+}

@@ -23,3 +23,10 @@ export type {
   GitHubOAuthClient,
   GitHubSessionIssuer,
 } from './github-auth.js';
+
+export { createInstallationApi } from './installation-api.js';
+export type {
+  InstallationApiOptions,
+  InstallationAuthenticator,
+  InstallationRepositoryStore,
+} from './installation-api.js';
