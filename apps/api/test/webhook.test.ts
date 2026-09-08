@@ -30,6 +30,16 @@ afterEach(async () => {
 });
 
 describe('GitHub webhook boundary', () => {
+  it('refuses an empty webhook secret', () => {
+    expect(() =>
+      createGitHubWebhookApi({
+        secret: '',
+        deliveryStore: { record: vi.fn() },
+        reviewRunStarter: { start: vi.fn() },
+      }),
+    ).toThrow('secret is required');
+  });
+
   it('records a verified delivery and starts one pending review', async () => {
     const { app, deliveryStore, reviewRunStarter } = createApi();
     const payload = JSON.stringify({ action: 'opened' });
@@ -74,6 +84,27 @@ describe('GitHub webhook boundary', () => {
     });
 
     expect(response.statusCode).toBe(401);
+    expect(deliveryStore.record).not.toHaveBeenCalled();
+    expect(reviewRunStarter.start).not.toHaveBeenCalled();
+  });
+
+  it('rejects a signed malformed payload before storing it', async () => {
+    const { app, deliveryStore, reviewRunStarter } = createApi();
+    const payload = '{not-json';
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: {
+        'content-type': 'application/json',
+        'x-github-delivery': 'delivery-malformed',
+        'x-github-event': 'pull_request',
+        'x-hub-signature-256': signature(payload),
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(400);
     expect(deliveryStore.record).not.toHaveBeenCalled();
     expect(reviewRunStarter.start).not.toHaveBeenCalled();
   });

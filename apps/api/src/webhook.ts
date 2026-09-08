@@ -42,6 +42,9 @@ export function verifyGitHubWebhookSignature(
 }
 
 export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
+  if (options.secret.trim().length === 0) {
+    throw new Error('GitHub webhook secret is required.');
+  }
   const app = Fastify({ logger: false });
   app.addContentTypeParser(
     'application/json',
