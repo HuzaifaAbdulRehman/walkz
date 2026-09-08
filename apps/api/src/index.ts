@@ -14,4 +14,5 @@ export type {
   RepositoryApiAuthenticator,
   RepositoryApiOptions,
   RepositoryConfigHistoryStore,
+  ReviewHistoryStore,
 } from './repository-api.js';

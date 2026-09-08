@@ -15,6 +15,7 @@ describe('authenticated repository API', () => {
     const app = createRepositoryApi({
       authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId }) },
       configHistory: { list: vi.fn().mockResolvedValue([{ configHash: 'a'.repeat(64) }]) },
+      reviewHistory: { list: vi.fn().mockResolvedValue([]) },
     });
     apps.push(app);
 
@@ -28,11 +29,26 @@ describe('authenticated repository API', () => {
     const app = createRepositoryApi({
       authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId: otherRepositoryId }) },
       configHistory: { list: vi.fn() },
+      reviewHistory: { list: vi.fn() },
     });
     apps.push(app);
 
     const response = await app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/configs` });
 
     expect(response.statusCode).toBe(403);
+  });
+
+  it('returns review history for an authorized repository', async () => {
+    const app = createRepositoryApi({
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId }) },
+      configHistory: { list: vi.fn().mockResolvedValue([]) },
+      reviewHistory: { list: vi.fn().mockResolvedValue([{ status: 'completed' }]) },
+    });
+    apps.push(app);
+
+    const response = await app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/reviews` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ reviews: [{ status: 'completed' }] });
   });
 });

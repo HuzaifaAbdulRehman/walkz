@@ -7,12 +7,17 @@ export interface RepositoryConfigHistoryStore {
   list(repositoryId: string): Promise<readonly unknown[]>;
 }
 
+export interface ReviewHistoryStore {
+  list(repositoryId: string): Promise<readonly unknown[]>;
+}
+
 export interface RepositoryApiAuthenticator {
   authenticate(request: unknown): Promise<{ repositoryId: string }>;
 }
 
 export interface RepositoryApiOptions {
   configHistory: RepositoryConfigHistoryStore;
+  reviewHistory: ReviewHistoryStore;
   authenticator: RepositoryApiAuthenticator;
 }
 
@@ -25,6 +30,14 @@ export function createRepositoryApi(options: RepositoryApiOptions): FastifyInsta
       return reply.code(403).send({ error: 'repository_forbidden' });
     }
     return reply.send({ configurations: await options.configHistory.list(repositoryId) });
+  });
+  app.get('/api/repositories/:repositoryId/reviews', async (request, reply) => {
+    const { repositoryId } = repositoryParamsSchema.parse(request.params);
+    const identity = await options.authenticator.authenticate(request);
+    if (identity.repositoryId !== repositoryId) {
+      return reply.code(403).send({ error: 'repository_forbidden' });
+    }
+    return reply.send({ reviews: await options.reviewHistory.list(repositoryId) });
   });
   return app;
 }
