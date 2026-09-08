@@ -65,6 +65,7 @@ describe('GitHub webhook boundary', () => {
     expect(reviewRunStarter.start).toHaveBeenCalledWith({
       deliveryId: 'delivery-1',
       eventName: 'pull_request',
+      payload: { action: 'opened' },
     });
   });
 

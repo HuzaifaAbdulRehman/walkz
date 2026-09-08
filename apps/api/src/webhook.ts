@@ -11,7 +11,11 @@ export interface WebhookDeliveryStore {
 }
 
 export interface PendingReviewRunStarter {
-  start(input: { deliveryId: string; eventName: string }): Promise<void>;
+  start(input: {
+    deliveryId: string;
+    eventName: string;
+    payload: unknown;
+  }): Promise<void>;
 }
 
 export interface GitHubWebhookApiOptions {
@@ -65,8 +69,9 @@ export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
       return reply.code(400).send({ error: 'missing_delivery_metadata' });
     }
 
+    let parsedPayload: unknown;
     try {
-      JSON.parse(payload.toString('utf8'));
+      parsedPayload = JSON.parse(payload.toString('utf8'));
     } catch {
       return reply.code(400).send({ error: 'invalid_payload' });
     }
@@ -77,7 +82,11 @@ export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
       payloadHash: createHash('sha256').update(payload).digest('hex'),
     });
     if (outcome === 'accepted') {
-      await options.reviewRunStarter.start({ deliveryId, eventName });
+      await options.reviewRunStarter.start({
+        deliveryId,
+        eventName,
+        payload: parsedPayload,
+      });
     }
     return reply.code(202).send({ accepted: outcome === 'accepted' });
   });
