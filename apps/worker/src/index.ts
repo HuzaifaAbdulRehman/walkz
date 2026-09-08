@@ -1,3 +1,5 @@
+import { Queue, type ConnectionOptions } from 'bullmq';
+
 export const outboxQueueName = 'walkz-outbox';
 
 export interface OutboxQueue {
@@ -13,4 +15,8 @@ export async function enqueueOutboxEvent(
   eventId: string,
 ): Promise<void> {
   await queue.add('dispatch', { eventId }, { jobId: eventId });
+}
+
+export function createOutboxQueue(connection: ConnectionOptions): Queue {
+  return new Queue(outboxQueueName, { connection });
 }
