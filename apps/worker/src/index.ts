@@ -1,4 +1,4 @@
-import { Queue, type ConnectionOptions } from 'bullmq';
+import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import type { ClaimedOutboxEvent } from '@walkz/persistence';
 
 export const outboxQueueName = 'walkz-outbox';
@@ -57,4 +57,27 @@ export async function dispatchOutboxEvent(
     throw new Error('Outbox event lease was lost before publication acknowledgement.');
   }
   return 'published';
+}
+
+export function createOutboxWorker(
+  connection: ConnectionOptions,
+  store: OutboxEventStore,
+  handler: OutboxEventHandler,
+  options: { workerId: string; leaseMs: number },
+): Worker {
+  return new Worker(
+    outboxQueueName,
+    async (job) => {
+      const eventId = job.data?.eventId;
+      if (typeof eventId !== 'string') {
+        throw new Error('Outbox jobs must contain an event ID.');
+      }
+      return dispatchOutboxEvent(store, handler, {
+        eventId,
+        workerId: options.workerId,
+        leaseMs: options.leaseMs,
+      });
+    },
+    { connection },
+  );
 }
