@@ -61,9 +61,9 @@ export async function getManualReviewRepository(
   const repositoryId = z.uuid().parse(repositoryIdInput);
   const result = await pool.query(
     `
-      SELECT r.id AS repositoryId,
-             gi.github_id::text AS installationId,
-             r.github_id::text AS githubId,
+      SELECT r.id AS "repositoryId",
+             gi.github_id::text AS "installationId",
+             r.github_id::text AS "githubId",
              r.owner_login AS owner,
              r.repository_name AS repository
       FROM repositories r
@@ -100,11 +100,11 @@ async function claimManualReviewRequest(
   if (inserted.rows.length === 1) return null;
   const existing = await client.query(
     `
-      SELECT repository_id AS repositoryId,
-             pull_request_number AS pullRequestNumber,
-             base_sha AS baseSha,
-             head_sha AS headSha,
-             review_run_id AS reviewRunId
+      SELECT repository_id AS "repositoryId",
+             pull_request_number AS "pullRequestNumber",
+             base_sha AS "baseSha",
+             head_sha AS "headSha",
+             review_run_id AS "reviewRunId"
       FROM manual_review_requests
       WHERE request_id = $1
     `,
@@ -130,8 +130,8 @@ export async function queueManualReview(
   return withTransaction(pool, async (client) => {
     const contextResult = await client.query(
       `
-        SELECT rc.id AS configId,
-               rc.config_hash AS configHash,
+        SELECT rc.id AS "configId",
+               rc.config_hash AS "configHash",
                rc.config
         FROM repositories r
         JOIN github_installations gi ON gi.id = r.installation_id

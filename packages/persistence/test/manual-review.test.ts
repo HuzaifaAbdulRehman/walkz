@@ -42,6 +42,8 @@ describe('manual review persistence', () => {
       expect.stringContaining('WHERE r.id = $1'),
       [repositoryId],
     );
+    expect(query.mock.calls[0]?.[0]).toContain('r.id AS "repositoryId"');
+    expect(query.mock.calls[0]?.[0]).toContain('gi.github_id::text AS "installationId"');
   });
 
   it('queues exact GitHub state and supersedes stale work atomically', async () => {
@@ -82,6 +84,8 @@ describe('manual review persistence', () => {
       'COMMIT',
     ]);
     expect(release).toHaveBeenCalledOnce();
+    expect(query.mock.calls[1]?.[0]).toContain('rc.id AS "configId"');
+    expect(query.mock.calls[1]?.[0]).toContain('rc.config_hash AS "configHash"');
   });
 
   it('returns the original run for a repeated request key', async () => {
@@ -110,6 +114,8 @@ describe('manual review persistence', () => {
       created: false,
     });
     expect(query).toHaveBeenCalledTimes(5);
+    expect(query.mock.calls[3]?.[0]).toContain('base_sha AS "baseSha"');
+    expect(query.mock.calls[3]?.[0]).toContain('review_run_id AS "reviewRunId"');
   });
 
   it('rolls back when the repository identity changed', async () => {

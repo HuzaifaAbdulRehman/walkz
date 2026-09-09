@@ -72,9 +72,9 @@ async function lockReviewRun(
     `
       SELECT rr.id,
              rr.status,
-             rr.base_sha AS baseSha,
-             rr.head_sha AS headSha,
-             gi.github_id::text AS installationId,
+             rr.base_sha AS "baseSha",
+             rr.head_sha AS "headSha",
+             gi.github_id::text AS "installationId",
              r.owner_login AS owner,
              r.repository_name AS repository
       FROM review_runs rr
