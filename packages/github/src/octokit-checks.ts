@@ -30,6 +30,38 @@ export interface InstallationReviewCheckPublisherFactory {
   forInstallation(installationId: string): Promise<ReviewCheckPublisher>;
 }
 
+const appConfigSchema = z.object({
+  appId: z.union([
+    z.string().trim().min(1).max(128),
+    z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  ]),
+  privateKey: z.string().trim().min(1).max(65_536),
+  requestTimeoutMs: z.number().int().min(1_000).max(60_000).default(15_000),
+}).strict();
+
+export function createGitHubInstallationApp(input: unknown): GitHubInstallationApp {
+  const config = appConfigSchema.parse(input);
+  const InstallationOctokit = Octokit.defaults({
+    request: { timeout: config.requestTimeoutMs },
+  });
+  const app = new App({
+    appId: config.appId,
+    privateKey: config.privateKey,
+    Octokit: InstallationOctokit,
+  });
+  return {
+    async getInstallationOctokit(installationId) {
+      const octokit = await app.getInstallationOctokit(installationId);
+      return {
+        async request(route, parameters) {
+          const response = await octokit.request(route, parameters);
+          return { data: response.data };
+        },
+      };
+    },
+  };
+}
+
 function output(input: {
   summary: string;
   annotations: Parameters<GitHubChecksClient['create']>[0]['annotations'];
@@ -107,36 +139,10 @@ export function createInstallationReviewCheckPublisherFactory(
   };
 }
 
-const appConfigSchema = z.object({
-  appId: z.union([
-    z.string().trim().min(1).max(128),
-    z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  ]),
-  privateKey: z.string().trim().min(1).max(65_536),
-  requestTimeoutMs: z.number().int().min(1_000).max(60_000).default(15_000),
-}).strict();
-
 export function createGitHubAppCheckPublisherFactory(
   input: unknown,
 ): InstallationReviewCheckPublisherFactory {
-  const config = appConfigSchema.parse(input);
-  const InstallationOctokit = Octokit.defaults({
-    request: { timeout: config.requestTimeoutMs },
-  });
-  const app = new App({
-    appId: config.appId,
-    privateKey: config.privateKey,
-    Octokit: InstallationOctokit,
-  });
-  return createInstallationReviewCheckPublisherFactory({
-    async getInstallationOctokit(installationId) {
-      const octokit = await app.getInstallationOctokit(installationId);
-      return {
-        async request(route, parameters) {
-          const response = await octokit.request(route, parameters);
-          return { data: response.data };
-        },
-      };
-    },
-  });
+  return createInstallationReviewCheckPublisherFactory(
+    createGitHubInstallationApp(input),
+  );
 }
