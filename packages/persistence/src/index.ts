@@ -58,6 +58,19 @@ export {
 
 export type { CreatedQueuedReviewRun } from './review-run.js';
 
+export { queueGitHubReviewRun } from './github-review-run.js';
+export type { QueuedGitHubReviewRun } from './github-review-run.js';
+
+export {
+  getManualReviewRepository,
+  queueManualReview,
+} from './manual-review.js';
+export type {
+  ManualReviewInput,
+  ManualReviewQueueResult,
+  ManualReviewRepository,
+} from './manual-review.js';
+
 export { completeHostedReviewRun } from './review-result.js';
 export type { CompletedHostedReviewRun } from './review-result.js';
 
