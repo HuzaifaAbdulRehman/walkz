@@ -82,7 +82,7 @@ describe('PostgreSQL hosted review completion', () => {
     expect(second).toEqual({ ...first, created: false });
 
     const runs = await pool.query(
-      `SELECT status, verdict, result_summary AS resultSummary
+      `SELECT status, verdict, result_summary AS "resultSummary"
        FROM review_runs WHERE id = $1`,
       [runId],
     );
@@ -92,7 +92,7 @@ describe('PostgreSQL hosted review completion', () => {
       resultSummary: 'No blocking evidence.',
     }]);
     const events = await pool.query(
-      `SELECT event_type AS eventType, payload
+      `SELECT event_type AS "eventType", payload
        FROM outbox_events
        WHERE aggregate_id = $1 AND event_type = 'github_check.completed'`,
       [runId],
