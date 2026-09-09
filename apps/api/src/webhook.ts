@@ -1,27 +1,27 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import Fastify from 'fastify';
+import { parsePullRequestReviewTrigger } from '@walkz/github';
+import {
+  acceptGitHubWebhook,
+  type GitHubWebhookIntakeInput,
+  type GitHubWebhookIntakeResult,
+} from '@walkz/persistence';
 
-export interface WebhookDeliveryStore {
-  record(input: {
-    deliveryId: string;
-    eventName: string;
-    payloadHash: string;
-  }): Promise<'accepted' | 'duplicate'>;
+export interface GitHubWebhookIntake {
+  accept(input: GitHubWebhookIntakeInput): Promise<GitHubWebhookIntakeResult>;
 }
 
-export interface PendingReviewRunStarter {
-  start(input: {
-    deliveryId: string;
-    eventName: string;
-    payload: unknown;
-  }): Promise<void>;
+export function createPersistentGitHubWebhookIntake(
+  pool: Parameters<typeof acceptGitHubWebhook>[0],
+): GitHubWebhookIntake {
+  return { accept: (input) => acceptGitHubWebhook(pool, input) };
 }
 
 export interface GitHubWebhookApiOptions {
   secret: string;
-  deliveryStore: WebhookDeliveryStore;
-  reviewRunStarter: PendingReviewRunStarter;
+  promptVersion: string;
+  intake: GitHubWebhookIntake;
 }
 
 function headerValue(value: string | string[] | undefined): string | null {
@@ -48,6 +48,9 @@ export function verifyGitHubWebhookSignature(
 export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
   if (options.secret.trim().length === 0) {
     throw new Error('GitHub webhook secret is required.');
+  }
+  if (options.promptVersion.trim().length === 0) {
+    throw new Error('Review prompt version is required.');
   }
   const app = Fastify({ logger: false });
   app.addContentTypeParser(
@@ -76,19 +79,26 @@ export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
       return reply.code(400).send({ error: 'invalid_payload' });
     }
 
-    const outcome = await options.deliveryStore.record({
+    let review: ReturnType<typeof parsePullRequestReviewTrigger> = null;
+    if (eventName === 'pull_request') {
+      try {
+        review = parsePullRequestReviewTrigger(parsedPayload);
+      } catch {
+        return reply.code(400).send({ error: 'invalid_payload' });
+      }
+    }
+
+    const outcome = await options.intake.accept({
       deliveryId,
       eventName,
       payloadHash: createHash('sha256').update(payload).digest('hex'),
+      promptVersion: options.promptVersion,
+      review,
     });
-    if (outcome === 'accepted') {
-      await options.reviewRunStarter.start({
-        deliveryId,
-        eventName,
-        payload: parsedPayload,
-      });
-    }
-    return reply.code(202).send({ accepted: outcome === 'accepted' });
+    return reply.code(202).send({
+      accepted: outcome.status !== 'duplicate',
+      queued: outcome.status === 'queued',
+    });
   });
   return app;
 }

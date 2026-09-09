@@ -54,7 +54,10 @@ export {
 export type { CreatedQueuedReviewRun } from './review-run.js';
 
 export { acceptGitHubWebhook } from './github-review-intake.js';
-export type { GitHubWebhookIntakeResult } from './github-review-intake.js';
+export type {
+  GitHubWebhookIntakeInput,
+  GitHubWebhookIntakeResult,
+} from './github-review-intake.js';
 
 export { purgeExpiredAuditEvents, recordAuditEvent } from './audit.js';
 

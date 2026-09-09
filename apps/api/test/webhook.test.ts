@@ -13,16 +13,40 @@ function signature(payload: string): string {
   );
 }
 
-function createApi(outcome: 'accepted' | 'duplicate' = 'accepted') {
-  const deliveryStore = { record: vi.fn().mockResolvedValue(outcome) };
-  const reviewRunStarter = { start: vi.fn().mockResolvedValue(undefined) };
+const pullRequestPayload = {
+  action: 'ready_for_review',
+  installation: { id: 1234 },
+  repository: { id: 5678, name: 'walkz', owner: { login: 'owner' } },
+  pull_request: {
+    id: 9012,
+    number: 7,
+    base: { sha: 'a'.repeat(40) },
+    head: { sha: 'b'.repeat(40) },
+  },
+};
+
+function createApi(outcome: 'queued' | 'duplicate' | 'ignored' = 'queued') {
+  const result = outcome === 'queued'
+    ? {
+        status: 'queued' as const,
+        reviewRunId: '3d963b52-8203-4ba6-bcac-15bf132371f0',
+        outboxEventIds: [
+          '08d0dd85-734e-4f74-bcfc-3436ec7b4abd',
+          '09e7392c-03bb-4b34-b099-0803fb0d9023',
+        ] as [string, string],
+        supersededRunIds: [],
+      }
+    : outcome === 'duplicate'
+      ? { status: 'duplicate' as const }
+      : { status: 'ignored' as const, reason: 'event_not_reviewable' as const };
+  const intake = { accept: vi.fn().mockResolvedValue(result) };
   const app = createGitHubWebhookApi({
     secret,
-    deliveryStore,
-    reviewRunStarter,
+    promptVersion: 'walkz-review-v1',
+    intake,
   });
   apps.push(app);
-  return { app, deliveryStore, reviewRunStarter };
+  return { app, intake };
 }
 
 afterEach(async () => {
@@ -34,15 +58,15 @@ describe('GitHub webhook boundary', () => {
     expect(() =>
       createGitHubWebhookApi({
         secret: '',
-        deliveryStore: { record: vi.fn() },
-        reviewRunStarter: { start: vi.fn() },
+        promptVersion: 'walkz-review-v1',
+        intake: { accept: vi.fn() },
       }),
     ).toThrow('secret is required');
   });
 
-  it('records a verified delivery and starts one pending review', async () => {
-    const { app, deliveryStore, reviewRunStarter } = createApi();
-    const payload = JSON.stringify({ action: 'opened' });
+  it('passes a verified pull request to one atomic intake', async () => {
+    const { app, intake } = createApi();
+    const payload = JSON.stringify(pullRequestPayload);
 
     const response = await app.inject({
       method: 'POST',
@@ -57,20 +81,28 @@ describe('GitHub webhook boundary', () => {
     });
 
     expect(response.statusCode).toBe(202);
-    expect(deliveryStore.record).toHaveBeenCalledWith({
+    expect(response.json()).toEqual({ accepted: true, queued: true });
+    expect(intake.accept).toHaveBeenCalledWith({
       deliveryId: 'delivery-1',
       eventName: 'pull_request',
       payloadHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-    });
-    expect(reviewRunStarter.start).toHaveBeenCalledWith({
-      deliveryId: 'delivery-1',
-      eventName: 'pull_request',
-      payload: { action: 'opened' },
+      promptVersion: 'walkz-review-v1',
+      review: {
+        trigger: 'ready_for_review',
+        installationId: '1234',
+        repositoryId: '5678',
+        repositoryOwner: 'owner',
+        repositoryName: 'walkz',
+        pullRequestId: '9012',
+        pullRequestNumber: 7,
+        baseSha: 'a'.repeat(40),
+        headSha: 'b'.repeat(40),
+      },
     });
   });
 
   it('rejects an invalid signature before parsing or storing payload data', async () => {
-    const { app, deliveryStore, reviewRunStarter } = createApi();
+    const { app, intake } = createApi();
 
     const response = await app.inject({
       method: 'POST',
@@ -85,12 +117,11 @@ describe('GitHub webhook boundary', () => {
     });
 
     expect(response.statusCode).toBe(401);
-    expect(deliveryStore.record).not.toHaveBeenCalled();
-    expect(reviewRunStarter.start).not.toHaveBeenCalled();
+    expect(intake.accept).not.toHaveBeenCalled();
   });
 
   it('rejects a signed malformed payload before storing it', async () => {
-    const { app, deliveryStore, reviewRunStarter } = createApi();
+    const { app, intake } = createApi();
     const payload = '{not-json';
 
     const response = await app.inject({
@@ -106,13 +137,12 @@ describe('GitHub webhook boundary', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(deliveryStore.record).not.toHaveBeenCalled();
-    expect(reviewRunStarter.start).not.toHaveBeenCalled();
+    expect(intake.accept).not.toHaveBeenCalled();
   });
 
   it('acknowledges duplicates without starting another review', async () => {
-    const { app, deliveryStore, reviewRunStarter } = createApi('duplicate');
-    const payload = JSON.stringify({ action: 'opened' });
+    const { app, intake } = createApi('duplicate');
+    const payload = JSON.stringify(pullRequestPayload);
 
     const response = await app.inject({
       method: 'POST',
@@ -127,8 +157,52 @@ describe('GitHub webhook boundary', () => {
     });
 
     expect(response.statusCode).toBe(202);
-    expect(response.json()).toEqual({ accepted: false });
-    expect(deliveryStore.record).toHaveBeenCalledOnce();
-    expect(reviewRunStarter.start).not.toHaveBeenCalled();
+    expect(response.json()).toEqual({ accepted: false, queued: false });
+    expect(intake.accept).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a signed pull request with an invalid shape', async () => {
+    const { app, intake } = createApi();
+    const payload = JSON.stringify({ action: 'ready_for_review' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: {
+        'content-type': 'application/json',
+        'x-github-delivery': 'delivery-invalid-shape',
+        'x-github-event': 'pull_request',
+        'x-hub-signature-256': signature(payload),
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'invalid_payload' });
+    expect(intake.accept).not.toHaveBeenCalled();
+  });
+
+  it('records signed non-review events without queuing work', async () => {
+    const { app, intake } = createApi('ignored');
+    const payload = JSON.stringify({ zen: 'Keep it logically awesome.' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: {
+        'content-type': 'application/json',
+        'x-github-delivery': 'delivery-ping',
+        'x-github-event': 'ping',
+        'x-hub-signature-256': signature(payload),
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ accepted: true, queued: false });
+    expect(intake.accept).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'ping',
+      review: null,
+    }));
   });
 });

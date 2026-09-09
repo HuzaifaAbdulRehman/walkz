@@ -1,12 +1,12 @@
 export {
   createGitHubWebhookApi,
+  createPersistentGitHubWebhookIntake,
   verifyGitHubWebhookSignature,
 } from './webhook.js';
 
 export type {
+  GitHubWebhookIntake,
   GitHubWebhookApiOptions,
-  PendingReviewRunStarter,
-  WebhookDeliveryStore,
 } from './webhook.js';
 
 export { createRepositoryApi } from './repository-api.js';

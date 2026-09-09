@@ -11,6 +11,9 @@
   "references": [
     {
       "path": "../../packages/github"
+    },
+    {
+      "path": "../../packages/persistence"
     }
   ]
 }

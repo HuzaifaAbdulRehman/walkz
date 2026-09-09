@@ -45,6 +45,8 @@ const webhookIntakeSchema = z
     path: ['eventName'],
   });
 
+export type GitHubWebhookIntakeInput = z.infer<typeof webhookIntakeSchema>;
+
 interface RepositoryReviewContext {
   installationId: string;
   repositoryId: string;
