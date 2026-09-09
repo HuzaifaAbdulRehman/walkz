@@ -43,4 +43,15 @@ describe('runGitBuffer input', () => {
       await repository.dispose();
     }
   });
+
+  it('rejects header injection in GitHub credentials', async () => {
+    const repository = await GitFixture.create();
+    try {
+      await expect(runGitBuffer(repository.root, ['status'], {
+        githubToken: 'token\r\nInjected: value',
+      })).rejects.toThrow('installation token is invalid');
+    } finally {
+      await repository.dispose();
+    }
+  });
 });

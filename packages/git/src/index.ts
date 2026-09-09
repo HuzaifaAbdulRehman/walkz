@@ -11,6 +11,11 @@ export {
 } from './process.js';
 export { resolveGitReferences } from './references.js';
 export { locateRepositoryRoot } from './repository.js';
+export { withHostedGitHubCheckout } from './hosted-checkout.js';
+export type {
+  HostedCheckoutOptions,
+  HostedGitRunner,
+} from './hosted-checkout.js';
 export { readRepositoryFileAtRevision } from './revision-file.js';
 export {
   assertProofWorkspacePath,

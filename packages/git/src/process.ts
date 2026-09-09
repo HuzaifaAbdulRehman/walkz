@@ -47,10 +47,32 @@ export class GitOutputLimitError extends GitCommandError {
 }
 
 export interface RunGitOptions {
+  githubToken?: string | undefined;
   input?: Uint8Array | undefined;
   maxOutputBytes?: number;
   signal?: AbortSignal | undefined;
   timeoutMs?: number;
+}
+
+function addGitHubAuthentication(
+  environment: NodeJS.ProcessEnv,
+  token: string | undefined,
+): void {
+  if (token === undefined) return;
+  if (
+    token.length < 1 ||
+    token.length > 1_024 ||
+    token.trim() !== token ||
+    /[\0\r\n]/.test(token)
+  ) {
+    throw new GitCommandError('GitHub installation token is invalid.');
+  }
+  const credentials = Buffer.from(`x-access-token:${token}`, 'utf8').toString('base64');
+  environment.GIT_CONFIG_COUNT = '2';
+  environment.GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader';
+  environment.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${credentials}`;
+  environment.GIT_CONFIG_KEY_1 = 'credential.helper';
+  environment.GIT_CONFIG_VALUE_1 = '';
 }
 
 function inheritedEnvironment(): NodeJS.ProcessEnv {
@@ -152,6 +174,7 @@ export async function runGitBuffer(
     throw new GitCommandError('Repository root must be a directory.');
   }
   const environment = inheritedEnvironment();
+  addGitHubAuthentication(environment, options.githubToken);
   const executable = await locateGitExecutable(environment);
   if (options.signal?.aborted === true) {
     throw new GitCommandError('Git command was cancelled.');
