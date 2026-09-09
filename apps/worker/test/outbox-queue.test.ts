@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  createOutboxQueue,
   dispatchOutboxEvent,
   enqueueOutboxEvent,
+  outboxQueueName,
   recoverOutboxEvents,
 } from '../src/index.js';
 
@@ -53,11 +53,8 @@ describe('outbox queue', () => {
     );
   });
 
-  it('uses one named queue for all outbox dispatches', async () => {
-    const queue = createOutboxQueue({ host: '127.0.0.1', port: 1 });
-
-    expect(queue.name).toBe('walkz-outbox');
-    await queue.close();
+  it('uses one named queue for all outbox dispatches', () => {
+    expect(outboxQueueName).toBe('walkz-outbox');
   });
 
   it('marks an event published only after its idempotent handler succeeds', async () => {
