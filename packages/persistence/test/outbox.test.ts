@@ -131,6 +131,10 @@ describe('transactional outbox', () => {
       expect.stringContaining('lease_expires_at <= now()'),
       [reviewRunId, 'worker-1', 30_000],
     );
+    expect(query.mock.calls[0]?.[0]).toContain(
+      'earlier.aggregate_id = outbox_events.aggregate_id',
+    );
+    expect(query.mock.calls[0]?.[0]).toContain('(earlier.created_at, earlier.id) <');
   });
 
   it('marks an event published only for its lease holder', async () => {

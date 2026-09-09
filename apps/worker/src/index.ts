@@ -55,7 +55,9 @@ export async function recoverOutboxEvents(
   limit: number,
 ): Promise<number> {
   const eventIds = await store.listRecoverableEventIds(limit);
-  await Promise.all(eventIds.map((eventId) => enqueueOutboxEvent(queue, eventId)));
+  for (const eventId of eventIds) {
+    await enqueueOutboxEvent(queue, eventId);
+  }
   return eventIds.length;
 }
 

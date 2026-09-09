@@ -244,6 +244,14 @@ export async function claimOutboxEvent(
       WHERE id = $1
         AND published_at IS NULL
         AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+        AND NOT EXISTS (
+          SELECT 1
+          FROM outbox_events earlier
+          WHERE earlier.aggregate_id = outbox_events.aggregate_id
+            AND earlier.published_at IS NULL
+            AND (earlier.created_at, earlier.id) <
+                (outbox_events.created_at, outbox_events.id)
+        )
       RETURNING id, aggregate_id AS "aggregateId", event_type AS "eventType", payload
     `,
     [lease.eventId, lease.workerId, lease.leaseMs],
