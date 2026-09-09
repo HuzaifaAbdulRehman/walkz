@@ -1,6 +1,9 @@
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import type { ClaimedOutboxEvent } from '@walkz/persistence';
 
+export { createGitHubCheckOutboxHandler } from './github-check-handler.js';
+export type { InstallationReviewCheckPublisherFactory } from './github-check-handler.js';
+
 export const outboxQueueName = 'walkz-outbox';
 
 export interface OutboxQueue {
