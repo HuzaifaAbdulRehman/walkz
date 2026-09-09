@@ -26,6 +26,19 @@ const reviewResultSchema = z
     path: ['headSha'],
   });
 
+function renderPlainCheckText(value: string, maxLength: number): string {
+  const escaped = value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('@', '&#64;')
+    .replaceAll('\\', '\\\\')
+    .replace(/([!"#$%()*+,\-./:;=?[\]^_\x60{|}~])/g, '\\$1');
+  return escaped.length <= maxLength
+    ? escaped
+    : `${escaped.slice(0, maxLength - 1)}…`;
+}
+
 export function buildReviewCheckPayload(input: unknown): ReviewCheckPayload {
   const result = reviewResultSchema.parse(input);
   const conclusion = result.verdict === 'SHIP'
@@ -41,7 +54,7 @@ export function buildReviewCheckPayload(input: unknown): ReviewCheckPayload {
     headSha: result.headSha,
     status: 'completed',
     conclusion,
-    summary: result.summary,
+    summary: renderPlainCheckText(result.summary, 65_536),
     annotations: result.findings.map((finding) => ({
       path: finding.path,
       startLine: finding.startLine,
@@ -51,7 +64,7 @@ export function buildReviewCheckPayload(input: unknown): ReviewCheckPayload {
         : finding.severity === 'medium'
           ? 'warning'
           : 'notice',
-      message: finding.summary,
+      message: renderPlainCheckText(finding.summary, 1_024),
     })),
   });
 }
