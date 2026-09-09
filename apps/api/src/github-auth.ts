@@ -52,7 +52,7 @@ export function registerGitHubAuthRoutes(
   const now = options.now ?? (() => new Date());
   app.get('/auth/github/start', async (_request, reply) => {
     const stateId = randomUUID();
-    const state = options.stateSigner.issue({ stateId, returnTo: '/reviews' });
+    const state = options.stateSigner.issue({ stateId, returnTo: '/' });
     await options.stateStore.store({ stateId, expiresAt: new Date(state.expiresAt) });
     const url = new URL('https://github.com/login/oauth/authorize');
     url.searchParams.set('client_id', options.clientId);

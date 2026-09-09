@@ -58,13 +58,13 @@ describe('GitHub OAuth API', () => {
     apps.push(app);
     const state = stateSigner.issue({
       stateId: '3d963b52-8203-4ba6-bcac-15bf132371f0',
-      returnTo: '/reviews',
+      returnTo: '/',
     }).token;
 
     const response = await app.inject({ method: 'GET', url: `/auth/github/callback?code=code&state=${encodeURIComponent(state)}` });
 
     expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toBe('/reviews');
+    expect(response.headers.location).toBe('/');
     expect(response.headers['set-cookie']).toContain('walkz_session=session-id');
     expect(response.headers['set-cookie']).toContain('Max-Age=3600');
     expect(response.body).not.toContain('token');
@@ -85,7 +85,7 @@ describe('GitHub OAuth API', () => {
     apps.push(app);
     const state = stateSigner.issue({
       stateId: '3d963b52-8203-4ba6-bcac-15bf132371f0',
-      returnTo: '/reviews',
+      returnTo: '/',
     }).token;
 
     const response = await app.inject({

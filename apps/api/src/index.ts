@@ -43,6 +43,11 @@ export {
 
 export { createHostedApi } from './hosted-api.js';
 export type { HostedApiOptions } from './hosted-api.js';
+export {
+  createHostedApiFromEnvironment,
+  parseHostedApiEnvironment,
+} from './runtime.js';
+export type { HostedApiEnvironment } from './runtime.js';
 
 export { createApiSessionAuthenticator, readSessionCookie } from './session-auth.js';
 export type {

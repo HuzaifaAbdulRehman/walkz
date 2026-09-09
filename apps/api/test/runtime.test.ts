@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest';
+
+import { parseHostedApiEnvironment } from '../src/index.js';
+
+const privateKey = Buffer.from([
+  '-----BEGIN PRIVATE KEY-----',
+  'test-value',
+  '-----END PRIVATE KEY-----',
+].join('\n')).toString('base64');
+
+function environment(): NodeJS.ProcessEnv {
+  return {
+    DATABASE_URL: 'postgresql://walkz:secret@postgres:5432/walkz',
+    GITHUB_APP_ID: '123',
+    GITHUB_PRIVATE_KEY_BASE64: privateKey,
+    GITHUB_CLIENT_ID: 'client-id',
+    GITHUB_CLIENT_SECRET: 'client-secret',
+    GITHUB_OAUTH_CALLBACK_URL: 'https://walkz.test/auth/github/callback',
+    GITHUB_WEBHOOK_SECRET: 'w'.repeat(32),
+    WALKZ_OAUTH_STATE_SECRET: 's'.repeat(32),
+  };
+}
+
+describe('hosted API runtime configuration', () => {
+  it('parses a base64 PEM without retaining the encoded form', () => {
+    const parsed = parseHostedApiEnvironment(environment());
+
+    expect(parsed.githubPrivateKey).toContain('BEGIN PRIVATE KEY');
+    expect(parsed).not.toHaveProperty('GITHUB_PRIVATE_KEY_BASE64');
+    expect(parsed.port).toBe(3001);
+    expect(parsed.host).toBe('0.0.0.0');
+  });
+
+  it('rejects short webhook and state secrets', () => {
+    expect(() => parseHostedApiEnvironment({
+      ...environment(),
+      GITHUB_WEBHOOK_SECRET: 'short',
+      WALKZ_OAUTH_STATE_SECRET: 'short',
+    })).toThrow();
+  });
+
+  it('rejects decoded values that are not PEM keys', () => {
+    expect(() => parseHostedApiEnvironment({
+      ...environment(),
+      GITHUB_PRIVATE_KEY_BASE64: Buffer.from('not-a-key').toString('base64'),
+    })).toThrow('must contain a PEM private key');
+  });
+});

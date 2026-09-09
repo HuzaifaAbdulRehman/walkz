@@ -10,6 +10,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/contracts"
+    },
+    {
       "path": "../../packages/github"
     },
     {
