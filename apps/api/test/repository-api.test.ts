@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createDefaultWalkzConfig } from '@walkz/contracts';
+
 import { createRepositoryApi } from '../src/index.js';
 
 const repositoryId = '3d963b52-8203-4ba6-bcac-15bf132371f0';
@@ -20,7 +22,13 @@ describe('authenticated repository API', () => {
           schemaVersion: 1,
           configHash: 'a'.repeat(64),
           createdAt: new Date('2026-09-09T12:00:00.000Z'),
-          config: { commands: [{ args: ['secret-shaped-value'] }] },
+          config: createDefaultWalkzConfig([{
+            id: 'typecheck',
+            executable: 'npm',
+            args: ['run', 'typecheck', 'secret-shaped-value'],
+            cwd: '.',
+            required: true,
+          }]),
         }]),
       },
       reviewHistory: { list: vi.fn().mockResolvedValue([]) },
@@ -35,8 +43,25 @@ describe('authenticated repository API', () => {
       schemaVersion: 1,
       configHash: 'a'.repeat(64),
       createdAt: '2026-09-09T12:00:00.000Z',
+      provider: { name: 'groq', model: 'auto' },
+      budget: {
+        diffBytes: 524_288,
+        files: 100,
+        tokens: 16_000,
+        commandTimeoutMs: 120_000,
+        commandOutputBytesPerStream: 262_144,
+      },
+      triggerPolicy: 'manual',
+      blockingEvidenceLevels: ['VERIFIED'],
+      commandApprovalPolicy: 'prompt',
+      commandCount: 1,
+      requiredCommandCount: 1,
+      premiumEnabled: false,
+      spendingLimitUsd: 0,
     }] });
     expect(response.body).not.toContain('secret-shaped-value');
+    expect(response.body).not.toContain('executable');
+    expect(response.body).not.toContain('commands');
   });
 
   it('rejects access to another repository', async () => {
