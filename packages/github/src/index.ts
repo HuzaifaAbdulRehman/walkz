@@ -43,3 +43,10 @@ export { buildReviewCheckPayload } from './review-result.js';
 
 export { parsePullRequestReviewTrigger } from './pull-request-event.js';
 export type { PullRequestReviewTrigger } from './pull-request-event.js';
+
+export { createInstallationPullRequestReaderFactory } from './pull-request-reader.js';
+export type {
+  GitHubPullRequest,
+  InstallationPullRequestReader,
+  InstallationPullRequestReaderFactory,
+} from './pull-request-reader.js';
