@@ -14,7 +14,15 @@ describe('authenticated repository API', () => {
   it('returns configuration history for an authorized repository', async () => {
     const app = createRepositoryApi({
       authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId }) },
-      configHistory: { list: vi.fn().mockResolvedValue([{ configHash: 'a'.repeat(64) }]) },
+      configHistory: {
+        list: vi.fn().mockResolvedValue([{
+          id: 'config-1',
+          schemaVersion: 1,
+          configHash: 'a'.repeat(64),
+          createdAt: new Date('2026-09-09T12:00:00.000Z'),
+          config: { commands: [{ args: ['secret-shaped-value'] }] },
+        }]),
+      },
       reviewHistory: { list: vi.fn().mockResolvedValue([]) },
     });
     apps.push(app);
@@ -22,7 +30,13 @@ describe('authenticated repository API', () => {
     const response = await app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/configs` });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ configurations: [{ configHash: 'a'.repeat(64) }] });
+    expect(response.json()).toEqual({ configurations: [{
+      id: 'config-1',
+      schemaVersion: 1,
+      configHash: 'a'.repeat(64),
+      createdAt: '2026-09-09T12:00:00.000Z',
+    }] });
+    expect(response.body).not.toContain('secret-shaped-value');
   });
 
   it('rejects access to another repository', async () => {
