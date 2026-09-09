@@ -17,6 +17,7 @@ section { padding-top: 42px; }
 h2 { font-size: 26px; }
 .badge, .status { border: 1px solid #385276; border-radius: 999px; color: #a8c8ff; font-size: 12px; padding: 6px 10px; }
 .review-list { display: grid; gap: 12px; }
+.empty-state { background: #101c30; border: 1px dashed #385276; border-radius: 14px; color: #a8b8cf; padding: 24px; }
 .review-card { align-items: center; background: #101c30; border: 1px solid #23334c; border-radius: 14px; display: flex; justify-content: space-between; padding: 20px; }
 .repository, .detail { color: #91a4bf; font-size: 14px; margin: 0 0 8px; }
 h3 { font-size: 20px; margin: 0 0 8px; }
