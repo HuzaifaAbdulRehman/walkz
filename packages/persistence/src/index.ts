@@ -88,6 +88,12 @@ export {
 } from './repository-config.js';
 export type { RepositoryConfigVersion } from './repository-config.js';
 
+export {
+  listGrantedRepositories,
+  selectGrantedRepository,
+} from './repository-selection.js';
+export type { GrantedRepository } from './repository-selection.js';
+
 export { listReviewHistory } from './review-history.js';
 export type { ReviewHistoryItem } from './review-history.js';
 
