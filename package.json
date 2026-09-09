@@ -16,7 +16,7 @@
     "demo": "npm run build --silent && node scripts/demo-local.mjs",
     "demo:proof": "npm run build --silent && node scripts/evaluate-golden.mjs",
     "evaluate:golden": "npm run build --silent && node scripts/evaluate-golden.mjs --json",
-    "migrate:up": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir migrations --migrations-table walkz_migrations --advisory-lock-mode fail up",
+    "migrate:up": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir migrations --migrations-table walkz_migrations --advisory-lock-mode fail --no-single-transaction up",
     "test": "vitest run",
     "test:types": "tsc -p tsconfig.test.json --noEmit --pretty false",
     "typecheck": "npm run build && npm run test:types",
