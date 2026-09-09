@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 
 import { loadDashboardReviews, type DashboardReview } from './lib/reviews';
+import { ReviewHistory } from './review-history';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,23 +33,8 @@ export default async function HomePage() {
         </div>
         {historyUnavailable ? (
           <p className="empty-state">Review history is temporarily unavailable. Try again later.</p>
-        ) : reviews.length === 0 ? (
-          <p className="empty-state">No review history is available for this repository yet.</p>
         ) : (
-          <div className="review-list">
-            {reviews.map((review) => (
-              <article className="review-card" key={review.id}>
-                <div>
-                  <p className="repository">Pull request {review.pullRequestId ?? 'not linked'}</p>
-                  <h3>{review.status}</h3>
-                  <p className="detail">
-                    {review.headSha.slice(0, 7)} against {review.baseSha.slice(0, 7)}
-                  </p>
-                </div>
-                <span className={`status status-${review.status.toLowerCase()}`}>{review.status}</span>
-              </article>
-            ))}
-          </div>
+          <ReviewHistory initialReviews={reviews} />
         )}
       </section>
     </main>

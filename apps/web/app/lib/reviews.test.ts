@@ -20,7 +20,9 @@ describe('loadDashboardReviews', () => {
               pullRequestId: '#12',
               baseSha: 'a'.repeat(40),
               headSha: 'b'.repeat(40),
-              status: 'SHIP',
+              status: 'completed',
+              verdict: 'SHIP',
+              resultSummary: 'No blocking evidence.',
               createdAt: '2026-09-09T12:00:00.000Z',
               completedAt: '2026-09-09T12:01:00.000Z',
             },
@@ -37,6 +39,24 @@ describe('loadDashboardReviews', () => {
 
   it('rejects malformed history responses', async () => {
     const fetcher = async () => new Response(JSON.stringify({ reviews: [{ id: 'run-1' }] }), { status: 200 });
+    await expect(loadDashboardReviews('https://api.example.test', 'repo-1', undefined, fetcher)).rejects.toThrow(
+      'Review history response was invalid.',
+    );
+  });
+
+  it('rejects an invalid terminal result', async () => {
+    const fetcher = async () => new Response(JSON.stringify({ reviews: [{
+      id: 'run-1',
+      pullRequestId: null,
+      baseSha: 'a'.repeat(40),
+      headSha: 'b'.repeat(40),
+      status: 'completed',
+      verdict: 42,
+      resultSummary: null,
+      createdAt: '2026-09-09T12:00:00.000Z',
+      completedAt: '2026-09-09T12:01:00.000Z',
+    }] }), { status: 200 });
+
     await expect(loadDashboardReviews('https://api.example.test', 'repo-1', undefined, fetcher)).rejects.toThrow(
       'Review history response was invalid.',
     );

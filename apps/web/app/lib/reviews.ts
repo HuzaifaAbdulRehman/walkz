@@ -4,26 +4,62 @@ export interface DashboardReview {
   baseSha: string;
   headSha: string;
   status: string;
+  verdict: 'SHIP' | 'FIX' | 'HUMAN' | 'INCONCLUSIVE' | 'ERROR' | null;
+  resultSummary: string | null;
   createdAt: string;
   completedAt: string | null;
 }
 
-interface ReviewHistoryResponse {
-  reviews: DashboardReview[];
+const verdicts = new Set<NonNullable<DashboardReview['verdict']>>([
+  'SHIP', 'FIX', 'HUMAN', 'INCONCLUSIVE', 'ERROR',
+]);
+
+function isDashboardVerdict(value: string): value is NonNullable<DashboardReview['verdict']> {
+  return verdicts.has(value as NonNullable<DashboardReview['verdict']>);
 }
 
-function isReviewHistoryResponse(input: unknown): input is ReviewHistoryResponse {
-  if (typeof input !== 'object' || input === null || !('reviews' in input)) return false;
+function parseDashboardReview(input: unknown): DashboardReview | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const value = input as Record<string, unknown>;
+  if (
+    typeof value.id !== 'string' ||
+    (typeof value.pullRequestId !== 'string' && value.pullRequestId !== null) ||
+    typeof value.baseSha !== 'string' || typeof value.headSha !== 'string' ||
+    typeof value.status !== 'string' ||
+    (typeof value.verdict !== 'string' && value.verdict !== null) ||
+    (typeof value.resultSummary !== 'string' && value.resultSummary !== null) ||
+    typeof value.createdAt !== 'string' ||
+    (typeof value.completedAt !== 'string' && value.completedAt !== null)
+  ) return null;
+  if (value.status.trim().length === 0 || (value.verdict !== null && !isDashboardVerdict(value.verdict))) {
+    return null;
+  }
+  return {
+    id: value.id,
+    pullRequestId: value.pullRequestId,
+    baseSha: value.baseSha,
+    headSha: value.headSha,
+    status: value.status,
+    verdict: value.verdict === null ? null : value.verdict as NonNullable<DashboardReview['verdict']>,
+    resultSummary: value.resultSummary,
+    createdAt: value.createdAt,
+    completedAt: value.completedAt,
+  };
+}
+
+export function parseDashboardReviewHistory(input: unknown): DashboardReview[] {
+  if (typeof input !== 'object' || input === null || !('reviews' in input)) {
+    throw new Error('Review history response was invalid.');
+  }
   const reviews = (input as { reviews: unknown }).reviews;
-  return Array.isArray(reviews) && reviews.every((review) => {
-    if (typeof review !== 'object' || review === null) return false;
-    const value = review as Record<string, unknown>;
-    return typeof value.id === 'string' &&
-      (typeof value.pullRequestId === 'string' || value.pullRequestId === null) &&
-      typeof value.baseSha === 'string' && typeof value.headSha === 'string' &&
-      typeof value.status === 'string' && typeof value.createdAt === 'string' &&
-      (typeof value.completedAt === 'string' || value.completedAt === null);
-  });
+  if (!Array.isArray(reviews)) throw new Error('Review history response was invalid.');
+  const parsed: DashboardReview[] = [];
+  for (const review of reviews) {
+    const mapped = parseDashboardReview(review);
+    if (mapped === null) throw new Error('Review history response was invalid.');
+    parsed.push(mapped);
+  }
+  return parsed;
 }
 
 export async function loadDashboardReviews(
@@ -41,6 +77,5 @@ export async function loadDashboardReviews(
   );
   if (!response.ok) throw new Error(`Review history request failed with ${response.status}.`);
   const body: unknown = await response.json();
-  if (!isReviewHistoryResponse(body)) throw new Error('Review history response was invalid.');
-  return body.reviews;
+  return parseDashboardReviewHistory(body);
 }

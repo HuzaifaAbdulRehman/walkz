@@ -17,9 +17,19 @@ section { padding-top: 42px; }
 h2 { font-size: 26px; }
 .badge, .status { border: 1px solid #385276; border-radius: 999px; color: #a8c8ff; font-size: 12px; padding: 6px 10px; }
 .review-list { display: grid; gap: 12px; }
+.live-status { color: #91a4bf; font-size: 13px; margin: 0 0 16px; }
 .empty-state { background: #101c30; border: 1px dashed #385276; border-radius: 14px; color: #a8b8cf; padding: 24px; }
 .review-card { align-items: center; background: #101c30; border: 1px solid #23334c; border-radius: 14px; display: flex; justify-content: space-between; padding: 20px; }
+.review-card > div { min-width: 0; }
 .repository, .detail { color: #91a4bf; font-size: 14px; margin: 0 0 8px; }
+.review-summary { color: #c4d0df; line-height: 1.5; margin: 0; max-width: 620px; overflow-wrap: anywhere; }
 h3 { font-size: 20px; margin: 0 0 8px; }
 .status-ship { color: #8ce0ac; border-color: #2c7148; }
-.status-inconclusive { color: #ffd58a; border-color: #806128; }
+.status-fix, .status-error { border-color: #8d3f4d; color: #ffb5be; }
+.status-human, .status-inconclusive { color: #ffd58a; border-color: #806128; }
+.status-active { color: #a8c8ff; border-color: #385276; }
+
+@media (max-width: 640px) {
+  .shell { padding: 48px 16px; }
+  .review-card { align-items: flex-start; flex-direction: column; gap: 16px; }
+}
