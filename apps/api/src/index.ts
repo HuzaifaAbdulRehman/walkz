@@ -30,3 +30,15 @@ export type {
   InstallationAuthenticator,
   InstallationRepositoryStore,
 } from './installation-api.js';
+
+export {
+  createManualReviewApi,
+  createManualReviewStarter,
+  createPersistentManualReviewStarter,
+} from './manual-review-api.js';
+export type {
+  ManualReviewApiOptions,
+  ManualReviewAuthenticator,
+  ManualReviewServiceOptions,
+  ManualReviewStarter,
+} from './manual-review-api.js';
