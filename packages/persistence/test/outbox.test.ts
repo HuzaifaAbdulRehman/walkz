@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   claimOutboxEvent,
+  createGitHubCheckCompletedOutboxEvent,
   createGitHubCheckQueuedOutboxEvent,
   createOutboxEventStore,
   createReviewRunQueuedOutboxEvent,
@@ -56,6 +57,29 @@ describe('transactional outbox', () => {
     const storedPayload = JSON.parse(query.mock.calls[0]?.[1]?.[2] as string);
     expect(storedPayload).not.toHaveProperty('token');
     expect(storedPayload).toMatchObject({ installationId: '1234', headSha: 'b'.repeat(40) });
+  });
+
+  it('stores bounded final check results without source or credentials', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 'event-id' }] });
+    await expect(createGitHubCheckCompletedOutboxEvent({ query }, {
+      aggregateId: reviewRunId,
+      eventType: 'github_check.completed',
+      payload: {
+        reviewRunId,
+        installationId: '1234',
+        owner: 'owner',
+        repository: 'repo',
+        baseSha: 'a'.repeat(40),
+        headSha: 'b'.repeat(40),
+        verdict: 'SHIP',
+        summary: 'No blocking evidence.',
+        findings: [],
+      },
+    })).resolves.toBe('event-id');
+    const payload = JSON.parse(query.mock.calls[0]?.[1]?.[2] as string);
+    expect(payload).not.toHaveProperty('token');
+    expect(payload).not.toHaveProperty('source');
+    expect(payload).toMatchObject({ verdict: 'SHIP', findings: [] });
   });
 
   it('rolls back and releases a failed transaction', async () => {

@@ -1,0 +1,145 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { completeHostedReviewRun } from '../src/index.js';
+
+const runId = '3d963b52-8203-4ba6-bcac-15bf132371f0';
+const eventId = '08d0dd85-734e-4f74-bcfc-3436ec7b4abd';
+const baseSha = 'a'.repeat(40);
+const headSha = 'b'.repeat(40);
+const input = {
+  reviewRunId: runId,
+  baseSha,
+  headSha,
+  verdict: 'FIX',
+  summary: 'One verified regression needs attention.',
+  findings: [{
+    path: 'src/index.ts',
+    startLine: 4,
+    endLine: 4,
+    severity: 'high',
+    summary: 'The head revision fails the reproducer.',
+  }],
+} as const;
+
+function durableRun(status: string) {
+  return {
+    id: runId,
+    status,
+    baseSha,
+    headSha,
+    installationId: '1234',
+    owner: 'owner',
+    repository: 'repo',
+  };
+}
+
+function completedPayload() {
+  return {
+    reviewRunId: runId,
+    installationId: '1234',
+    owner: 'owner',
+    repository: 'repo',
+    baseSha,
+    headSha,
+    verdict: input.verdict,
+    summary: input.summary,
+    findings: input.findings,
+  };
+}
+
+describe('hosted review completion', () => {
+  it('stores the outcome and check event in one transaction', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [durableRun('proving')] })
+      .mockResolvedValueOnce({ rows: [{ id: runId }] })
+      .mockResolvedValueOnce({ rows: [{ id: eventId }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const release = vi.fn();
+    const pool = { connect: vi.fn().mockResolvedValue({ query, release }) };
+
+    await expect(completeHostedReviewRun(pool, input)).resolves.toEqual({
+      reviewRunId: runId,
+      outboxEventId: eventId,
+      created: true,
+    });
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN',
+      expect.stringContaining('FOR UPDATE OF rr'),
+      expect.stringContaining('UPDATE review_runs'),
+      expect.stringContaining('INSERT INTO outbox_events'),
+      'COMMIT',
+    ]);
+    expect(query.mock.calls[2]?.[1]).toEqual([
+      runId, 'completed', 'FIX', input.summary, 'proving',
+    ]);
+    const payload = JSON.parse(query.mock.calls[3]?.[1]?.[2] as string);
+    expect(payload).toEqual(completedPayload());
+    expect(payload).not.toHaveProperty('credential');
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('returns the first event for an identical retry', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [durableRun('completed')] })
+      .mockResolvedValueOnce({ rows: [{ id: eventId, payload: completedPayload() }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    };
+    await expect(completeHostedReviewRun(pool, input)).resolves.toEqual({
+      reviewRunId: runId,
+      outboxEventId: eventId,
+      created: false,
+    });
+    expect(query).toHaveBeenCalledTimes(4);
+  });
+
+  it('rejects a conflicting terminal retry', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [durableRun('completed')] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: eventId,
+          payload: { ...completedPayload(), verdict: 'SHIP', findings: [] },
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    };
+    await expect(completeHostedReviewRun(pool, input)).rejects.toThrow(
+      'different terminal result',
+    );
+    expect(query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+  });
+
+  it('does not complete a superseded run', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [durableRun('superseded')] })
+      .mockResolvedValueOnce({ rows: [] });
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    };
+    await expect(completeHostedReviewRun(pool, input)).rejects.toThrow(
+      'Cannot complete a superseded review run',
+    );
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN',
+      expect.stringContaining('FOR UPDATE OF rr'),
+      'ROLLBACK',
+    ]);
+  });
+
+  it('rejects unsafe paths before opening a transaction', async () => {
+    const connect = vi.fn();
+    await expect(completeHostedReviewRun({ connect }, {
+      ...input,
+      findings: [{ ...input.findings[0], path: '../secret.txt' }],
+    })).rejects.toThrow('repository-relative');
+    expect(connect).not.toHaveBeenCalled();
+  });
+});

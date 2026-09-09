@@ -22,7 +22,46 @@ export type ReviewRunQueuedOutboxEvent = z.infer<
 >;
 
 const shaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
-const githubIdSchema = z.string().regex(/^[1-9][0-9]{0,18}$/);
+const githubIdSchema = z
+  .string()
+  .regex(/^[1-9][0-9]{0,18}$/)
+  .refine((value) => BigInt(value) <= 9_223_372_036_854_775_807n, {
+    message: 'GitHub IDs must fit PostgreSQL BIGINT.',
+  });
+
+export const githubCheckVerdictSchema = z.enum([
+  'SHIP',
+  'FIX',
+  'HUMAN',
+  'INCONCLUSIVE',
+  'ERROR',
+]);
+
+export const githubCheckResultFindingSchema = z
+  .object({
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1_024)
+      .refine(
+        (value) =>
+          !value.startsWith('/') &&
+          !value.includes('\\') &&
+          !value.split('/').some((segment) =>
+            segment === '' || segment === '.' || segment === '..'),
+        { message: 'Finding paths must be normalized repository-relative paths.' },
+      ),
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+    severity: z.enum(['low', 'medium', 'high', 'critical']),
+    summary: z.string().trim().min(1).max(1_024),
+  })
+  .strict()
+  .refine((finding) => finding.endLine >= finding.startLine, {
+    message: 'Finding lines must be ordered.',
+    path: ['endLine'],
+  });
 
 export const githubCheckQueuedOutboxEventSchema = z
   .object({
@@ -51,6 +90,38 @@ export const githubCheckQueuedOutboxEventSchema = z
 
 export type GitHubCheckQueuedOutboxEvent = z.infer<
   typeof githubCheckQueuedOutboxEventSchema
+>;
+
+export const githubCheckCompletedOutboxEventSchema = z
+  .object({
+    aggregateId: z.uuid(),
+    eventType: z.literal('github_check.completed'),
+    payload: z
+      .object({
+        reviewRunId: z.uuid(),
+        installationId: githubIdSchema,
+        owner: z.string().trim().min(1).max(100),
+        repository: z.string().trim().min(1).max(100),
+        baseSha: shaSchema,
+        headSha: shaSchema,
+        verdict: githubCheckVerdictSchema,
+        summary: z.string().trim().min(1).max(65_536),
+        findings: z.array(githubCheckResultFindingSchema).max(50),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine((event) => event.aggregateId === event.payload.reviewRunId, {
+    message: 'Outbox events must use the review run as their aggregate.',
+    path: ['aggregateId'],
+  })
+  .refine((event) => event.payload.baseSha !== event.payload.headSha, {
+    message: 'Completed checks require different base and head commits.',
+    path: ['payload', 'headSha'],
+  });
+
+export type GitHubCheckCompletedOutboxEvent = z.infer<
+  typeof githubCheckCompletedOutboxEventSchema
 >;
 
 const outboxLeaseSchema = z
@@ -123,6 +194,26 @@ export async function createGitHubCheckQueuedOutboxEvent(
   input: unknown,
 ): Promise<string> {
   const event = githubCheckQueuedOutboxEventSchema.parse(input);
+  const result = await client.query<{ id: string }>(
+    `
+      INSERT INTO outbox_events (aggregate_id, event_type, payload)
+      VALUES ($1, $2, $3::jsonb)
+      RETURNING id
+    `,
+    [event.aggregateId, event.eventType, JSON.stringify(event.payload)],
+  );
+  const row = result.rows[0];
+  if (row === undefined) {
+    throw new Error('Outbox event insert did not return an ID.');
+  }
+  return row.id;
+}
+
+export async function createGitHubCheckCompletedOutboxEvent(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<string> {
+  const event = githubCheckCompletedOutboxEventSchema.parse(input);
   const result = await client.query<{ id: string }>(
     `
       INSERT INTO outbox_events (aggregate_id, event_type, payload)

@@ -12,11 +12,15 @@ export type { WebhookDeliveryInput } from './webhook-delivery.js';
 
 export {
   claimOutboxEvent,
+  createGitHubCheckCompletedOutboxEvent,
   createGitHubCheckQueuedOutboxEvent,
   createOutboxEventStore,
   createReviewRunQueuedOutboxEvent,
   listRecoverableOutboxEventIds,
   markOutboxEventPublished,
+  githubCheckCompletedOutboxEventSchema,
+  githubCheckResultFindingSchema,
+  githubCheckVerdictSchema,
   githubCheckQueuedOutboxEventSchema,
   reviewRunQueuedOutboxEventSchema,
   withTransaction,
@@ -24,6 +28,7 @@ export {
 
 export type {
   ClaimedOutboxEvent,
+  GitHubCheckCompletedOutboxEvent,
   GitHubCheckQueuedOutboxEvent,
   OutboxEventLeaseInput,
   OutboxEventStore,
@@ -52,6 +57,9 @@ export {
 } from './review-run.js';
 
 export type { CreatedQueuedReviewRun } from './review-run.js';
+
+export { completeHostedReviewRun } from './review-result.js';
+export type { CompletedHostedReviewRun } from './review-result.js';
 
 export { acceptGitHubWebhook } from './github-review-intake.js';
 export type {
