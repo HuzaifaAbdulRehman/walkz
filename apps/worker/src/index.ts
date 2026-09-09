@@ -3,6 +3,15 @@ import type { ClaimedOutboxEvent } from '@walkz/persistence';
 
 export { createGitHubCheckOutboxHandler } from './github-check-handler.js';
 export type { InstallationReviewCheckPublisherFactory } from './github-check-handler.js';
+export { createHostedOutboxHandler } from './hosted-outbox-handler.js';
+export type { CheckOutboxHandler } from './hosted-outbox-handler.js';
+export {
+  createReviewQueue,
+  createReviewWorker,
+  enqueueReviewRun,
+  reviewQueueName,
+} from './review-queue.js';
+export type { ReviewJobHandler, ReviewQueue } from './review-queue.js';
 
 export const outboxQueueName = 'walkz-outbox';
 
