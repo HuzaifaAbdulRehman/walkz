@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadDashboardReviews } from './reviews.js';
+import { loadDashboardConfigurations, loadDashboardReviews } from './reviews.js';
 
 describe('loadDashboardReviews', () => {
   it('returns no reviews when the hosted API is not configured', async () => {
@@ -60,5 +60,42 @@ describe('loadDashboardReviews', () => {
     await expect(loadDashboardReviews('https://api.example.test', 'repo-1', undefined, fetcher)).rejects.toThrow(
       'Review history response was invalid.',
     );
+  });
+});
+
+describe('loadDashboardConfigurations', () => {
+  it('keeps only safe configuration history metadata', async () => {
+    const fetcher = async () => new Response(JSON.stringify({ configurations: [{
+      id: 'config-1',
+      schemaVersion: 1,
+      configHash: 'a'.repeat(64),
+      createdAt: '2026-09-09T12:00:00.000Z',
+      commands: [{ args: ['not-allowed'] }],
+    }] }), { status: 200 });
+
+    await expect(loadDashboardConfigurations(
+      'https://api.example.test',
+      'repo-1',
+      undefined,
+      fetcher,
+    )).resolves.toEqual([{
+      id: 'config-1',
+      schemaVersion: 1,
+      configHash: 'a'.repeat(64),
+      createdAt: '2026-09-09T12:00:00.000Z',
+    }]);
+  });
+
+  it('rejects malformed configuration history', async () => {
+    const fetcher = async () => new Response(JSON.stringify({ configurations: [{ id: 'config-1' }] }), {
+      status: 200,
+    });
+
+    await expect(loadDashboardConfigurations(
+      'https://api.example.test',
+      'repo-1',
+      undefined,
+      fetcher,
+    )).rejects.toThrow('Configuration history response was invalid.');
   });
 });

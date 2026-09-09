@@ -10,6 +10,13 @@ export interface DashboardReview {
   completedAt: string | null;
 }
 
+export interface DashboardConfiguration {
+  id: string;
+  schemaVersion: number;
+  configHash: string;
+  createdAt: string;
+}
+
 const verdicts = new Set<NonNullable<DashboardReview['verdict']>>([
   'SHIP', 'FIX', 'HUMAN', 'INCONCLUSIVE', 'ERROR',
 ]);
@@ -62,6 +69,35 @@ export function parseDashboardReviewHistory(input: unknown): DashboardReview[] {
   return parsed;
 }
 
+export function parseDashboardConfigurationHistory(input: unknown): DashboardConfiguration[] {
+  if (typeof input !== 'object' || input === null || !('configurations' in input)) {
+    throw new Error('Configuration history response was invalid.');
+  }
+  const configurations = (input as { configurations: unknown }).configurations;
+  if (!Array.isArray(configurations)) throw new Error('Configuration history response was invalid.');
+  return configurations.map((configuration) => {
+    if (typeof configuration !== 'object' || configuration === null) {
+      throw new Error('Configuration history response was invalid.');
+    }
+    const value = configuration as Record<string, unknown>;
+    if (
+      typeof value.id !== 'string' ||
+      typeof value.schemaVersion !== 'number' ||
+      !Number.isInteger(value.schemaVersion) ||
+      typeof value.configHash !== 'string' ||
+      typeof value.createdAt !== 'string'
+    ) {
+      throw new Error('Configuration history response was invalid.');
+    }
+    return {
+      id: value.id,
+      schemaVersion: value.schemaVersion,
+      configHash: value.configHash,
+      createdAt: value.createdAt,
+    };
+  });
+}
+
 export async function loadDashboardReviews(
   apiUrl: string | undefined,
   repositoryId: string | undefined,
@@ -78,4 +114,22 @@ export async function loadDashboardReviews(
   if (!response.ok) throw new Error(`Review history request failed with ${response.status}.`);
   const body: unknown = await response.json();
   return parseDashboardReviewHistory(body);
+}
+
+export async function loadDashboardConfigurations(
+  apiUrl: string | undefined,
+  repositoryId: string | undefined,
+  cookie: string | undefined,
+  fetcher: typeof fetch = fetch,
+): Promise<DashboardConfiguration[]> {
+  if (apiUrl === undefined || apiUrl.trim().length === 0 || repositoryId === undefined || repositoryId.trim().length === 0) {
+    return [];
+  }
+  const response = await fetcher(
+    `${apiUrl.replace(/\/$/, '')}/api/repositories/${encodeURIComponent(repositoryId)}/configs`,
+    { cache: 'no-store', headers: cookie === undefined ? {} : { cookie } },
+  );
+  if (!response.ok) throw new Error(`Configuration history request failed with ${response.status}.`);
+  const body: unknown = await response.json();
+  return parseDashboardConfigurationHistory(body);
 }
