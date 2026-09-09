@@ -107,6 +107,14 @@ export function createManualReviewApi(
   options: ManualReviewApiOptions,
 ): FastifyInstance {
   const app = Fastify({ logger: false });
+  registerManualReviewRoutes(app, options);
+  return app;
+}
+
+export function registerManualReviewRoutes(
+  app: FastifyInstance,
+  options: ManualReviewApiOptions,
+): void {
   app.post(
     '/api/repositories/:repositoryId/pull-requests/:pullRequestNumber/reviews',
     async (request, reply) => {
@@ -129,5 +137,4 @@ export function createManualReviewApi(
       return reply.code(202).send(review);
     },
   );
-  return app;
 }

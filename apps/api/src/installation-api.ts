@@ -18,8 +18,10 @@ export interface InstallationApiOptions {
   repositories: InstallationRepositoryStore;
 }
 
-export function createInstallationApi(options: InstallationApiOptions): FastifyInstance {
-  const app = Fastify({ logger: false });
+export function registerInstallationRoutes(
+  app: FastifyInstance,
+  options: InstallationApiOptions,
+): void {
   app.get('/api/installations/:installationId/repositories', async (request, reply) => {
     const { installationId } = paramsSchema.parse(request.params);
     const identity = await options.authenticator.authenticate(request);
@@ -40,5 +42,10 @@ export function createInstallationApi(options: InstallationApiOptions): FastifyI
     await options.repositories.select({ installationId, repositoryId });
     return reply.code(204).send();
   });
+}
+
+export function createInstallationApi(options: InstallationApiOptions): FastifyInstance {
+  const app = Fastify({ logger: false });
+  registerInstallationRoutes(app, options);
   return app;
 }

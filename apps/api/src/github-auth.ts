@@ -38,7 +38,10 @@ export interface GitHubAuthApiOptions {
 
 const sessionCookieName = 'walkz_session';
 
-export function createGitHubAuthApi(options: GitHubAuthApiOptions): FastifyInstance {
+export function registerGitHubAuthRoutes(
+  app: FastifyInstance,
+  options: GitHubAuthApiOptions,
+): void {
   if (options.clientId.trim().length === 0 || options.callbackUrl.trim().length === 0) {
     throw new Error('GitHub OAuth client configuration is required.');
   }
@@ -47,7 +50,6 @@ export function createGitHubAuthApi(options: GitHubAuthApiOptions): FastifyInsta
     throw new Error('GitHub OAuth callbacks must use HTTPS outside localhost.');
   }
   const now = options.now ?? (() => new Date());
-  const app = Fastify({ logger: false });
   app.get('/auth/github/start', async (_request, reply) => {
     const stateId = randomUUID();
     const state = options.stateSigner.issue({ stateId, returnTo: '/reviews' });
@@ -105,5 +107,10 @@ export function createGitHubAuthApi(options: GitHubAuthApiOptions): FastifyInsta
       .code(204)
       .send();
   });
+}
+
+export function createGitHubAuthApi(options: GitHubAuthApiOptions): FastifyInstance {
+  const app = Fastify({ logger: false });
+  registerGitHubAuthRoutes(app, options);
   return app;
 }

@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { parsePullRequestReviewTrigger } from '@walkz/github';
 import {
   acceptGitHubWebhook,
@@ -45,14 +45,16 @@ export function verifyGitHubWebhookSignature(
   );
 }
 
-export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
+export function registerGitHubWebhookRoutes(
+  app: FastifyInstance,
+  options: GitHubWebhookApiOptions,
+): void {
   if (options.secret.trim().length === 0) {
     throw new Error('GitHub webhook secret is required.');
   }
   if (options.promptVersion.trim().length === 0) {
     throw new Error('Review prompt version is required.');
   }
-  const app = Fastify({ logger: false });
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'buffer' },
@@ -100,5 +102,10 @@ export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
       queued: outcome.status === 'queued',
     });
   });
+}
+
+export function createGitHubWebhookApi(options: GitHubWebhookApiOptions) {
+  const app = Fastify({ logger: false });
+  registerGitHubWebhookRoutes(app, options);
   return app;
 }

@@ -1,6 +1,7 @@
 export {
   createGitHubWebhookApi,
   createPersistentGitHubWebhookIntake,
+  registerGitHubWebhookRoutes,
   verifyGitHubWebhookSignature,
 } from './webhook.js';
 
@@ -9,7 +10,7 @@ export type {
   GitHubWebhookApiOptions,
 } from './webhook.js';
 
-export { createRepositoryApi } from './repository-api.js';
+export { createRepositoryApi, registerRepositoryRoutes } from './repository-api.js';
 export type {
   RepositoryApiAuthenticator,
   RepositoryApiOptions,
@@ -17,7 +18,7 @@ export type {
   ReviewHistoryStore,
 } from './repository-api.js';
 
-export { createGitHubAuthApi } from './github-auth.js';
+export { createGitHubAuthApi, registerGitHubAuthRoutes } from './github-auth.js';
 export type {
   GitHubAuthApiOptions,
   GitHubOAuthClient,
@@ -25,7 +26,7 @@ export type {
   GitHubSessionIssuer,
 } from './github-auth.js';
 
-export { createInstallationApi } from './installation-api.js';
+export { createInstallationApi, registerInstallationRoutes } from './installation-api.js';
 export type {
   InstallationApiOptions,
   InstallationAuthenticator,
@@ -36,7 +37,11 @@ export {
   createManualReviewApi,
   createManualReviewStarter,
   createPersistentManualReviewStarter,
+  registerManualReviewRoutes,
 } from './manual-review-api.js';
+
+export { createHostedApi } from './hosted-api.js';
+export type { HostedApiOptions } from './hosted-api.js';
 
 export { createApiSessionAuthenticator, readSessionCookie } from './session-auth.js';
 export type {

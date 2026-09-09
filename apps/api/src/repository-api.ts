@@ -92,8 +92,10 @@ export interface RepositoryApiOptions {
   authenticator: RepositoryApiAuthenticator;
 }
 
-export function createRepositoryApi(options: RepositoryApiOptions): FastifyInstance {
-  const app = Fastify({ logger: false });
+export function registerRepositoryRoutes(
+  app: FastifyInstance,
+  options: RepositoryApiOptions,
+): void {
   app.get('/api/repositories/:repositoryId/configs', async (request, reply) => {
     const { repositoryId } = repositoryParamsSchema.parse(request.params);
     const identity = await options.authenticator.authenticate(request);
@@ -113,5 +115,10 @@ export function createRepositoryApi(options: RepositoryApiOptions): FastifyInsta
     }
     return reply.send({ reviews: await options.reviewHistory.list(repositoryId) });
   });
+}
+
+export function createRepositoryApi(options: RepositoryApiOptions): FastifyInstance {
+  const app = Fastify({ logger: false });
+  registerRepositoryRoutes(app, options);
   return app;
 }
