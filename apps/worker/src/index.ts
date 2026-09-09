@@ -12,6 +12,12 @@ export {
   reviewQueueName,
 } from './review-queue.js';
 export type { ReviewJobHandler, ReviewQueue } from './review-queue.js';
+export { createHostedReviewJobHandler } from './hosted-review-handler.js';
+export type {
+  HostedInstallationTokens,
+  HostedReviewHandlerOptions,
+  HostedReviewStore,
+} from './hosted-review-handler.js';
 
 export const outboxQueueName = 'walkz-outbox';
 

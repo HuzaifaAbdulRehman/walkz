@@ -72,8 +72,8 @@ export function createInstallationTokenSource(
         }),
       );
       const expiresAt = new Date(authentication.expiresAt);
-      if (expiresAt.getTime() <= clock().getTime()) {
-        throw new Error('GitHub installation token is already expired.');
+      if (expiresAt.getTime() <= clock().getTime() + 120_000) {
+        throw new Error('GitHub installation token expires too soon.');
       }
       return {
         token: authentication.token,

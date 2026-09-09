@@ -47,9 +47,7 @@ describe('Octokit checks adapter', () => {
       }),
     }, () => new Date('2026-09-09T12:00:00.000Z'));
 
-    await expect(source.getInstallationToken(1234)).rejects.toThrow(
-      'already expired',
-    );
+    await expect(source.getInstallationToken(1234)).rejects.toThrow('expires too soon');
   });
 
   it('maps create and update calls to GitHub check-run fields', async () => {

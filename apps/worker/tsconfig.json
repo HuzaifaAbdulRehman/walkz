@@ -10,10 +10,22 @@
   ],
   "references": [
     {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/engine"
+    },
+    {
       "path": "../../packages/github"
     },
     {
+      "path": "../../packages/git"
+    },
+    {
       "path": "../../packages/persistence"
+    },
+    {
+      "path": "../../packages/providers"
     }
   ]
 }
