@@ -165,7 +165,9 @@ export async function completeHostedReviewRun(
         SET status = $2,
             verdict = $3,
             result_summary = $4,
-            completed_at = now()
+            completed_at = now(),
+            worker_lease_owner = NULL,
+            worker_lease_expires_at = NULL
         WHERE id = $1 AND status = $5
         RETURNING id
       `,

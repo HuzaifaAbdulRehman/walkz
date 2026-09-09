@@ -94,6 +94,12 @@ export {
 } from './repository-selection.js';
 export type { GrantedRepository } from './repository-selection.js';
 
+export {
+  claimHostedReviewRun,
+  renewHostedReviewRunLease,
+} from './hosted-review-worker.js';
+export type { ClaimedHostedReviewRun } from './hosted-review-worker.js';
+
 export { listReviewHistory } from './review-history.js';
 export type { ReviewHistoryItem } from './review-history.js';
 

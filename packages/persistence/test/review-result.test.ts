@@ -73,6 +73,7 @@ describe('hosted review completion', () => {
     expect(query.mock.calls[2]?.[1]).toEqual([
       runId, 'completed', 'FIX', input.summary, 'proving',
     ]);
+    expect(query.mock.calls[2]?.[0]).toContain('worker_lease_owner = NULL');
     expect(query.mock.calls[1]?.[0]).toContain('rr.base_sha AS "baseSha"');
     expect(query.mock.calls[1]?.[0]).toContain('rr.head_sha AS "headSha"');
     expect(query.mock.calls[1]?.[0]).toContain('gi.github_id::text AS "installationId"');
