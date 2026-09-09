@@ -21,13 +21,18 @@ describe('outbox queue', () => {
       1,
       'dispatch',
       { eventId: 'event-one' },
-      { jobId: 'event-one' },
+      expect.objectContaining({
+        jobId: 'event-one',
+        attempts: 5,
+        removeOnComplete: true,
+        removeOnFail: true,
+      }),
     );
     expect(queue.add).toHaveBeenNthCalledWith(
       2,
       'dispatch',
       { eventId: 'event-two' },
-      { jobId: 'event-two' },
+      expect.objectContaining({ jobId: 'event-two' }),
     );
   });
 
@@ -39,7 +44,12 @@ describe('outbox queue', () => {
     expect(add).toHaveBeenCalledWith(
       'dispatch',
       { eventId: 'event-id' },
-      { jobId: 'event-id' },
+      expect.objectContaining({
+        jobId: 'event-id',
+        attempts: 5,
+        removeOnComplete: true,
+        removeOnFail: true,
+      }),
     );
   });
 

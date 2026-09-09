@@ -137,3 +137,30 @@ export async function renewHostedReviewRunLease(
   );
   return result.rows.length === 1;
 }
+
+export async function listRecoverableHostedReviewRunIds(
+  pool: Pick<Pool, 'query'>,
+  input: unknown,
+): Promise<string[]> {
+  const limit = z.number().int().min(1).max(1_000).parse(input);
+  const result = await pool.query<{ reviewRunId: string }>(
+    `SELECT id AS "reviewRunId"
+     FROM review_runs
+     WHERE status = 'queued' OR (
+       status = ANY($2::text[])
+       AND (
+         worker_lease_expires_at IS NULL OR
+         worker_lease_expires_at <= now()
+       )
+     )
+     ORDER BY created_at ASC
+     LIMIT $1`,
+    [
+      limit,
+      ['collecting_context', 'deterministic_checks', 'reviewing', 'challenging', 'proving', 'reproving'],
+    ],
+  );
+  return z.array(z.object({ reviewRunId: z.uuid() }).strict())
+    .parse(result.rows)
+    .map((row) => row.reviewRunId);
+}

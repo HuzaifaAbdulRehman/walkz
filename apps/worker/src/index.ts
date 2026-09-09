@@ -9,6 +9,7 @@ export {
   createReviewQueue,
   createReviewWorker,
   enqueueReviewRun,
+  recoverReviewRuns,
   reviewQueueName,
 } from './review-queue.js';
 export type { ReviewJobHandler, ReviewQueue } from './review-queue.js';
@@ -25,7 +26,13 @@ export interface OutboxQueue {
   add(
     name: string,
     data: { eventId: string },
-    options: { jobId: string },
+    options: {
+      jobId: string;
+      attempts: number;
+      backoff: { type: 'exponential'; delay: number };
+      removeOnComplete: true;
+      removeOnFail: true;
+    },
   ): Promise<unknown>;
 }
 
@@ -33,7 +40,13 @@ export async function enqueueOutboxEvent(
   queue: OutboxQueue,
   eventId: string,
 ): Promise<void> {
-  await queue.add('dispatch', { eventId }, { jobId: eventId });
+  await queue.add('dispatch', { eventId }, {
+    jobId: eventId,
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 1_000 },
+    removeOnComplete: true,
+    removeOnFail: true,
+  });
 }
 
 export async function recoverOutboxEvents(

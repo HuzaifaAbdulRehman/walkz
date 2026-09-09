@@ -97,6 +97,7 @@ export type { GrantedRepository } from './repository-selection.js';
 
 export {
   claimHostedReviewRun,
+  listRecoverableHostedReviewRunIds,
   renewHostedReviewRunLease,
 } from './hosted-review-worker.js';
 export type { ClaimedHostedReviewRun } from './hosted-review-worker.js';

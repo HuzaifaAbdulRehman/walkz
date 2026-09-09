@@ -21,7 +21,7 @@ describe('hosted outbox routing', () => {
     expect(add).toHaveBeenCalledWith(
       'review',
       { reviewRunId },
-      { jobId: reviewRunId },
+      expect.objectContaining({ jobId: reviewRunId, removeOnComplete: true }),
     );
     expect(checks.handle).not.toHaveBeenCalled();
   });

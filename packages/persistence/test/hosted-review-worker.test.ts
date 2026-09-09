@@ -4,7 +4,11 @@ import { createRequire } from 'node:module';
 
 import { createDefaultWalkzConfig } from '@walkz/contracts';
 
-import { claimHostedReviewRun, renewHostedReviewRunLease } from '../src/index.js';
+import {
+  claimHostedReviewRun,
+  listRecoverableHostedReviewRunIds,
+  renewHostedReviewRunLease,
+} from '../src/index.js';
 
 const reviewRunId = '3d963b52-8203-4ba6-bcac-15bf132371f0';
 const require = createRequire(import.meta.url);
@@ -131,5 +135,22 @@ describe('hosted review worker leases', () => {
       expect.stringContaining('worker_lease_owner = $2'),
       expect.arrayContaining([reviewRunId, 'worker-1', 60_000]),
     );
+  });
+
+  it('lists queued and expired runs for Redis recovery', async () => {
+    const secondId = '57ee26ad-408d-4db3-bb78-93bc5b2242ad';
+    const query = vi.fn().mockResolvedValue({
+      rows: [{ reviewRunId }, { reviewRunId: secondId }],
+    });
+
+    await expect(listRecoverableHostedReviewRunIds({ query }, 100)).resolves.toEqual([
+      reviewRunId,
+      secondId,
+    ]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'queued'"),
+      expect.arrayContaining([100]),
+    );
+    expect(query.mock.calls[0]?.[0]).toContain('worker_lease_expires_at <= now()');
   });
 });

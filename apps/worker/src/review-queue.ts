@@ -9,7 +9,13 @@ export interface ReviewQueue {
   add(
     name: string,
     data: { reviewRunId: string },
-    options: { jobId: string },
+    options: {
+      jobId: string;
+      attempts: number;
+      backoff: { type: 'exponential'; delay: number };
+      removeOnComplete: true;
+      removeOnFail: true;
+    },
   ): Promise<unknown>;
 }
 
@@ -22,7 +28,24 @@ export async function enqueueReviewRun(
   reviewRunIdInput: unknown,
 ): Promise<void> {
   const { reviewRunId } = reviewJobSchema.parse({ reviewRunId: reviewRunIdInput });
-  await queue.add('review', { reviewRunId }, { jobId: reviewRunId });
+  await queue.add('review', { reviewRunId }, {
+    jobId: reviewRunId,
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 1_000 },
+    removeOnComplete: true,
+    removeOnFail: true,
+  });
+}
+
+export async function recoverReviewRuns(
+  queue: ReviewQueue,
+  store: { listRecoverableReviewRunIds(limit: number): Promise<string[]> },
+  limit: number,
+): Promise<number> {
+  const reviewRunIds = await store.listRecoverableReviewRunIds(limit);
+  await Promise.all(reviewRunIds.map((reviewRunId) =>
+    enqueueReviewRun(queue, reviewRunId)));
+  return reviewRunIds.length;
 }
 
 export function createReviewQueue(connection: ConnectionOptions): Queue {
