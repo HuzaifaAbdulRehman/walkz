@@ -16,5 +16,7 @@ describe('review history persistence', () => {
     ]);
     expect(query.mock.calls[0]?.[0]).not.toContain('prompt');
     expect(query.mock.calls[0]?.[0]).not.toContain('response');
+    expect(query.mock.calls[0]?.[0]).toContain('verdict');
+    expect(query.mock.calls[0]?.[0]).toContain('result_summary AS "resultSummary"');
   });
 });

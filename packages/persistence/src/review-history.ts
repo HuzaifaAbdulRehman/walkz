@@ -14,6 +14,8 @@ export interface ReviewHistoryItem {
   baseSha: string;
   headSha: string;
   status: string;
+  verdict: string | null;
+  resultSummary: string | null;
   createdAt: Date;
   completedAt: Date | null;
 }
@@ -30,6 +32,8 @@ export async function listReviewHistory(
              base_sha AS "baseSha",
              head_sha AS "headSha",
              status,
+             verdict,
+             result_summary AS "resultSummary",
              created_at AS "createdAt",
              completed_at AS "completedAt"
       FROM review_runs
