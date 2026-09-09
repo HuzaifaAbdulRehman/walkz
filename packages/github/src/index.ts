@@ -2,6 +2,17 @@ export { createOAuthStateSigner } from './oauth.js';
 export type { OAuthStateSigner } from './oauth.js';
 
 export {
+  createGitHubOAuthClient,
+  createGitHubUserIdentityClient,
+} from './auth-client.js';
+export type {
+  GitHubOAuthClient,
+  GitHubUserIdentity,
+  GitHubUserIdentityClient,
+  GitHubUserInstallation,
+} from './auth-client.js';
+
+export {
   installationAccessSchema,
   parseReadOnlyInstallation,
 } from './installation.js';
