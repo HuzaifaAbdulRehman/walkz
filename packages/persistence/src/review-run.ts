@@ -32,16 +32,23 @@ export async function createQueuedReviewRun(
   pool: Pick<Pool, 'connect'>,
   input: unknown,
 ): Promise<CreatedQueuedReviewRun> {
+  return withTransaction(pool, (client) =>
+    createQueuedReviewRunInTransaction(client, input),
+  );
+}
+
+export async function createQueuedReviewRunInTransaction(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<CreatedQueuedReviewRun> {
   const run = queuedReviewRunSchema.parse(input);
-  return withTransaction(pool, async (client) => {
-    const reviewRunId = await insertQueuedReviewRun(client, run);
-    const outboxEventId = await createReviewRunQueuedOutboxEvent(client, {
-      aggregateId: reviewRunId,
-      eventType: 'review_run.queued',
-      payload: { reviewRunId },
-    });
-    return { reviewRunId, outboxEventId };
+  const reviewRunId = await insertQueuedReviewRun(client, run);
+  const outboxEventId = await createReviewRunQueuedOutboxEvent(client, {
+    aggregateId: reviewRunId,
+    eventType: 'review_run.queued',
+    payload: { reviewRunId },
   });
+  return { reviewRunId, outboxEventId };
 }
 
 async function insertQueuedReviewRun(

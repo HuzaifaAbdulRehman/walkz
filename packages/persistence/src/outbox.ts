@@ -21,6 +21,38 @@ export type ReviewRunQueuedOutboxEvent = z.infer<
   typeof reviewRunQueuedOutboxEventSchema
 >;
 
+const shaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
+const githubIdSchema = z.string().regex(/^[1-9][0-9]{0,18}$/);
+
+export const githubCheckQueuedOutboxEventSchema = z
+  .object({
+    aggregateId: z.uuid(),
+    eventType: z.literal('github_check.queued'),
+    payload: z
+      .object({
+        reviewRunId: z.uuid(),
+        installationId: githubIdSchema,
+        owner: z.string().trim().min(1).max(100),
+        repository: z.string().trim().min(1).max(100),
+        baseSha: shaSchema,
+        headSha: shaSchema,
+      })
+      .strict(),
+  })
+  .strict()
+  .refine((event) => event.aggregateId === event.payload.reviewRunId, {
+    message: 'Outbox events must use the review run as their aggregate.',
+    path: ['aggregateId'],
+  })
+  .refine((event) => event.payload.baseSha !== event.payload.headSha, {
+    message: 'Queued checks require different base and head commits.',
+    path: ['payload', 'headSha'],
+  });
+
+export type GitHubCheckQueuedOutboxEvent = z.infer<
+  typeof githubCheckQueuedOutboxEventSchema
+>;
+
 const outboxLeaseSchema = z
   .object({
     eventId: z.uuid(),
@@ -71,6 +103,26 @@ export async function createReviewRunQueuedOutboxEvent(
   input: unknown,
 ): Promise<string> {
   const event = reviewRunQueuedOutboxEventSchema.parse(input);
+  const result = await client.query<{ id: string }>(
+    `
+      INSERT INTO outbox_events (aggregate_id, event_type, payload)
+      VALUES ($1, $2, $3::jsonb)
+      RETURNING id
+    `,
+    [event.aggregateId, event.eventType, JSON.stringify(event.payload)],
+  );
+  const row = result.rows[0];
+  if (row === undefined) {
+    throw new Error('Outbox event insert did not return an ID.');
+  }
+  return row.id;
+}
+
+export async function createGitHubCheckQueuedOutboxEvent(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<string> {
+  const event = githubCheckQueuedOutboxEventSchema.parse(input);
   const result = await client.query<{ id: string }>(
     `
       INSERT INTO outbox_events (aggregate_id, event_type, payload)

@@ -6,22 +6,25 @@ export {
 
 export type { DatabasePoolConfig } from './pool.js';
 
-export { recordWebhookDelivery } from './webhook-delivery.js';
+export { insertWebhookDelivery, recordWebhookDelivery } from './webhook-delivery.js';
 
 export type { WebhookDeliveryInput } from './webhook-delivery.js';
 
 export {
   claimOutboxEvent,
+  createGitHubCheckQueuedOutboxEvent,
   createOutboxEventStore,
   createReviewRunQueuedOutboxEvent,
   listRecoverableOutboxEventIds,
   markOutboxEventPublished,
+  githubCheckQueuedOutboxEventSchema,
   reviewRunQueuedOutboxEventSchema,
   withTransaction,
 } from './outbox.js';
 
 export type {
   ClaimedOutboxEvent,
+  GitHubCheckQueuedOutboxEvent,
   OutboxEventLeaseInput,
   OutboxEventStore,
   ReviewRunQueuedOutboxEvent,
@@ -42,9 +45,16 @@ export {
   supersedeActiveReviewRuns,
 } from './review-run-control.js';
 
-export { createQueuedReviewRun, queuedReviewRunSchema } from './review-run.js';
+export {
+  createQueuedReviewRun,
+  createQueuedReviewRunInTransaction,
+  queuedReviewRunSchema,
+} from './review-run.js';
 
 export type { CreatedQueuedReviewRun } from './review-run.js';
+
+export { acceptGitHubWebhook } from './github-review-intake.js';
+export type { GitHubWebhookIntakeResult } from './github-review-intake.js';
 
 export { purgeExpiredAuditEvents, recordAuditEvent } from './audit.js';
 

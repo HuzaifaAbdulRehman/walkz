@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 export interface WebhookDeliveryInput {
   deliveryId: string;
@@ -6,11 +6,11 @@ export interface WebhookDeliveryInput {
   payloadHash: string;
 }
 
-export async function recordWebhookDelivery(
-  pool: Pick<Pool, 'query'>,
+export async function insertWebhookDelivery(
+  client: Pick<PoolClient, 'query'>,
   input: WebhookDeliveryInput,
-): Promise<'accepted' | 'duplicate'> {
-  const result = await pool.query(
+): Promise<string | null> {
+  const result = await client.query<{ id: string }>(
     `
       INSERT INTO webhook_deliveries (delivery_id, event_name, payload_hash)
       VALUES ($1, $2, $3)
@@ -19,5 +19,14 @@ export async function recordWebhookDelivery(
     `,
     [input.deliveryId, input.eventName, input.payloadHash],
   );
-  return result.rows.length === 1 ? 'accepted' : 'duplicate';
+  return result.rows[0]?.id ?? null;
+}
+
+export async function recordWebhookDelivery(
+  pool: Pick<Pool, 'query'>,
+  input: WebhookDeliveryInput,
+): Promise<'accepted' | 'duplicate'> {
+  return (await insertWebhookDelivery(pool, input)) === null
+    ? 'duplicate'
+    : 'accepted';
 }

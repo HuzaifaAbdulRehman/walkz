@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   claimOutboxEvent,
+  createGitHubCheckQueuedOutboxEvent,
   createOutboxEventStore,
   createReviewRunQueuedOutboxEvent,
   markOutboxEventPublished,
@@ -35,6 +36,26 @@ describe('transactional outbox', () => {
       'COMMIT',
     ]);
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('stores bounded GitHub check targets without credentials', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 'event-id' }] });
+
+    await expect(createGitHubCheckQueuedOutboxEvent({ query }, {
+      aggregateId: reviewRunId,
+      eventType: 'github_check.queued',
+      payload: {
+        reviewRunId,
+        installationId: '1234',
+        owner: 'owner',
+        repository: 'repo',
+        baseSha: 'a'.repeat(40),
+        headSha: 'b'.repeat(40),
+      },
+    })).resolves.toBe('event-id');
+    const storedPayload = JSON.parse(query.mock.calls[0]?.[1]?.[2] as string);
+    expect(storedPayload).not.toHaveProperty('token');
+    expect(storedPayload).toMatchObject({ installationId: '1234', headSha: 'b'.repeat(40) });
   });
 
   it('rolls back and releases a failed transaction', async () => {
