@@ -8,6 +8,7 @@ const baseSha = 'a'.repeat(40);
 const headSha = 'b'.repeat(40);
 const input = {
   reviewRunId: runId,
+  workerId: 'worker-1',
   baseSha,
   headSha,
   verdict: 'FIX',
@@ -30,6 +31,7 @@ function durableRun(status: string) {
     installationId: '1234',
     owner: 'owner',
     repository: 'repo',
+    workerLeaseOwner: status === 'completed' ? null : 'worker-1',
   };
 }
 
@@ -71,7 +73,7 @@ describe('hosted review completion', () => {
       'COMMIT',
     ]);
     expect(query.mock.calls[2]?.[1]).toEqual([
-      runId, 'completed', 'FIX', input.summary, 'proving',
+      runId, 'completed', 'FIX', input.summary, 'proving', 'worker-1',
     ]);
     expect(query.mock.calls[2]?.[0]).toContain('worker_lease_owner = NULL');
     expect(query.mock.calls[1]?.[0]).toContain('rr.base_sha AS "baseSha"');
@@ -136,6 +138,23 @@ describe('hosted review completion', () => {
       expect.stringContaining('FOR UPDATE OF rr'),
       'ROLLBACK',
     ]);
+  });
+
+  it('rejects completion after the worker loses its lease', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ ...durableRun('reviewing'), workerLeaseOwner: 'worker-2' }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    };
+
+    await expect(completeHostedReviewRun(pool, input)).rejects.toThrow(
+      'lease is not owned by this worker',
+    );
+    expect(query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
 
   it('rejects unsafe paths before opening a transaction', async () => {

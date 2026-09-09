@@ -104,6 +104,12 @@ export async function claimHostedReviewRun(
   if (configHash !== claimed.configHash) {
     throw new Error('Review run configuration does not match its immutable hash.');
   }
+  if (
+    claimed.provider !== config.provider.name ||
+    claimed.model !== config.provider.model
+  ) {
+    throw new Error('Review run provider does not match its immutable configuration.');
+  }
   return {
     ...claimed,
     config,

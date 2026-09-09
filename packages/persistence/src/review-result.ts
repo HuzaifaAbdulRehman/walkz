@@ -15,6 +15,7 @@ const shaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
 const completedReviewRunInputSchema = z
   .object({
     reviewRunId: z.uuid(),
+    workerId: z.string().trim().min(1).max(128),
     baseSha: shaSchema,
     headSha: shaSchema,
     verdict: githubCheckVerdictSchema,
@@ -36,6 +37,7 @@ const lockedReviewRunSchema = z
     installationId: z.string(),
     owner: z.string(),
     repository: z.string(),
+    workerLeaseOwner: z.string().nullable(),
   })
   .strict();
 
@@ -77,6 +79,7 @@ async function lockReviewRun(
              gi.github_id::text AS "installationId",
              r.owner_login AS owner,
              r.repository_name AS repository
+             , rr.worker_lease_owner AS "workerLeaseOwner"
       FROM review_runs rr
       JOIN repositories r ON r.id = rr.repository_id
       JOIN github_installations gi ON gi.id = r.installation_id
@@ -157,6 +160,9 @@ export async function completeHostedReviewRun(
     if (run.status === 'cancelled' || run.status === 'superseded') {
       throw new Error(`Cannot complete a ${run.status} review run.`);
     }
+    if (run.workerLeaseOwner !== result.workerId) {
+      throw new Error('Review run lease is not owned by this worker.');
+    }
 
     const terminalStatus = terminalStatusForVerdict(result.verdict);
     const updated = await client.query(
@@ -168,10 +174,17 @@ export async function completeHostedReviewRun(
             completed_at = now(),
             worker_lease_owner = NULL,
             worker_lease_expires_at = NULL
-        WHERE id = $1 AND status = $5
+        WHERE id = $1 AND status = $5 AND worker_lease_owner = $6
         RETURNING id
       `,
-      [run.id, terminalStatus, result.verdict, result.summary, run.status],
+      [
+        run.id,
+        terminalStatus,
+        result.verdict,
+        result.summary,
+        run.status,
+        result.workerId,
+      ],
     );
     if (updated.rows.length !== 1) {
       throw new Error('Review run changed while its result was being stored.');

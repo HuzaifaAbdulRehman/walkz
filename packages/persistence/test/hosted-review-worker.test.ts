@@ -84,6 +84,34 @@ describe('hosted review worker leases', () => {
     })).rejects.toThrow('does not match its immutable hash');
   });
 
+  it('rejects a provider snapshot that disagrees with its configuration', async () => {
+    const config = createDefaultWalkzConfig();
+    const query = vi.fn().mockResolvedValue({ rows: [{
+      reviewRunId,
+      repositoryId: '08d0dd85-734e-4f74-bcfc-3436ec7b4abd',
+      installationId: '123',
+      owner: 'owner',
+      repository: 'walkz',
+      pullRequestNumber: 7,
+      baseSha: 'a'.repeat(40),
+      headSha: 'b'.repeat(40),
+      configHash: createHash('sha256')
+        .update(JSON.stringify(config), 'utf8')
+        .digest('hex'),
+      config,
+      provider: 'groq',
+      model: 'different-model',
+      promptVersion: 'hosted-v1',
+      status: 'collecting_context',
+    }] });
+
+    await expect(claimHostedReviewRun({ query }, {
+      reviewRunId,
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+    })).rejects.toThrow('provider does not match');
+  });
+
   it('skips a run held by another active worker', async () => {
     await expect(claimHostedReviewRun(
       { query: vi.fn().mockResolvedValue({ rows: [] }) },
