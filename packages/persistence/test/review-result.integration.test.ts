@@ -3,7 +3,10 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { completeHostedReviewRun } from '../src/index.js';
+import {
+  completeHostedReviewRun,
+  listReviewFindings,
+} from '../src/index.js';
 
 const databaseUrl = process.env.WALKZ_POSTGRES_TEST_URL;
 const integration = databaseUrl === undefined ? it.skip : it;
@@ -134,5 +137,13 @@ describe('PostgreSQL hosted review completion', () => {
       startLine: 8,
       evidenceLevel: 'UNVERIFIED',
     }]);
+    await expect(listReviewFindings(pool, {
+      repositoryId,
+      reviewRunId: runId,
+    })).resolves.toHaveLength(1);
+    await expect(listReviewFindings(pool, {
+      repositoryId: randomUUID(),
+      reviewRunId: runId,
+    })).resolves.toEqual([]);
   });
 });

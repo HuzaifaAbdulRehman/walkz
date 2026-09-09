@@ -105,6 +105,9 @@ export type { ClaimedHostedReviewRun } from './hosted-review-worker.js';
 export { listReviewHistory } from './review-history.js';
 export type { ReviewHistoryItem } from './review-history.js';
 
+export { listReviewFindings } from './review-findings.js';
+export type { ReviewFindingItem } from './review-findings.js';
+
 export {
   consumeOAuthState,
   createPersistentGitHubSessionService,

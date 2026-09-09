@@ -32,6 +32,7 @@ describe('authenticated repository API', () => {
         }]),
       },
       reviewHistory: { list: vi.fn().mockResolvedValue([]) },
+      reviewFindings: { list: vi.fn().mockResolvedValue([]) },
     });
     apps.push(app);
 
@@ -69,6 +70,7 @@ describe('authenticated repository API', () => {
       authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [otherRepositoryId] }) },
       configHistory: { list: vi.fn() },
       reviewHistory: { list: vi.fn() },
+      reviewFindings: { list: vi.fn() },
     });
     apps.push(app);
 
@@ -83,6 +85,7 @@ describe('authenticated repository API', () => {
       authenticator: { authenticate: vi.fn().mockResolvedValue(null) },
       configHistory: { list },
       reviewHistory: { list },
+      reviewFindings: { list },
     });
     apps.push(app);
 
@@ -98,6 +101,7 @@ describe('authenticated repository API', () => {
       authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [repositoryId] }) },
       configHistory: { list: vi.fn().mockResolvedValue([]) },
       reviewHistory: { list: vi.fn().mockResolvedValue([{ status: 'completed' }]) },
+      reviewFindings: { list: vi.fn().mockResolvedValue([]) },
     });
     apps.push(app);
 
@@ -105,5 +109,74 @@ describe('authenticated repository API', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ reviews: [{ status: 'completed' }] });
+  });
+
+  it('returns named finding fields for an authorized review', async () => {
+    const list = vi.fn().mockResolvedValue([{
+      fingerprint: 'a'.repeat(64),
+      category: 'correctness',
+      severity: 'high',
+      path: 'src/value.ts',
+      startLine: 8,
+      endLine: 9,
+      lifecycleStatus: 'verified',
+      evidenceLevel: 'VERIFIED',
+      advisoryConfidence: 0.93,
+      summary: 'The value can be stale.',
+      claim: 'The value can be stale.',
+      failureMechanism: 'The cache key omits the current revision.',
+      suggestedProof: 'Request both revisions with the same key.',
+      createdAt: new Date('2026-09-10T00:00:00.000Z'),
+    }]);
+    const app = createRepositoryApi({
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [repositoryId] }) },
+      configHistory: { list: vi.fn() },
+      reviewHistory: { list: vi.fn() },
+      reviewFindings: { list },
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/repositories/${repositoryId}/reviews/${otherRepositoryId}/findings`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(list).toHaveBeenCalledWith(repositoryId, otherRepositoryId);
+    expect(response.json()).toEqual({ findings: [{
+      fingerprint: 'a'.repeat(64),
+      category: 'correctness',
+      severity: 'high',
+      path: 'src/value.ts',
+      startLine: 8,
+      endLine: 9,
+      lifecycleStatus: 'verified',
+      evidenceLevel: 'VERIFIED',
+      advisoryConfidence: 0.93,
+      summary: 'The value can be stale.',
+      claim: 'The value can be stale.',
+      failureMechanism: 'The cache key omits the current revision.',
+      suggestedProof: 'Request both revisions with the same key.',
+      createdAt: '2026-09-10T00:00:00.000Z',
+    }] });
+  });
+
+  it('does not query findings for another repository', async () => {
+    const list = vi.fn();
+    const app = createRepositoryApi({
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [otherRepositoryId] }) },
+      configHistory: { list: vi.fn() },
+      reviewHistory: { list: vi.fn() },
+      reviewFindings: { list },
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/repositories/${repositoryId}/reviews/${otherRepositoryId}/findings`,
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(list).not.toHaveBeenCalled();
   });
 });

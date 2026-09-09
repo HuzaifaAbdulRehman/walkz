@@ -35,6 +35,7 @@ describe('hosted API composition', () => {
         authenticator,
         configHistory: { list: vi.fn() },
         reviewHistory: { list: vi.fn() },
+        reviewFindings: { list: vi.fn() },
       },
       webhook: {
         secret: 'webhook-secret',
@@ -45,13 +46,17 @@ describe('hosted API composition', () => {
     });
     apps.push(app);
 
-    const [webhook, logout, installations, manualReview, configs, reviews] = await Promise.all([
+    const [webhook, logout, installations, manualReview, configs, reviews, findings] = await Promise.all([
       app.inject({ method: 'POST', url: '/webhooks/github', payload: {} }),
       app.inject({ method: 'POST', url: '/auth/logout' }),
       app.inject({ method: 'GET', url: '/api/installations/123/repositories' }),
       app.inject({ method: 'POST', url: `/api/repositories/${repositoryId}/pull-requests/1/reviews` }),
       app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/configs` }),
       app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/reviews` }),
+      app.inject({
+        method: 'GET',
+        url: `/api/repositories/${repositoryId}/reviews/${repositoryId}/findings`,
+      }),
     ]);
 
     expect(webhook.statusCode).toBe(401);
@@ -60,6 +65,7 @@ describe('hosted API composition', () => {
     expect(manualReview.statusCode).toBe(401);
     expect(configs.statusCode).toBe(401);
     expect(reviews.statusCode).toBe(401);
+    expect(findings.statusCode).toBe(401);
     expect(configs.headers['cache-control']).toBe('private, no-store');
   });
 
@@ -80,6 +86,7 @@ describe('hosted API composition', () => {
         authenticator,
         configHistory: { list: vi.fn() },
         reviewHistory: { list: vi.fn() },
+        reviewFindings: { list: vi.fn() },
       },
       webhook: {
         secret: 'webhook-secret',

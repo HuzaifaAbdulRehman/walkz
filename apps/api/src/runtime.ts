@@ -10,6 +10,7 @@ import {
   consumeOAuthState,
   createDatabasePool,
   createPersistentGitHubSessionService,
+  listReviewFindings,
   listRepositoryConfigVersions,
   listReviewHistory,
   storeOAuthState,
@@ -134,6 +135,10 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
       authenticator,
       configHistory: { list: (repositoryId) => listRepositoryConfigVersions(pool, repositoryId) },
       reviewHistory: { list: (repositoryId) => listReviewHistory(pool, { repositoryId, limit: 100 }) },
+      reviewFindings: {
+        list: (repositoryId, reviewRunId) =>
+          listReviewFindings(pool, { repositoryId, reviewRunId }),
+      },
     },
     webhook: {
       secret: config.githubWebhookSecret,

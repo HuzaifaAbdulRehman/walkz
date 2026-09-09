@@ -4,6 +4,42 @@ import { z } from 'zod';
 import { repositoryConfigSchema } from '@walkz/contracts';
 
 const repositoryParamsSchema = z.object({ repositoryId: z.uuid() }).strict();
+const reviewParamsSchema = z.object({
+  repositoryId: z.uuid(),
+  reviewRunId: z.uuid(),
+}).strict();
+
+const dashboardFindingSchema = z.object({
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/i),
+  category: z.enum([
+    'correctness',
+    'security',
+    'performance',
+    'reliability',
+    'maintainability',
+  ]).nullable(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).nullable(),
+  path: z.string().nullable(),
+  startLine: z.number().int().positive().nullable(),
+  endLine: z.number().int().positive().nullable(),
+  lifecycleStatus: z.enum([
+    'proposed',
+    'challenged',
+    'proving',
+    'verified',
+    'supported',
+    'unverified',
+    'dismissed',
+    'fixed',
+  ]),
+  evidenceLevel: z.enum(['VERIFIED', 'SUPPORTED', 'UNVERIFIED']),
+  advisoryConfidence: z.number().min(0).max(1).nullable(),
+  summary: z.string(),
+  claim: z.string().nullable(),
+  failureMechanism: z.string().nullable(),
+  suggestedProof: z.string().nullable(),
+  createdAt: z.union([z.date(), z.string().datetime({ offset: true })]),
+}).strict();
 
 interface DashboardConfiguration {
   id: string;
@@ -82,6 +118,10 @@ export interface ReviewHistoryStore {
   list(repositoryId: string): Promise<readonly unknown[]>;
 }
 
+export interface ReviewFindingsStore {
+  list(repositoryId: string, reviewRunId: string): Promise<readonly unknown[]>;
+}
+
 export interface RepositoryApiAuthenticator {
   authenticate(request: unknown): Promise<{ repositoryIds: readonly string[] } | null>;
 }
@@ -89,6 +129,7 @@ export interface RepositoryApiAuthenticator {
 export interface RepositoryApiOptions {
   configHistory: RepositoryConfigHistoryStore;
   reviewHistory: ReviewHistoryStore;
+  reviewFindings: ReviewFindingsStore;
   authenticator: RepositoryApiAuthenticator;
 }
 
@@ -115,6 +156,31 @@ export function registerRepositoryRoutes(
     }
     return reply.send({ reviews: await options.reviewHistory.list(repositoryId) });
   });
+  app.get(
+    '/api/repositories/:repositoryId/reviews/:reviewRunId/findings',
+    async (request, reply) => {
+      const { repositoryId, reviewRunId } = reviewParamsSchema.parse(request.params);
+      const identity = await options.authenticator.authenticate(request);
+      if (identity === null) {
+        return reply.code(401).send({ error: 'authentication_required' });
+      }
+      if (!identity.repositoryIds.includes(repositoryId)) {
+        return reply.code(403).send({ error: 'repository_forbidden' });
+      }
+      const findings = await options.reviewFindings.list(repositoryId, reviewRunId);
+      return reply.send({
+        findings: findings.map((finding) => {
+          const parsed = dashboardFindingSchema.parse(finding);
+          return {
+            ...parsed,
+            createdAt: parsed.createdAt instanceof Date
+              ? parsed.createdAt.toISOString()
+              : parsed.createdAt,
+          };
+        }),
+      });
+    },
+  );
 }
 
 export function createRepositoryApi(options: RepositoryApiOptions): FastifyInstance {
