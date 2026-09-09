@@ -4,6 +4,7 @@ import {
   createCredentialVault,
   decryptCredential,
   encryptCredential,
+  loadProviderCredential,
   storeProviderCredential,
 } from '../src/index.js';
 
@@ -12,6 +13,10 @@ const vault = createCredentialVault({
   activeKeyId: 'primary-2026',
   keys: { 'primary-2026': key },
 });
+const binding = {
+  repositoryId: '3d963b52-8203-4ba6-bcac-15bf132371f0',
+  provider: 'groq',
+};
 
 describe('credential vault', () => {
   it('round-trips a credential through a fresh authenticated envelope', () => {
@@ -44,6 +49,19 @@ describe('credential vault', () => {
     ).toThrow('The active encryption key must be configured.');
   });
 
+  it('binds new envelopes to one repository and provider', () => {
+    const encrypted = encryptCredential(vault, 'gsk_secret-value', binding);
+
+    expect(decryptCredential(vault, encrypted, binding)).toBe('gsk_secret-value');
+    expect(() => decryptCredential(vault, encrypted, {
+      ...binding,
+      provider: 'another-provider',
+    })).toThrow('Could not decrypt the provider credential.');
+    expect(() => decryptCredential(vault, encrypted)).toThrow(
+      'binding is required',
+    );
+  });
+
   it('passes only the encrypted value to PostgreSQL', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ id: 'credential-id' }] });
     const credential = 'gsk_secret-value';
@@ -70,5 +88,28 @@ describe('credential vault', () => {
       expect.any(Buffer),
     ]);
     expect(values[3].includes(credential)).toBe(false);
+    expect(values[3][0]).toBe(2);
+  });
+
+  it('loads a credential only through its repository and provider binding', async () => {
+    const encrypted = encryptCredential(vault, 'gsk_secret-value', binding);
+    const query = vi.fn().mockResolvedValue({ rows: [{
+      encryptionKeyId: encrypted.encryptionKeyId,
+      encryptedValue: encrypted.encryptedValue,
+    }] });
+
+    await expect(loadProviderCredential({ query }, vault, binding)).resolves.toBe(
+      'gsk_secret-value',
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('repository_id = $1 AND provider = $2'),
+      [binding.repositoryId, binding.provider],
+    );
+  });
+
+  it('returns null when no repository credential exists', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+
+    await expect(loadProviderCredential({ query }, vault, binding)).resolves.toBeNull();
   });
 });

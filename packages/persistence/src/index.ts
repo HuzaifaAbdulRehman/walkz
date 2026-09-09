@@ -40,6 +40,7 @@ export {
   credentialEncryptionConfigSchema,
   decryptCredential,
   encryptCredential,
+  loadProviderCredential,
   storeProviderCredential,
 } from './credential-vault.js';
 

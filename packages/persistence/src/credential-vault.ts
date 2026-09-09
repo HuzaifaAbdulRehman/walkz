@@ -4,7 +4,7 @@ import {
   randomBytes,
 } from 'node:crypto';
 
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 
 const credentialValueSchema = z.string().min(1).max(16_384);
@@ -55,8 +55,14 @@ const credentialStorageInputSchema = z
     credential: credentialValueSchema,
   })
   .strict();
+const credentialBindingSchema = credentialStorageInputSchema.omit({ credential: true });
+const storedCredentialSchema = z.object({
+  encryptionKeyId: keyIdSchema,
+  encryptedValue: z.instanceof(Buffer),
+}).strict();
 
-const envelopeVersion = 1;
+const legacyEnvelopeVersion = 1;
+const boundEnvelopeVersion = 2;
 const nonceLength = 12;
 const authTagLength = 16;
 
@@ -74,8 +80,12 @@ export function createCredentialVault(input: unknown): CredentialVault {
 export function encryptCredential(
   vault: CredentialVault,
   input: unknown,
+  bindingInput?: unknown,
 ): EncryptedCredential {
   const credential = credentialValueSchema.parse(input);
+  const binding = bindingInput === undefined
+    ? null
+    : credentialBindingSchema.parse(bindingInput);
   const key = vault.keys.get(vault.activeKeyId);
   if (key === undefined) {
     throw new Error('The active encryption key is unavailable.');
@@ -83,9 +93,12 @@ export function encryptCredential(
 
   const nonce = randomBytes(nonceLength);
   const cipher = createCipheriv('aes-256-gcm', key, nonce);
+  if (binding !== null) {
+    cipher.setAAD(Buffer.from(JSON.stringify(binding), 'utf8'));
+  }
   const ciphertext = Buffer.concat([cipher.update(credential, 'utf8'), cipher.final()]);
   const envelope = Buffer.concat([
-    Buffer.from([envelopeVersion]),
+    Buffer.from([binding === null ? legacyEnvelopeVersion : boundEnvelopeVersion]),
     nonce,
     cipher.getAuthTag(),
     ciphertext,
@@ -96,16 +109,24 @@ export function encryptCredential(
 export function decryptCredential(
   vault: CredentialVault,
   input: unknown,
+  bindingInput?: unknown,
 ): string {
   const encrypted = encryptedCredentialSchema.parse(input);
+  const binding = bindingInput === undefined
+    ? null
+    : credentialBindingSchema.parse(bindingInput);
   const key = vault.keys.get(encrypted.encryptionKeyId);
   if (key === undefined) {
     throw new Error('The credential encryption key is unavailable.');
   }
 
   const envelope = encrypted.encryptedValue;
-  if (envelope[0] !== envelopeVersion) {
+  const version = envelope[0];
+  if (version !== legacyEnvelopeVersion && version !== boundEnvelopeVersion) {
     throw new Error('The credential envelope version is unsupported.');
+  }
+  if (version === boundEnvelopeVersion && binding === null) {
+    throw new Error('The credential binding is required for this envelope.');
   }
 
   const nonceStart = 1;
@@ -117,6 +138,9 @@ export function decryptCredential(
       key,
       envelope.subarray(nonceStart, authTagStart),
     );
+    if (version === boundEnvelopeVersion && binding !== null) {
+      decipher.setAAD(Buffer.from(JSON.stringify(binding), 'utf8'));
+    }
     decipher.setAuthTag(envelope.subarray(authTagStart, ciphertextStart));
     return Buffer.concat([
       decipher.update(envelope.subarray(ciphertextStart)),
@@ -133,7 +157,10 @@ export async function storeProviderCredential(
   input: unknown,
 ): Promise<string> {
   const credential = credentialStorageInputSchema.parse(input);
-  const encrypted = encryptCredential(vault, credential.credential);
+  const encrypted = encryptCredential(vault, credential.credential, {
+    repositoryId: credential.repositoryId,
+    provider: credential.provider,
+  });
   const result = await client.query<{ id: string }>(
     `
       INSERT INTO provider_credentials (
@@ -160,4 +187,24 @@ export async function storeProviderCredential(
     throw new Error('Credential storage did not return an ID.');
   }
   return row.id;
+}
+
+export async function loadProviderCredential(
+  pool: Pick<Pool, 'query'>,
+  vault: CredentialVault,
+  input: unknown,
+): Promise<string | null> {
+  const binding = credentialBindingSchema.parse(input);
+  const result = await pool.query(
+    `
+      SELECT encryption_key_id AS "encryptionKeyId",
+             encrypted_value AS "encryptedValue"
+      FROM provider_credentials
+      WHERE repository_id = $1 AND provider = $2
+    `,
+    [binding.repositoryId, binding.provider],
+  );
+  const row = result.rows[0];
+  if (row === undefined) return null;
+  return decryptCredential(vault, storedCredentialSchema.parse(row), binding);
 }
