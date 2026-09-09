@@ -61,3 +61,10 @@ export type {
   InstallationPullRequestReader,
   InstallationPullRequestReaderFactory,
 } from './pull-request-reader.js';
+
+export { createInstallationRepositoryCatalogFactory } from './repository-catalog.js';
+export type {
+  InstallationRepository,
+  InstallationRepositoryCatalog,
+  InstallationRepositoryCatalogFactory,
+} from './repository-catalog.js';
