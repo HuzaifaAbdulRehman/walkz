@@ -41,7 +41,7 @@ describe('hosted review worker leases', () => {
       config,
       provider: 'groq',
       model: 'auto',
-      promptVersion: 'hosted-v1',
+      promptVersion: 'walkz-review-v1',
       status: 'collecting_context',
     };
     const query = vi.fn().mockResolvedValue({ rows: [row] });
@@ -73,7 +73,7 @@ describe('hosted review worker leases', () => {
       config,
       provider: 'groq',
       model: 'auto',
-      promptVersion: 'hosted-v1',
+      promptVersion: 'walkz-review-v1',
       status: 'collecting_context',
     }] });
 
@@ -101,7 +101,7 @@ describe('hosted review worker leases', () => {
       config,
       provider: 'groq',
       model: 'different-model',
-      promptVersion: 'hosted-v1',
+      promptVersion: 'walkz-review-v1',
       status: 'collecting_context',
     }] });
 

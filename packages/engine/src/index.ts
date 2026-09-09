@@ -14,7 +14,10 @@ export {
   hashWalkzConfig,
 } from './run.js';
 export type { CreateLocalReviewRunOptions } from './run.js';
-export { buildReviewPrompt } from './prompt.js';
+export {
+  buildReviewPrompt,
+  WALKZ_REVIEW_PROMPT_VERSION,
+} from './prompt.js';
 export type {
   BuildReviewPromptOptions,
   BuiltReviewPrompt,

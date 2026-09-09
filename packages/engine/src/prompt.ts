@@ -7,7 +7,7 @@ import type {
 } from '@walkz/contracts';
 import type { ReviewContext } from '@walkz/git';
 
-const PROMPT_VERSION = 'walkz-review-v1';
+export const WALKZ_REVIEW_PROMPT_VERSION = 'walkz-review-v1';
 const INVISIBLE_CODEPOINTS =
   /[\u200B-\u200D\u202A-\u202E\u2060\u2066-\u2069\uFEFF\u{E0000}-\u{E007F}]/gu;
 const SYSTEM_PROMPT =
@@ -229,7 +229,7 @@ export function buildReviewPrompt(
     systemPrompt: SYSTEM_PROMPT,
     userPrompt: packed.userPrompt,
     maxOutputTokens,
-    promptVersion: PROMPT_VERSION,
+    promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
     inputBytes: packed.inputBytes,
     truncated: packed.truncated,
   };

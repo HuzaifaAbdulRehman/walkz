@@ -32,7 +32,8 @@ const environmentSchema = z.object({
   GITHUB_OAUTH_CALLBACK_URL: z.url(),
   GITHUB_WEBHOOK_SECRET: z.string().min(32).max(1_024),
   WALKZ_OAUTH_STATE_SECRET: z.string().min(32).max(1_024),
-  WALKZ_PROMPT_VERSION: z.string().trim().min(1).max(128).default('hosted-v1'),
+  WALKZ_PROMPT_VERSION: z.string().trim().min(1).max(128)
+    .default('walkz-review-v1'),
   WALKZ_HOST: z.string().trim().min(1).max(255).default('0.0.0.0'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
 }).passthrough();
