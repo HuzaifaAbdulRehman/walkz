@@ -9,29 +9,29 @@ const stateId = '3d963b52-8203-4ba6-bcac-15bf132371f0';
 const secret = 'a'.repeat(32);
 
 describe('GitHub App authentication boundary', () => {
-  it('signs, verifies, expires, and consumes OAuth state once', () => {
+  it('signs, verifies, and expires OAuth state', () => {
     let now = 1_000;
     const signer = createOAuthStateSigner(secret, {
       ttlMs: 100,
       now: () => now,
     });
-    const token = signer.issue({ stateId, returnTo: '/reviews?status=open' });
+    const issued = signer.issue({ stateId, returnTo: '/reviews?status=open' });
 
-    expect(signer.consume(token)).toEqual({ stateId, returnTo: '/reviews?status=open' });
-    expect(() => signer.consume(token)).toThrow('already consumed');
+    expect(issued.expiresAt).toBe(now + 100);
+    expect(signer.verify(issued.token)).toEqual({ stateId, returnTo: '/reviews?status=open' });
 
     now = 2_000;
     const expired = createOAuthStateSigner(secret, { ttlMs: 100, now: () => now - 200 });
-    const expiredToken = expired.issue({ stateId, returnTo: '/reviews' });
+    const expiredToken = expired.issue({ stateId, returnTo: '/reviews' }).token;
     now = 2_500;
-    expect(() => expired.consume(expiredToken)).toThrow('expired');
+    expect(() => expired.verify(expiredToken)).toThrow('expired');
   });
 
   it('rejects tampered state and write-capable installation permissions', () => {
     const signer = createOAuthStateSigner(secret);
-    const token = signer.issue({ stateId, returnTo: '/reviews' });
+    const token = signer.issue({ stateId, returnTo: '/reviews' }).token;
     const [payload, signature] = token.split('.');
-    expect(() => signer.consume(`${payload}.${signature}x`)).toThrow();
+    expect(() => signer.verify(`${payload}.${signature}x`)).toThrow();
     expect(() => parseReadOnlyInstallation({
       installationId: '123',
       repositories: [{ githubId: '456', owner: 'owner', name: 'repo' }],

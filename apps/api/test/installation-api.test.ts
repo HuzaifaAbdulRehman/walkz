@@ -45,4 +45,21 @@ describe('installation selection API', () => {
     expect(response.statusCode).toBe(403);
     expect(list).not.toHaveBeenCalled();
   });
+
+  it('requires an authenticated session', async () => {
+    const list = vi.fn();
+    const app = createInstallationApi({
+      authenticator: { authenticate: vi.fn().mockResolvedValue(null) },
+      repositories: { list, select: vi.fn() },
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/installations/${installationId}/repositories`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(list).not.toHaveBeenCalled();
+  });
 });

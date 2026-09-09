@@ -18,7 +18,7 @@ describe('manual review API', () => {
     const start = vi.fn().mockResolvedValue({ reviewRunId: 'run-id' });
     const app = createManualReviewApi({
       authenticator: {
-        authenticate: vi.fn().mockResolvedValue({ repositoryId }),
+        authenticate: vi.fn().mockResolvedValue({ repositoryIds: [repositoryId] }),
       },
       reviews: { start },
     });
@@ -43,7 +43,7 @@ describe('manual review API', () => {
     const app = createManualReviewApi({
       authenticator: {
         authenticate: vi.fn().mockResolvedValue({
-          repositoryId: '08d0dd85-734e-4f74-bcfc-3436ec7b4abd',
+          repositoryIds: ['08d0dd85-734e-4f74-bcfc-3436ec7b4abd'],
         }),
       },
       reviews: { start },
@@ -58,11 +58,29 @@ describe('manual review API', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it('requires an authenticated session before starting work', async () => {
+    const start = vi.fn();
+    const app = createManualReviewApi({
+      authenticator: { authenticate: vi.fn().mockResolvedValue(null) },
+      reviews: { start },
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/repositories/${repositoryId}/pull-requests/7/reviews`,
+      headers: { 'idempotency-key': requestId },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing idempotency key before starting work', async () => {
     const start = vi.fn();
     const app = createManualReviewApi({
       authenticator: {
-        authenticate: vi.fn().mockResolvedValue({ repositoryId }),
+        authenticate: vi.fn().mockResolvedValue({ repositoryIds: [repositoryId] }),
       },
       reviews: { start },
     });

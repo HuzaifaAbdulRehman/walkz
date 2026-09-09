@@ -44,7 +44,7 @@ export interface ReviewHistoryStore {
 }
 
 export interface RepositoryApiAuthenticator {
-  authenticate(request: unknown): Promise<{ repositoryId: string }>;
+  authenticate(request: unknown): Promise<{ repositoryIds: readonly string[] } | null>;
 }
 
 export interface RepositoryApiOptions {
@@ -58,7 +58,8 @@ export function createRepositoryApi(options: RepositoryApiOptions): FastifyInsta
   app.get('/api/repositories/:repositoryId/configs', async (request, reply) => {
     const { repositoryId } = repositoryParamsSchema.parse(request.params);
     const identity = await options.authenticator.authenticate(request);
-    if (identity.repositoryId !== repositoryId) {
+    if (identity === null) return reply.code(401).send({ error: 'authentication_required' });
+    if (!identity.repositoryIds.includes(repositoryId)) {
       return reply.code(403).send({ error: 'repository_forbidden' });
     }
     const configurations = await options.configHistory.list(repositoryId);
@@ -67,7 +68,8 @@ export function createRepositoryApi(options: RepositoryApiOptions): FastifyInsta
   app.get('/api/repositories/:repositoryId/reviews', async (request, reply) => {
     const { repositoryId } = repositoryParamsSchema.parse(request.params);
     const identity = await options.authenticator.authenticate(request);
-    if (identity.repositoryId !== repositoryId) {
+    if (identity === null) return reply.code(401).send({ error: 'authentication_required' });
+    if (!identity.repositoryIds.includes(repositoryId)) {
       return reply.code(403).send({ error: 'repository_forbidden' });
     }
     return reply.send({ reviews: await options.reviewHistory.list(repositoryId) });

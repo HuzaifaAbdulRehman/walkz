@@ -16,7 +16,7 @@ const paramsSchema = z.object({
 const idempotencyKeySchema = z.uuid();
 
 export interface ManualReviewAuthenticator {
-  authenticate(request: unknown): Promise<{ repositoryId: string }>;
+  authenticate(request: unknown): Promise<{ repositoryIds: readonly string[] } | null>;
 }
 
 export interface ManualReviewStarter {
@@ -112,7 +112,8 @@ export function createManualReviewApi(
     async (request, reply) => {
       const params = paramsSchema.parse(request.params);
       const identity = await options.authenticator.authenticate(request);
-      if (identity.repositoryId !== params.repositoryId) {
+      if (identity === null) return reply.code(401).send({ error: 'authentication_required' });
+      if (!identity.repositoryIds.includes(params.repositoryId)) {
         return reply.code(403).send({ error: 'repository_forbidden' });
       }
       const idempotencyKey = idempotencyKeySchema.safeParse(

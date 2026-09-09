@@ -14,8 +14,11 @@ const oauthPayloadSchema = z
 const oauthStateTokenSchema = z.string().regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 
 export interface OAuthStateSigner {
-  issue(input: { stateId: string; returnTo: string }): string;
-  consume(token: string): { stateId: string; returnTo: string };
+  issue(input: { stateId: string; returnTo: string }): {
+    token: string;
+    expiresAt: number;
+  };
+  verify(token: string): { stateId: string; returnTo: string };
 }
 
 export function createOAuthStateSigner(
@@ -27,7 +30,6 @@ export function createOAuthStateSigner(
   }
   const ttlMs = options.ttlMs ?? 600_000;
   const now = options.now ?? Date.now;
-  const consumed = new Set<string>();
 
   function sign(payload: string): string {
     return createHmac('sha256', secret).update(payload).digest('base64url');
@@ -42,9 +44,9 @@ export function createOAuthStateSigner(
         expiresAt: now() + ttlMs,
       });
       const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-      return `${encoded}.${sign(encoded)}`;
+      return { token: `${encoded}.${sign(encoded)}`, expiresAt: payload.expiresAt };
     },
-    consume(token) {
+    verify(token) {
       const parsedToken = oauthStateTokenSchema.parse(token);
       const [encoded, receivedSignature] = parsedToken.split('.');
       if (encoded === undefined || receivedSignature === undefined) {
@@ -64,10 +66,6 @@ export function createOAuthStateSigner(
       if (payload.expiresAt <= now()) {
         throw new Error('OAuth state has expired.');
       }
-      if (consumed.has(payload.stateId)) {
-        throw new Error('OAuth state was already consumed.');
-      }
-      consumed.add(payload.stateId);
       return { stateId: payload.stateId, returnTo: payload.returnTo };
     },
   };

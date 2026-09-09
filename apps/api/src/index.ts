@@ -21,6 +21,7 @@ export { createGitHubAuthApi } from './github-auth.js';
 export type {
   GitHubAuthApiOptions,
   GitHubOAuthClient,
+  GitHubOAuthStateStore,
   GitHubSessionIssuer,
 } from './github-auth.js';
 
@@ -36,6 +37,12 @@ export {
   createManualReviewStarter,
   createPersistentManualReviewStarter,
 } from './manual-review-api.js';
+
+export { createApiSessionAuthenticator, readSessionCookie } from './session-auth.js';
+export type {
+  ApiSessionAuthenticator,
+  SessionVerifier,
+} from './session-auth.js';
 export type {
   ManualReviewApiOptions,
   ManualReviewAuthenticator,

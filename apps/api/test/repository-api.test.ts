@@ -13,7 +13,7 @@ afterEach(async () => {
 describe('authenticated repository API', () => {
   it('returns configuration history for an authorized repository', async () => {
     const app = createRepositoryApi({
-      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId }) },
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [repositoryId] }) },
       configHistory: {
         list: vi.fn().mockResolvedValue([{
           id: 'config-1',
@@ -41,7 +41,7 @@ describe('authenticated repository API', () => {
 
   it('rejects access to another repository', async () => {
     const app = createRepositoryApi({
-      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId: otherRepositoryId }) },
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [otherRepositoryId] }) },
       configHistory: { list: vi.fn() },
       reviewHistory: { list: vi.fn() },
     });
@@ -52,9 +52,25 @@ describe('authenticated repository API', () => {
     expect(response.statusCode).toBe(403);
   });
 
+  it('requires an authenticated session', async () => {
+    const list = vi.fn();
+    const app = createRepositoryApi({
+      authenticator: { authenticate: vi.fn().mockResolvedValue(null) },
+      configHistory: { list },
+      reviewHistory: { list },
+    });
+    apps.push(app);
+
+    const response = await app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/configs` });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: 'authentication_required' });
+    expect(list).not.toHaveBeenCalled();
+  });
+
   it('returns review history for an authorized repository', async () => {
     const app = createRepositoryApi({
-      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryId }) },
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ repositoryIds: [repositoryId] }) },
       configHistory: { list: vi.fn().mockResolvedValue([]) },
       reviewHistory: { list: vi.fn().mockResolvedValue([{ status: 'completed' }]) },
     });

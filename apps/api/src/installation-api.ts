@@ -10,7 +10,7 @@ export interface InstallationRepositoryStore {
 }
 
 export interface InstallationAuthenticator {
-  authenticate(request: unknown): Promise<{ installationIds: readonly string[] }>;
+  authenticate(request: unknown): Promise<{ installationIds: readonly string[] } | null>;
 }
 
 export interface InstallationApiOptions {
@@ -23,6 +23,7 @@ export function createInstallationApi(options: InstallationApiOptions): FastifyI
   app.get('/api/installations/:installationId/repositories', async (request, reply) => {
     const { installationId } = paramsSchema.parse(request.params);
     const identity = await options.authenticator.authenticate(request);
+    if (identity === null) return reply.code(401).send({ error: 'authentication_required' });
     if (!identity.installationIds.includes(installationId)) {
       return reply.code(403).send({ error: 'installation_forbidden' });
     }
@@ -32,6 +33,7 @@ export function createInstallationApi(options: InstallationApiOptions): FastifyI
     const { installationId } = paramsSchema.parse(request.params);
     const { repositoryId } = selectionSchema.parse(request.body);
     const identity = await options.authenticator.authenticate(request);
+    if (identity === null) return reply.code(401).send({ error: 'authentication_required' });
     if (!identity.installationIds.includes(installationId)) {
       return reply.code(403).send({ error: 'installation_forbidden' });
     }
