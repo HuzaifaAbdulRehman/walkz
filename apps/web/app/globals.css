@@ -22,6 +22,12 @@ h2 { font-size: 26px; }
 .review-card { align-items: center; background: #101c30; border: 1px solid #23334c; border-radius: 14px; display: flex; justify-content: space-between; padding: 20px; }
 .review-card > div { min-width: 0; }
 .configuration-card { align-items: center; background: #101c30; border: 1px solid #23334c; border-radius: 14px; display: flex; justify-content: space-between; gap: 16px; padding: 20px; }
+.configuration-overview { background: #101c30; border: 1px solid #385276; border-radius: 14px; display: grid; gap: 24px; margin-bottom: 24px; padding: 24px; }
+.configuration-label { color: #a8c8ff; font-size: 12px; letter-spacing: .08em; margin: 0 0 8px; text-transform: uppercase; }
+.configuration-facts { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.configuration-facts div { min-width: 0; }
+.configuration-facts dt { color: #91a4bf; font-size: 12px; margin-bottom: 4px; }
+.configuration-facts dd { color: #e7edf7; font-size: 14px; margin: 0; overflow-wrap: anywhere; }
 .repository, .detail { color: #91a4bf; font-size: 14px; margin: 0 0 8px; }
 .review-summary { color: #c4d0df; line-height: 1.5; margin: 0; max-width: 620px; overflow-wrap: anywhere; }
 .config-hash { color: #a8c8ff; font-size: 13px; overflow-wrap: anywhere; }
@@ -34,4 +40,5 @@ h3 { font-size: 20px; margin: 0 0 8px; }
 @media (max-width: 640px) {
   .shell { padding: 48px 16px; }
   .review-card, .configuration-card { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .configuration-facts { grid-template-columns: 1fr; }
 }

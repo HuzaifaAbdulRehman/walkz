@@ -64,12 +64,27 @@ describe('loadDashboardReviews', () => {
 });
 
 describe('loadDashboardConfigurations', () => {
-  it('keeps only safe configuration history metadata', async () => {
+  it('loads a safe configuration summary without command text', async () => {
     const fetcher = async () => new Response(JSON.stringify({ configurations: [{
       id: 'config-1',
       schemaVersion: 1,
       configHash: 'a'.repeat(64),
       createdAt: '2026-09-09T12:00:00.000Z',
+      provider: { name: 'groq', model: 'auto' },
+      budget: {
+        diffBytes: 524_288,
+        files: 100,
+        tokens: 16_000,
+        commandTimeoutMs: 120_000,
+        commandOutputBytesPerStream: 262_144,
+      },
+      triggerPolicy: 'manual',
+      blockingEvidenceLevels: ['VERIFIED'],
+      commandApprovalPolicy: 'prompt',
+      commandCount: 1,
+      requiredCommandCount: 1,
+      premiumEnabled: false,
+      spendingLimitUsd: 0,
       commands: [{ args: ['not-allowed'] }],
     }] }), { status: 200 });
 
@@ -83,6 +98,21 @@ describe('loadDashboardConfigurations', () => {
       schemaVersion: 1,
       configHash: 'a'.repeat(64),
       createdAt: '2026-09-09T12:00:00.000Z',
+      provider: { name: 'groq', model: 'auto' },
+      budget: {
+        diffBytes: 524_288,
+        files: 100,
+        tokens: 16_000,
+        commandTimeoutMs: 120_000,
+        commandOutputBytesPerStream: 262_144,
+      },
+      triggerPolicy: 'manual',
+      blockingEvidenceLevels: ['VERIFIED'],
+      commandApprovalPolicy: 'prompt',
+      commandCount: 1,
+      requiredCommandCount: 1,
+      premiumEnabled: false,
+      spendingLimitUsd: 0,
     }]);
   });
 
@@ -96,6 +126,20 @@ describe('loadDashboardConfigurations', () => {
       'repo-1',
       undefined,
       fetcher,
+    )).rejects.toThrow('Configuration history response was invalid.');
+  });
+
+  it('rejects an invalid configuration budget', async () => {
+    const fetcher = async () => new Response(JSON.stringify({ configurations: [{
+      id: 'config-1', schemaVersion: 1, configHash: 'a'.repeat(64), createdAt: '2026-09-09T12:00:00.000Z',
+      provider: { name: 'groq', model: 'auto' },
+      budget: { diffBytes: -1, files: 100, tokens: 16_000, commandTimeoutMs: 120_000, commandOutputBytesPerStream: 262_144 },
+      triggerPolicy: 'manual', blockingEvidenceLevels: ['VERIFIED'], commandApprovalPolicy: 'prompt',
+      commandCount: 0, requiredCommandCount: 0, premiumEnabled: false, spendingLimitUsd: 0,
+    }] }), { status: 200 });
+
+    await expect(loadDashboardConfigurations(
+      'https://api.example.test', 'repo-1', undefined, fetcher,
     )).rejects.toThrow('Configuration history response was invalid.');
   });
 });

@@ -15,10 +15,37 @@ export interface DashboardConfiguration {
   schemaVersion: number;
   configHash: string;
   createdAt: string;
+  provider: {
+    name: 'groq';
+    model: string;
+  };
+  budget: {
+    diffBytes: number;
+    files: number;
+    tokens: number;
+    commandTimeoutMs: number;
+    commandOutputBytesPerStream: number;
+  };
+  triggerPolicy: 'manual' | 'ready_for_review' | 'every_push';
+  blockingEvidenceLevels: Array<'VERIFIED' | 'SUPPORTED'>;
+  commandApprovalPolicy: 'prompt' | 'trusted_config';
+  commandCount: number;
+  requiredCommandCount: number;
+  premiumEnabled: false;
+  spendingLimitUsd: 0;
 }
 
 const verdicts = new Set<NonNullable<DashboardReview['verdict']>>([
   'SHIP', 'FIX', 'HUMAN', 'INCONCLUSIVE', 'ERROR',
+]);
+const triggerPolicies = new Set<DashboardConfiguration['triggerPolicy']>([
+  'manual', 'ready_for_review', 'every_push',
+]);
+const blockingEvidenceLevels = new Set<DashboardConfiguration['blockingEvidenceLevels'][number]>([
+  'VERIFIED', 'SUPPORTED',
+]);
+const commandApprovalPolicies = new Set<DashboardConfiguration['commandApprovalPolicy']>([
+  'prompt', 'trusted_config',
 ]);
 
 function isDashboardVerdict(value: string): value is NonNullable<DashboardReview['verdict']> {
@@ -80,12 +107,40 @@ export function parseDashboardConfigurationHistory(input: unknown): DashboardCon
       throw new Error('Configuration history response was invalid.');
     }
     const value = configuration as Record<string, unknown>;
+    const provider = value.provider;
+    const budget = value.budget;
+    const evidence = value.blockingEvidenceLevels;
+    const providerValue = provider as Record<string, unknown>;
+    const budgetValue = budget as Record<string, unknown>;
+    const commandCount = value.commandCount;
+    const requiredCommandCount = value.requiredCommandCount;
     if (
       typeof value.id !== 'string' ||
       typeof value.schemaVersion !== 'number' ||
       !Number.isInteger(value.schemaVersion) ||
       typeof value.configHash !== 'string' ||
-      typeof value.createdAt !== 'string'
+      typeof value.createdAt !== 'string' ||
+      typeof provider !== 'object' || provider === null ||
+      providerValue.name !== 'groq' ||
+      typeof providerValue.model !== 'string' ||
+      typeof budget !== 'object' || budget === null ||
+      typeof budgetValue.diffBytes !== 'number' || !Number.isInteger(budgetValue.diffBytes) ||
+      budgetValue.diffBytes < 1 ||
+      typeof budgetValue.files !== 'number' || !Number.isInteger(budgetValue.files) ||
+      budgetValue.files < 1 ||
+      typeof budgetValue.tokens !== 'number' || !Number.isInteger(budgetValue.tokens) ||
+      budgetValue.tokens < 1 ||
+      typeof budgetValue.commandTimeoutMs !== 'number' || !Number.isInteger(budgetValue.commandTimeoutMs) ||
+      budgetValue.commandTimeoutMs < 1 ||
+      typeof budgetValue.commandOutputBytesPerStream !== 'number' || !Number.isInteger(budgetValue.commandOutputBytesPerStream) ||
+      budgetValue.commandOutputBytesPerStream < 1 ||
+      typeof value.triggerPolicy !== 'string' || !triggerPolicies.has(value.triggerPolicy as DashboardConfiguration['triggerPolicy']) ||
+      !Array.isArray(evidence) || evidence.length === 0 ||
+      !evidence.every((item) => typeof item === 'string' && blockingEvidenceLevels.has(item as DashboardConfiguration['blockingEvidenceLevels'][number])) ||
+      typeof value.commandApprovalPolicy !== 'string' || !commandApprovalPolicies.has(value.commandApprovalPolicy as DashboardConfiguration['commandApprovalPolicy']) ||
+      typeof commandCount !== 'number' || !Number.isInteger(commandCount) || commandCount < 0 ||
+      typeof requiredCommandCount !== 'number' || !Number.isInteger(requiredCommandCount) || requiredCommandCount < 0 || requiredCommandCount > commandCount ||
+      value.premiumEnabled !== false || value.spendingLimitUsd !== 0
     ) {
       throw new Error('Configuration history response was invalid.');
     }
@@ -94,6 +149,24 @@ export function parseDashboardConfigurationHistory(input: unknown): DashboardCon
       schemaVersion: value.schemaVersion,
       configHash: value.configHash,
       createdAt: value.createdAt,
+      provider: {
+        name: 'groq',
+        model: providerValue.model,
+      },
+      budget: {
+        diffBytes: budgetValue.diffBytes,
+        files: budgetValue.files,
+        tokens: budgetValue.tokens,
+        commandTimeoutMs: budgetValue.commandTimeoutMs,
+        commandOutputBytesPerStream: budgetValue.commandOutputBytesPerStream,
+      },
+      triggerPolicy: value.triggerPolicy as DashboardConfiguration['triggerPolicy'],
+      blockingEvidenceLevels: evidence as DashboardConfiguration['blockingEvidenceLevels'],
+      commandApprovalPolicy: value.commandApprovalPolicy as DashboardConfiguration['commandApprovalPolicy'],
+      commandCount,
+      requiredCommandCount,
+      premiumEnabled: false,
+      spendingLimitUsd: 0,
     };
   });
 }
