@@ -1,8 +1,10 @@
 import {
+  buildReviewCheckPayload,
   parseReviewCheckPayload,
   type ReviewCheckPublisher,
 } from '@walkz/github';
 import {
+  githubCheckCompletedOutboxEventSchema,
   githubCheckQueuedOutboxEventSchema,
   type ClaimedOutboxEvent,
 } from '@walkz/persistence';
@@ -21,6 +23,31 @@ export function createGitHubCheckOutboxHandler(
     ): Promise<void> {
       if (input.idempotencyKey !== event.id) {
         throw new Error('Outbox handler idempotency key must match the event ID.');
+      }
+      if (event.eventType === 'github_check.completed') {
+        const completed = githubCheckCompletedOutboxEventSchema.parse({
+          aggregateId: event.aggregateId,
+          eventType: event.eventType,
+          payload: event.payload,
+        });
+        const publisher = await factory.forInstallation(
+          completed.payload.installationId,
+        );
+        await publisher.publish(
+          {
+            owner: completed.payload.owner,
+            repository: completed.payload.repository,
+          },
+          buildReviewCheckPayload({
+            baseSha: completed.payload.baseSha,
+            headSha: completed.payload.headSha,
+            verdict: completed.payload.verdict,
+            summary: completed.payload.summary,
+            findings: completed.payload.findings,
+          }),
+          completed.payload.reviewRunId,
+        );
+        return;
       }
       const queued = githubCheckQueuedOutboxEventSchema.parse({
         aggregateId: event.aggregateId,

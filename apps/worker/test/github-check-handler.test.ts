@@ -16,6 +16,24 @@ const event = {
   },
 };
 
+const completedEvent = {
+  ...event,
+  id: 'edab20a3-473e-498d-9f01-c93907ba7d25',
+  eventType: 'github_check.completed',
+  payload: {
+    ...event.payload,
+    verdict: 'FIX',
+    summary: 'One verified regression needs attention.',
+    findings: [{
+      path: 'src/index.ts',
+      startLine: 4,
+      endLine: 4,
+      severity: 'high',
+      summary: 'The head revision fails the reproducer.',
+    }],
+  },
+};
+
 describe('GitHub check outbox handler', () => {
   it('publishes one exact-SHA pending check with the review run as its stable key', async () => {
     const publish = vi.fn().mockResolvedValue(42);
@@ -48,6 +66,28 @@ describe('GitHub check outbox handler', () => {
       { idempotencyKey: event.id },
     )).rejects.toThrow();
     expect(forInstallation).not.toHaveBeenCalled();
+  });
+
+  it('updates the same exact-SHA check with the final verdict', async () => {
+    const publish = vi.fn().mockResolvedValue(42);
+    const forInstallation = vi.fn().mockResolvedValue({ publish });
+    const handler = createGitHubCheckOutboxHandler({ forInstallation });
+
+    await handler.handle(completedEvent, { idempotencyKey: completedEvent.id });
+    expect(publish).toHaveBeenCalledWith(
+      { owner: 'owner', repository: 'repo' },
+      expect.objectContaining({
+        baseSha: 'a'.repeat(40),
+        headSha: 'b'.repeat(40),
+        status: 'completed',
+        conclusion: 'failure',
+        annotations: [expect.objectContaining({
+          path: 'src/index.ts',
+          level: 'failure',
+        })],
+      }),
+      event.aggregateId,
+    );
   });
 
   it('rejects a mismatched dispatch idempotency key', async () => {
