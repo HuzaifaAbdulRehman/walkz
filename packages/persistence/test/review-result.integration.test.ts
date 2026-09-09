@@ -62,13 +62,16 @@ describe('PostgreSQL hosted review completion', () => {
     await pool.query(
       `INSERT INTO review_runs
         (id, repository_id, config_id, config_hash, base_sha, head_sha,
-         provider, model, prompt_version, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'groq', 'model', 'v1', 'proving')`,
+         provider, model, prompt_version, status, worker_lease_owner,
+         worker_lease_expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'groq', 'model', 'v1', 'proving',
+               'worker-1', now() + interval '1 minute')`,
       [runId, repositoryId, configId, 'd'.repeat(64), baseSha, headSha],
     );
 
     const input = {
       reviewRunId: runId,
+      workerId: 'worker-1',
       baseSha,
       headSha,
       verdict: 'SHIP' as const,
