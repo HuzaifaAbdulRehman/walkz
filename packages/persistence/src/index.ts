@@ -90,3 +90,16 @@ export type { RepositoryConfigVersion } from './repository-config.js';
 
 export { listReviewHistory } from './review-history.js';
 export type { ReviewHistoryItem } from './review-history.js';
+
+export {
+  consumeOAuthState,
+  createPersistentGitHubSessionService,
+  purgeExpiredOAuthStates,
+  purgeExpiredSessions,
+  storeOAuthState,
+} from './auth.js';
+export type {
+  GitHubIdentityResolver,
+  PersistentGitHubSessionService,
+  SessionPrincipal,
+} from './auth.js';
