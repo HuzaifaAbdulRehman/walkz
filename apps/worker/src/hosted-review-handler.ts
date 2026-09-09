@@ -24,11 +24,20 @@ const workerOptionsSchema = z.object({
 }).strict();
 
 interface HostedResultFinding {
+  fingerprint: string;
+  category: 'correctness' | 'security' | 'performance' | 'reliability' | 'maintainability';
   path: string;
   startLine: number;
   endLine: number;
   severity: 'low' | 'medium' | 'high' | 'critical';
   summary: string;
+  lifecycleStatus: 'proposed' | 'challenged' | 'proving' | 'verified' |
+    'supported' | 'unverified' | 'dismissed' | 'fixed';
+  evidenceLevel: 'VERIFIED' | 'SUPPORTED' | 'UNVERIFIED';
+  advisoryConfidence: number;
+  claim: string;
+  failureMechanism: string;
+  suggestedProof: string;
 }
 
 interface HostedReviewResult {
@@ -108,11 +117,19 @@ function resultFromPipeline(result: LocalReviewPipelineResult): HostedReviewResu
     verdict,
     summary: summaryFor(verdict),
     findings: result.run.findings.slice(0, 50).map((finding) => ({
+      fingerprint: finding.fingerprint,
+      category: finding.category,
       path: finding.file,
       startLine: finding.line,
       endLine: finding.endLine ?? finding.line,
       severity: finding.severity,
       summary: boundedSummary(finding.claim),
+      lifecycleStatus: finding.lifecycleStatus,
+      evidenceLevel: finding.evidenceLevel,
+      advisoryConfidence: finding.advisoryConfidence,
+      claim: finding.claim,
+      failureMechanism: finding.failureMechanism,
+      suggestedProof: finding.suggestedProof,
     })),
   };
 }

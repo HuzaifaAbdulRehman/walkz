@@ -14,11 +14,19 @@ const input = {
   verdict: 'FIX',
   summary: 'One verified regression needs attention.',
   findings: [{
+    fingerprint: 'c'.repeat(64),
+    category: 'correctness',
     path: 'src/index.ts',
     startLine: 4,
     endLine: 4,
     severity: 'high',
     summary: 'The head revision fails the reproducer.',
+    lifecycleStatus: 'verified',
+    evidenceLevel: 'VERIFIED',
+    advisoryConfidence: 0.99,
+    claim: 'The head revision fails the reproducer.',
+    failureMechanism: 'The changed branch returns the wrong value.',
+    suggestedProof: 'Run the focused reproducer on both revisions.',
   }],
 } as const;
 
@@ -45,7 +53,13 @@ function completedPayload() {
     headSha,
     verdict: input.verdict,
     summary: input.summary,
-    findings: input.findings,
+    findings: input.findings.map((finding) => ({
+      path: finding.path,
+      startLine: finding.startLine,
+      endLine: finding.endLine,
+      severity: finding.severity,
+      summary: finding.summary,
+    })),
   };
 }
 
@@ -55,6 +69,7 @@ describe('hosted review completion', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [durableRun('proving')] })
       .mockResolvedValueOnce({ rows: [{ id: runId }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: eventId }] })
       .mockResolvedValueOnce({ rows: [] });
     const release = vi.fn();
@@ -69,6 +84,7 @@ describe('hosted review completion', () => {
       'BEGIN',
       expect.stringContaining('FOR UPDATE OF rr'),
       expect.stringContaining('UPDATE review_runs'),
+      expect.stringContaining('INSERT INTO findings'),
       expect.stringContaining('INSERT INTO outbox_events'),
       'COMMIT',
     ]);
@@ -79,9 +95,15 @@ describe('hosted review completion', () => {
     expect(query.mock.calls[1]?.[0]).toContain('rr.base_sha AS "baseSha"');
     expect(query.mock.calls[1]?.[0]).toContain('rr.head_sha AS "headSha"');
     expect(query.mock.calls[1]?.[0]).toContain('gi.github_id::text AS "installationId"');
-    const payload = JSON.parse(query.mock.calls[3]?.[1]?.[2] as string);
+    const payload = JSON.parse(query.mock.calls[4]?.[1]?.[2] as string);
     expect(payload).toEqual(completedPayload());
     expect(payload).not.toHaveProperty('credential');
+    const stored = JSON.parse(query.mock.calls[3]?.[1]?.[1] as string);
+    expect(stored[0]).toMatchObject({
+      fingerprint: 'c'.repeat(64),
+      evidenceLevel: 'VERIFIED',
+      path: 'src/index.ts',
+    });
     expect(release).toHaveBeenCalledOnce();
   });
 

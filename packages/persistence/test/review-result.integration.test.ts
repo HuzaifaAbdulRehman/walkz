@@ -37,6 +37,7 @@ describe('PostgreSQL hosted review completion', () => {
 
     cleanups.push(async () => {
       await pool.query('DELETE FROM outbox_events WHERE aggregate_id = $1', [runId]);
+      await pool.query('DELETE FROM findings WHERE review_run_id = $1', [runId]);
       await pool.query('DELETE FROM review_runs WHERE id = $1', [runId]);
       await pool.query('DELETE FROM repository_configs WHERE id = $1', [configId]);
       await pool.query('DELETE FROM repositories WHERE id = $1', [repositoryId]);
@@ -76,7 +77,21 @@ describe('PostgreSQL hosted review completion', () => {
       headSha,
       verdict: 'SHIP' as const,
       summary: 'No blocking evidence.',
-      findings: [],
+      findings: [{
+        fingerprint: 'c'.repeat(64),
+        category: 'correctness' as const,
+        path: 'src/value.ts',
+        startLine: 8,
+        endLine: 8,
+        severity: 'medium' as const,
+        summary: 'The changed branch can return the wrong value.',
+        lifecycleStatus: 'unverified' as const,
+        evidenceLevel: 'UNVERIFIED' as const,
+        advisoryConfidence: 0.7,
+        claim: 'The changed branch can return the wrong value.',
+        failureMechanism: 'The fallback skips the expected value.',
+        suggestedProof: 'Exercise the fallback on both revisions.',
+      }],
     };
 
     const first = await completeHostedReviewRun(pool, input);
@@ -105,5 +120,19 @@ describe('PostgreSQL hosted review completion', () => {
       eventType: 'github_check.completed',
       payload: { reviewRunId: runId, baseSha, headSha, verdict: 'SHIP' },
     });
+    const findings = await pool.query(
+      `SELECT fingerprint, category, severity, file_path AS "path",
+              start_line AS "startLine", evidence_level AS "evidenceLevel"
+       FROM findings WHERE review_run_id = $1`,
+      [runId],
+    );
+    expect(findings.rows).toEqual([{
+      fingerprint: 'c'.repeat(64),
+      category: 'correctness',
+      severity: 'medium',
+      path: 'src/value.ts',
+      startLine: 8,
+      evidenceLevel: 'UNVERIFIED',
+    }]);
   });
 });

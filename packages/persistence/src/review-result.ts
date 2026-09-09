@@ -11,6 +11,31 @@ import {
 } from './outbox.js';
 
 const shaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
+const persistedFindingSchema = githubCheckResultFindingSchema.extend({
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/i),
+  category: z.enum([
+    'correctness',
+    'security',
+    'performance',
+    'reliability',
+    'maintainability',
+  ]),
+  lifecycleStatus: z.enum([
+    'proposed',
+    'challenged',
+    'proving',
+    'verified',
+    'supported',
+    'unverified',
+    'dismissed',
+    'fixed',
+  ]),
+  evidenceLevel: z.enum(['VERIFIED', 'SUPPORTED', 'UNVERIFIED']),
+  advisoryConfidence: z.number().min(0).max(1),
+  claim: z.string().trim().min(1).max(2_000),
+  failureMechanism: z.string().trim().min(1).max(4_000),
+  suggestedProof: z.string().trim().min(1).max(4_000),
+});
 
 const completedReviewRunInputSchema = z
   .object({
@@ -20,7 +45,7 @@ const completedReviewRunInputSchema = z
     headSha: shaSchema,
     verdict: githubCheckVerdictSchema,
     summary: z.string().trim().min(1).max(65_536),
-    findings: z.array(githubCheckResultFindingSchema).max(50),
+    findings: z.array(persistedFindingSchema).max(50),
   })
   .strict()
   .refine((result) => result.baseSha !== result.headSha, {
@@ -113,6 +138,53 @@ async function findCompletedEvent(
   return row === undefined ? null : existingEventSchema.parse(row);
 }
 
+async function persistFindings(
+  client: Pick<PoolClient, 'query'>,
+  reviewRunId: string,
+  findings: z.infer<typeof persistedFindingSchema>[],
+): Promise<void> {
+  if (findings.length === 0) return;
+  await client.query(
+    `
+      INSERT INTO findings (
+        review_run_id, fingerprint, lifecycle_status, evidence_level,
+        summary, category, severity, file_path, start_line, end_line,
+        claim, failure_mechanism, suggested_proof, advisory_confidence
+      )
+      SELECT $1,
+             item.fingerprint,
+             item."lifecycleStatus",
+             item."evidenceLevel",
+             item.summary,
+             item.category,
+             item.severity,
+             item.path,
+             item."startLine",
+             item."endLine",
+             item.claim,
+             item."failureMechanism",
+             item."suggestedProof",
+             item."advisoryConfidence"
+      FROM jsonb_to_recordset($2::jsonb) AS item(
+        fingerprint text,
+        category text,
+        severity text,
+        path text,
+        "startLine" integer,
+        "endLine" integer,
+        summary text,
+        "lifecycleStatus" text,
+        "evidenceLevel" text,
+        "advisoryConfidence" double precision,
+        claim text,
+        "failureMechanism" text,
+        "suggestedProof" text
+      )
+    `,
+    [reviewRunId, JSON.stringify(findings)],
+  );
+}
+
 export async function completeHostedReviewRun(
   pool: Pick<Pool, 'connect'>,
   input: unknown,
@@ -136,7 +208,13 @@ export async function completeHostedReviewRun(
         headSha: run.headSha,
         verdict: result.verdict,
         summary: result.summary,
-        findings: result.findings,
+        findings: result.findings.map((finding) => ({
+          path: finding.path,
+          startLine: finding.startLine,
+          endLine: finding.endLine,
+          severity: finding.severity,
+          summary: finding.summary,
+        })),
       },
     });
 
@@ -189,6 +267,7 @@ export async function completeHostedReviewRun(
     if (updated.rows.length !== 1) {
       throw new Error('Review run changed while its result was being stored.');
     }
+    await persistFindings(client, run.id, result.findings);
     const outboxEventId = await createGitHubCheckCompletedOutboxEvent(client, event);
     return { reviewRunId: run.id, outboxEventId, created: true };
   });
