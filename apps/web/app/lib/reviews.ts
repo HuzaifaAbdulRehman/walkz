@@ -35,6 +35,25 @@ export interface DashboardConfiguration {
   spendingLimitUsd: 0;
 }
 
+export interface DashboardFinding {
+  fingerprint: string;
+  category: 'correctness' | 'security' | 'performance' | 'reliability' |
+    'maintainability' | null;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  path: string | null;
+  startLine: number | null;
+  endLine: number | null;
+  lifecycleStatus: 'proposed' | 'challenged' | 'proving' | 'verified' |
+    'supported' | 'unverified' | 'dismissed' | 'fixed';
+  evidenceLevel: 'VERIFIED' | 'SUPPORTED' | 'UNVERIFIED';
+  advisoryConfidence: number | null;
+  summary: string;
+  claim: string | null;
+  failureMechanism: string | null;
+  suggestedProof: string | null;
+  createdAt: string;
+}
+
 const verdicts = new Set<NonNullable<DashboardReview['verdict']>>([
   'SHIP', 'FIX', 'HUMAN', 'INCONCLUSIVE', 'ERROR',
 ]);
@@ -46,6 +65,19 @@ const blockingEvidenceLevels = new Set<DashboardConfiguration['blockingEvidenceL
 ]);
 const commandApprovalPolicies = new Set<DashboardConfiguration['commandApprovalPolicy']>([
   'prompt', 'trusted_config',
+]);
+const findingCategories = new Set<NonNullable<DashboardFinding['category']>>([
+  'correctness', 'security', 'performance', 'reliability', 'maintainability',
+]);
+const findingSeverities = new Set<NonNullable<DashboardFinding['severity']>>([
+  'low', 'medium', 'high', 'critical',
+]);
+const findingLifecycles = new Set<DashboardFinding['lifecycleStatus']>([
+  'proposed', 'challenged', 'proving', 'verified', 'supported', 'unverified',
+  'dismissed', 'fixed',
+]);
+const findingEvidenceLevels = new Set<DashboardFinding['evidenceLevel']>([
+  'VERIFIED', 'SUPPORTED', 'UNVERIFIED',
 ]);
 
 function isDashboardVerdict(value: string): value is NonNullable<DashboardReview['verdict']> {
@@ -94,6 +126,60 @@ export function parseDashboardReviewHistory(input: unknown): DashboardReview[] {
     parsed.push(mapped);
   }
   return parsed;
+}
+
+function parseDashboardFinding(input: unknown): DashboardFinding | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const value = input as Record<string, unknown>;
+  if (
+    typeof value.fingerprint !== 'string' ||
+    !/^[a-f0-9]{64}$/i.test(value.fingerprint) ||
+    (value.category !== null && (
+      typeof value.category !== 'string' ||
+      !findingCategories.has(value.category as NonNullable<DashboardFinding['category']>)
+    )) ||
+    (value.severity !== null && (
+      typeof value.severity !== 'string' ||
+      !findingSeverities.has(value.severity as NonNullable<DashboardFinding['severity']>)
+    )) ||
+    (typeof value.path !== 'string' && value.path !== null) ||
+    (typeof value.startLine !== 'number' && value.startLine !== null) ||
+    (typeof value.endLine !== 'number' && value.endLine !== null) ||
+    typeof value.lifecycleStatus !== 'string' ||
+    !findingLifecycles.has(value.lifecycleStatus as DashboardFinding['lifecycleStatus']) ||
+    typeof value.evidenceLevel !== 'string' ||
+    !findingEvidenceLevels.has(value.evidenceLevel as DashboardFinding['evidenceLevel']) ||
+    (typeof value.advisoryConfidence !== 'number' && value.advisoryConfidence !== null) ||
+    typeof value.summary !== 'string' ||
+    (typeof value.claim !== 'string' && value.claim !== null) ||
+    (typeof value.failureMechanism !== 'string' && value.failureMechanism !== null) ||
+    (typeof value.suggestedProof !== 'string' && value.suggestedProof !== null) ||
+    typeof value.createdAt !== 'string'
+  ) return null;
+  if (
+    (value.startLine !== null && (!Number.isInteger(value.startLine) || value.startLine < 1)) ||
+    (value.endLine !== null && (!Number.isInteger(value.endLine) || value.endLine < 1)) ||
+    (value.startLine !== null && value.endLine !== null && value.endLine < value.startLine) ||
+    (value.advisoryConfidence !== null && (
+      value.advisoryConfidence < 0 || value.advisoryConfidence > 1
+    ))
+  ) return null;
+  return value as unknown as DashboardFinding;
+}
+
+export function parseDashboardFindings(input: unknown): DashboardFinding[] {
+  if (typeof input !== 'object' || input === null || !('findings' in input)) {
+    throw new Error('Review findings response was invalid.');
+  }
+  const findings = (input as { findings: unknown }).findings;
+  if (!Array.isArray(findings)) {
+    throw new Error('Review findings response was invalid.');
+  }
+  return findings.map((finding) => {
+    const parsed = parseDashboardFinding(finding);
+    if (parsed === null) throw new Error('Review findings response was invalid.');
+    return parsed;
+  });
 }
 
 export function parseDashboardConfigurationHistory(input: unknown): DashboardConfiguration[] {
@@ -187,6 +273,30 @@ export async function loadDashboardReviews(
   if (!response.ok) throw new Error(`Review history request failed with ${response.status}.`);
   const body: unknown = await response.json();
   return parseDashboardReviewHistory(body);
+}
+
+export async function loadDashboardFindings(
+  apiUrl: string | undefined,
+  repositoryId: string | undefined,
+  reviewRunId: string,
+  cookie: string | undefined,
+  fetcher: typeof fetch = fetch,
+): Promise<DashboardFinding[]> {
+  if (
+    apiUrl === undefined ||
+    apiUrl.trim().length === 0 ||
+    repositoryId === undefined ||
+    repositoryId.trim().length === 0
+  ) return [];
+  const response = await fetcher(
+    `${apiUrl.replace(/\/$/, '')}/api/repositories/${encodeURIComponent(repositoryId)}/reviews/${encodeURIComponent(reviewRunId)}/findings`,
+    { cache: 'no-store', headers: cookie === undefined ? {} : { cookie } },
+  );
+  if (!response.ok) {
+    throw new Error(`Review findings request failed with ${response.status}.`);
+  }
+  const body: unknown = await response.json();
+  return parseDashboardFindings(body);
 }
 
 export async function loadDashboardConfigurations(

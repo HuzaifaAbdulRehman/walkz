@@ -6,6 +6,7 @@ import {
   parseDashboardReviewHistory,
   type DashboardReview,
 } from './lib/reviews';
+import { ReviewFindings } from './review-findings';
 
 const refreshIntervalMs = 15_000;
 
@@ -75,17 +76,20 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
         <div className="review-list">
           {reviews.map((review) => (
             <article className="review-card" key={review.id}>
-              <div>
-                <p className="repository">Pull request {review.pullRequestId ?? 'not linked'}</p>
-                <h3>{verdictLabel(review)}</h3>
-                <p className="detail">
-                  {formatStatus(review.status)} / {review.headSha.slice(0, 7)} against {review.baseSha.slice(0, 7)}
-                </p>
-                {review.resultSummary === null ? null : <p className="review-summary">{review.resultSummary}</p>}
+              <div className="review-card-header">
+                <div>
+                  <p className="repository">Pull request {review.pullRequestId ?? 'not linked'}</p>
+                  <h3>{verdictLabel(review)}</h3>
+                  <p className="detail">
+                    {formatStatus(review.status)} / {review.headSha.slice(0, 7)} against {review.baseSha.slice(0, 7)}
+                  </p>
+                  {review.resultSummary === null ? null : <p className="review-summary">{review.resultSummary}</p>}
+                </div>
+                <span className={`status status-${review.verdict?.toLowerCase() ?? 'active'}`}>
+                  {verdictLabel(review)}
+                </span>
               </div>
-              <span className={`status status-${review.verdict?.toLowerCase() ?? 'active'}`}>
-                {verdictLabel(review)}
-              </span>
+              <ReviewFindings reviewRunId={review.id} />
             </article>
           ))}
         </div>

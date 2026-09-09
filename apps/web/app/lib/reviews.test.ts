@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadDashboardConfigurations, loadDashboardReviews } from './reviews.js';
+import {
+  loadDashboardConfigurations,
+  loadDashboardFindings,
+  loadDashboardReviews,
+} from './reviews.js';
 
 describe('loadDashboardReviews', () => {
   it('returns no reviews when the hosted API is not configured', async () => {
@@ -60,6 +64,58 @@ describe('loadDashboardReviews', () => {
     await expect(loadDashboardReviews('https://api.example.test', 'repo-1', undefined, fetcher)).rejects.toThrow(
       'Review history response was invalid.',
     );
+  });
+});
+
+describe('loadDashboardFindings', () => {
+  it('loads and validates one review finding', async () => {
+    const fetcher = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      expect(String(input)).toBe(
+        'https://api.example.test/api/repositories/repo-1/reviews/run-1/findings',
+      );
+      expect(init?.headers).toEqual({ cookie: 'walkz_session=session-1' });
+      return new Response(JSON.stringify({ findings: [{
+        fingerprint: 'a'.repeat(64),
+        category: 'correctness',
+        severity: 'high',
+        path: 'src/value.ts',
+        startLine: 8,
+        endLine: 9,
+        lifecycleStatus: 'verified',
+        evidenceLevel: 'VERIFIED',
+        advisoryConfidence: 0.93,
+        summary: 'The cached value can be stale.',
+        claim: 'The cached value can be stale.',
+        failureMechanism: 'The cache key omits the current revision.',
+        suggestedProof: 'Request both revisions with the same key.',
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }] }), { status: 200 });
+    };
+
+    await expect(loadDashboardFindings(
+      'https://api.example.test/',
+      'repo-1',
+      'run-1',
+      'walkz_session=session-1',
+      fetcher,
+    )).resolves.toHaveLength(1);
+  });
+
+  it('rejects malformed review findings', async () => {
+    const fetcher = async () => new Response(JSON.stringify({
+      findings: [{ fingerprint: 'not-a-fingerprint' }],
+    }), { status: 200 });
+
+    await expect(loadDashboardFindings(
+      'https://api.example.test',
+      'repo-1',
+      'run-1',
+      undefined,
+      fetcher,
+    )).rejects.toThrow('Review findings response was invalid.');
   });
 });
 
