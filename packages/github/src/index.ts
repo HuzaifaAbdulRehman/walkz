@@ -19,6 +19,17 @@ export { createReviewCheckPublisher } from './publisher.js';
 export type { GitHubChecksClient, ReviewCheckPublisher } from './publisher.js';
 
 export {
+  createGitHubAppCheckPublisherFactory,
+  createInstallationReviewCheckPublisherFactory,
+  createOctokitChecksClient,
+} from './octokit-checks.js';
+export type {
+  GitHubInstallationApp,
+  InstallationReviewCheckPublisherFactory,
+  OctokitRequestClient,
+} from './octokit-checks.js';
+
+export {
   reviewTriggerPolicySchema,
   reviewTriggerSchema,
   shouldStartReview,
