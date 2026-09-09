@@ -33,7 +33,7 @@ export interface InstallationRepositoryCatalogFactory {
 }
 
 export function createInstallationRepositoryCatalogFactory(
-  app: GitHubInstallationApp,
+  app: Pick<GitHubInstallationApp, 'getInstallationOctokit'>,
 ): InstallationRepositoryCatalogFactory {
   return {
     async forInstallation(installationIdInput) {

@@ -24,6 +24,19 @@ export interface OctokitRequestClient {
 
 export interface GitHubInstallationApp {
   getInstallationOctokit(installationId: number): Promise<OctokitRequestClient>;
+  getInstallationToken(installationId: number): Promise<GitHubInstallationToken>;
+}
+
+export interface GitHubInstallationToken {
+  token: string;
+  expiresAt: string;
+}
+
+export interface GitHubInstallationAuthenticator {
+  auth(input: {
+    type: 'installation';
+    installationId: number;
+  }): Promise<unknown>;
 }
 
 export interface InstallationReviewCheckPublisherFactory {
@@ -39,6 +52,37 @@ const appConfigSchema = z.object({
   requestTimeoutMs: z.number().int().min(1_000).max(60_000).default(15_000),
 }).strict();
 
+const installationTokenSchema = z.object({
+  tokenType: z.literal('installation'),
+  token: z.string().trim().min(1).max(1_024),
+  expiresAt: z.iso.datetime({ offset: true }),
+}).passthrough();
+
+export function createInstallationTokenSource(
+  authenticator: GitHubInstallationAuthenticator,
+  clock: () => Date = () => new Date(),
+): Pick<GitHubInstallationApp, 'getInstallationToken'> {
+  return {
+    async getInstallationToken(installationId) {
+      const validatedId = installationIdSchema.parse(String(installationId));
+      const authentication = installationTokenSchema.parse(
+        await authenticator.auth({
+          type: 'installation',
+          installationId: Number(validatedId),
+        }),
+      );
+      const expiresAt = new Date(authentication.expiresAt);
+      if (expiresAt.getTime() <= clock().getTime()) {
+        throw new Error('GitHub installation token is already expired.');
+      }
+      return {
+        token: authentication.token,
+        expiresAt: authentication.expiresAt,
+      };
+    },
+  };
+}
+
 export function createGitHubInstallationApp(input: unknown): GitHubInstallationApp {
   const config = appConfigSchema.parse(input);
   const InstallationOctokit = Octokit.defaults({
@@ -48,6 +92,11 @@ export function createGitHubInstallationApp(input: unknown): GitHubInstallationA
     appId: config.appId,
     privateKey: config.privateKey,
     Octokit: InstallationOctokit,
+  });
+  const tokens = createInstallationTokenSource({
+    async auth(input) {
+      return await app.octokit.auth(input);
+    },
   });
   return {
     async getInstallationOctokit(installationId) {
@@ -59,6 +108,7 @@ export function createGitHubInstallationApp(input: unknown): GitHubInstallationA
         },
       };
     },
+    getInstallationToken: tokens.getInstallationToken,
   };
 }
 
@@ -128,7 +178,7 @@ export function createOctokitChecksClient(client: OctokitRequestClient): GitHubC
 }
 
 export function createInstallationReviewCheckPublisherFactory(
-  app: GitHubInstallationApp,
+  app: Pick<GitHubInstallationApp, 'getInstallationOctokit'>,
 ): InstallationReviewCheckPublisherFactory {
   return {
     async forInstallation(installationIdInput) {

@@ -51,7 +51,7 @@ export interface InstallationPullRequestReaderFactory {
 }
 
 export function createInstallationPullRequestReaderFactory(
-  app: GitHubInstallationApp,
+  app: Pick<GitHubInstallationApp, 'getInstallationOctokit'>,
 ): InstallationPullRequestReaderFactory {
   return {
     async forInstallation(installationIdInput) {

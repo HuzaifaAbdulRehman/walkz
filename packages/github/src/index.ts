@@ -32,11 +32,14 @@ export type { GitHubChecksClient, ReviewCheckPublisher } from './publisher.js';
 export {
   createGitHubAppCheckPublisherFactory,
   createGitHubInstallationApp,
+  createInstallationTokenSource,
   createInstallationReviewCheckPublisherFactory,
   createOctokitChecksClient,
 } from './octokit-checks.js';
 export type {
   GitHubInstallationApp,
+  GitHubInstallationAuthenticator,
+  GitHubInstallationToken,
   InstallationReviewCheckPublisherFactory,
   OctokitRequestClient,
 } from './octokit-checks.js';

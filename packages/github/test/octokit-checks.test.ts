@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createInstallationTokenSource,
   createInstallationReviewCheckPublisherFactory,
   createOctokitChecksClient,
 } from '../src/index.js';
@@ -16,6 +17,41 @@ const queued = {
 };
 
 describe('Octokit checks adapter', () => {
+  it('returns a bounded unexpired installation token', async () => {
+    const auth = vi.fn().mockResolvedValue({
+      tokenType: 'installation',
+      token: 'short-lived-token',
+      expiresAt: '2026-09-09T13:00:00.000Z',
+    });
+    const source = createInstallationTokenSource(
+      { auth },
+      () => new Date('2026-09-09T12:00:00.000Z'),
+    );
+
+    await expect(source.getInstallationToken(1234)).resolves.toEqual({
+      token: 'short-lived-token',
+      expiresAt: '2026-09-09T13:00:00.000Z',
+    });
+    expect(auth).toHaveBeenCalledWith({
+      type: 'installation',
+      installationId: 1234,
+    });
+  });
+
+  it('rejects an expired installation token', async () => {
+    const source = createInstallationTokenSource({
+      auth: vi.fn().mockResolvedValue({
+        tokenType: 'installation',
+        token: 'expired-token',
+        expiresAt: '2026-09-09T11:59:59.000Z',
+      }),
+    }, () => new Date('2026-09-09T12:00:00.000Z'));
+
+    await expect(source.getInstallationToken(1234)).rejects.toThrow(
+      'already expired',
+    );
+  });
+
   it('maps create and update calls to GitHub check-run fields', async () => {
     const request = vi
       .fn()
