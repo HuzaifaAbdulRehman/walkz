@@ -5,12 +5,19 @@ const paramsSchema = z.object({ installationId: z.string().regex(/^[1-9][0-9]{0,
 const selectionSchema = z.object({ repositoryId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict();
 
 export interface InstallationRepositoryStore {
-  list(installationId: string): Promise<readonly unknown[]>;
-  select(input: { installationId: string; repositoryId: string }): Promise<void>;
+  list(input: { userId: string; installationId: string }): Promise<readonly unknown[]>;
+  select(input: {
+    userId: string;
+    installationId: string;
+    repositoryId: string;
+  }): Promise<void>;
 }
 
 export interface InstallationAuthenticator {
-  authenticate(request: unknown): Promise<{ installationIds: readonly string[] } | null>;
+  authenticate(request: unknown): Promise<{
+    userId: string;
+    installationIds: readonly string[];
+  } | null>;
 }
 
 export interface InstallationApiOptions {
@@ -29,7 +36,12 @@ export function registerInstallationRoutes(
     if (!identity.installationIds.includes(installationId)) {
       return reply.code(403).send({ error: 'installation_forbidden' });
     }
-    return reply.send({ repositories: await options.repositories.list(installationId) });
+    return reply.send({
+      repositories: await options.repositories.list({
+        userId: identity.userId,
+        installationId,
+      }),
+    });
   });
   app.post('/api/installations/:installationId/repositories', async (request, reply) => {
     const { installationId } = paramsSchema.parse(request.params);
@@ -39,7 +51,11 @@ export function registerInstallationRoutes(
     if (!identity.installationIds.includes(installationId)) {
       return reply.code(403).send({ error: 'installation_forbidden' });
     }
-    await options.repositories.select({ installationId, repositoryId });
+    await options.repositories.select({
+      userId: identity.userId,
+      installationId,
+      repositoryId,
+    });
     return reply.code(204).send();
   });
 }

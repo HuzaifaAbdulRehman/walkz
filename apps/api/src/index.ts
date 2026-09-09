@@ -32,6 +32,7 @@ export type {
   InstallationAuthenticator,
   InstallationRepositoryStore,
 } from './installation-api.js';
+export { createPersistentInstallationRepositoryStore } from './installation-store.js';
 
 export {
   createManualReviewApi,

@@ -14,7 +14,7 @@ describe('installation selection API', () => {
     const list = vi.fn().mockResolvedValue([{ id: '456', name: 'repo' }]);
     const select = vi.fn().mockResolvedValue(undefined);
     const app = createInstallationApi({
-      authenticator: { authenticate: vi.fn().mockResolvedValue({ installationIds: [installationId] }) },
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ userId: 'user-1', installationIds: [installationId] }) },
       repositories: { list, select },
     });
     apps.push(app);
@@ -29,13 +29,14 @@ describe('installation selection API', () => {
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toEqual({ repositories: [{ id: '456', name: 'repo' }] });
     expect(selected.statusCode).toBe(204);
-    expect(select).toHaveBeenCalledWith({ installationId, repositoryId: '456' });
+    expect(list).toHaveBeenCalledWith({ userId: 'user-1', installationId });
+    expect(select).toHaveBeenCalledWith({ userId: 'user-1', installationId, repositoryId: '456' });
   });
 
   it('rejects installations outside the authenticated scope', async () => {
     const list = vi.fn();
     const app = createInstallationApi({
-      authenticator: { authenticate: vi.fn().mockResolvedValue({ installationIds: [] }) },
+      authenticator: { authenticate: vi.fn().mockResolvedValue({ userId: 'user-1', installationIds: [] }) },
       repositories: { list, select: vi.fn() },
     });
     apps.push(app);
