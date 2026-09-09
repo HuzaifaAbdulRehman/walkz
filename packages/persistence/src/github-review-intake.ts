@@ -2,9 +2,8 @@ import { parseWalkzConfig } from '@walkz/contracts';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 
-import { createGitHubCheckQueuedOutboxEvent, withTransaction } from './outbox.js';
-import { createQueuedReviewRunInTransaction } from './review-run.js';
-import { supersedeActiveReviewRuns } from './review-run-control.js';
+import { queueGitHubReviewRun } from './github-review-run.js';
+import { withTransaction } from './outbox.js';
 import { insertWebhookDelivery } from './webhook-delivery.js';
 
 const githubIdSchema = z.string().regex(/^[1-9][0-9]{0,18}$/).refine(
@@ -120,30 +119,6 @@ async function attachDeliveryAndRefreshRepository(
   );
 }
 
-async function upsertPullRequest(
-  client: Pick<PoolClient, 'query'>,
-  input: z.infer<typeof webhookReviewSchema>,
-  repositoryId: string,
-): Promise<string> {
-  const result = await client.query<{ id: string }>(
-    `
-      INSERT INTO pull_requests (
-        repository_id, github_id, number, base_sha, head_sha
-      )
-      VALUES ($1, $2::bigint, $3, $4, $5)
-      ON CONFLICT (repository_id, number) DO UPDATE
-      SET github_id = EXCLUDED.github_id,
-          base_sha = EXCLUDED.base_sha,
-          head_sha = EXCLUDED.head_sha
-      RETURNING id
-    `,
-    [repositoryId, input.pullRequestId, input.pullRequestNumber, input.baseSha, input.headSha],
-  );
-  const row = result.rows[0];
-  if (row === undefined) throw new Error('Pull request upsert did not return an ID.');
-  return row.id;
-}
-
 export async function acceptGitHubWebhook(
   pool: Pick<Pool, 'connect'>,
   input: unknown,
@@ -177,39 +152,26 @@ export async function acceptGitHubWebhook(
       return { status: 'ignored', reason: 'trigger_disabled' };
     }
 
-    const pullRequestId = await upsertPullRequest(client, request.review, context.repositoryId);
-    const run = await createQueuedReviewRunInTransaction(client, {
+    const run = await queueGitHubReviewRun(client, {
       repositoryId: context.repositoryId,
-      pullRequestId,
       configId: context.configId,
       configHash: context.configHash,
-      baseSha: request.review.baseSha,
-      headSha: request.review.headSha,
       provider: config.provider.name,
       model: config.provider.model,
       promptVersion: request.promptVersion,
-    });
-    const supersededRunIds = await supersedeActiveReviewRuns(client, {
-      pullRequestId,
-      replacementRunId: run.reviewRunId,
-    });
-    const checkOutboxEventId = await createGitHubCheckQueuedOutboxEvent(client, {
-      aggregateId: run.reviewRunId,
-      eventType: 'github_check.queued',
-      payload: {
-        reviewRunId: run.reviewRunId,
-        installationId: request.review.installationId,
-        owner: request.review.repositoryOwner,
-        repository: request.review.repositoryName,
-        baseSha: request.review.baseSha,
-        headSha: request.review.headSha,
-      },
+      installationId: request.review.installationId,
+      repositoryOwner: request.review.repositoryOwner,
+      repositoryName: request.review.repositoryName,
+      pullRequestId: request.review.pullRequestId,
+      pullRequestNumber: request.review.pullRequestNumber,
+      baseSha: request.review.baseSha,
+      headSha: request.review.headSha,
     });
     return {
       status: 'queued',
       reviewRunId: run.reviewRunId,
-      outboxEventIds: [run.outboxEventId, checkOutboxEventId],
-      supersededRunIds,
+      outboxEventIds: run.outboxEventIds,
+      supersededRunIds: run.supersededRunIds,
     };
   });
 }
