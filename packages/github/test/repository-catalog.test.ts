@@ -6,7 +6,17 @@ describe('installation repository catalog', () => {
   it('lists repositories through installation credentials', async () => {
     const request = vi.fn().mockResolvedValue({
       data: {
-        repositories: [{ id: 456, name: 'walkz', owner: { login: 'HuzaifaAbdulRehman' } }],
+        repositories: [{
+          id: 456,
+          name: 'walkz',
+          private: true,
+          html_url: 'https://github.com/HuzaifaAbdulRehman/walkz',
+          owner: {
+            id: 123,
+            login: 'HuzaifaAbdulRehman',
+            avatar_url: 'https://avatars.githubusercontent.com/u/123',
+          },
+        }],
       },
     });
     const factory = createInstallationRepositoryCatalogFactory({

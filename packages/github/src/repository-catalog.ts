@@ -9,8 +9,8 @@ const installationIdSchema = z.string().regex(/^[1-9][0-9]{0,15}$/).refine(
 const repositorySchema = z.object({
   id: z.number().int().positive().safe(),
   name: z.string().trim().min(1).max(100),
-  owner: z.object({ login: z.string().trim().min(1).max(100) }).strict(),
-}).strict();
+  owner: z.object({ login: z.string().trim().min(1).max(100) }),
+});
 const responseSchema = z.object({
   repositories: z.array(repositorySchema).max(100),
 }).passthrough();
