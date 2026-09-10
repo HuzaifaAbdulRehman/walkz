@@ -54,9 +54,7 @@ CMD ["node", "../../node_modules/next/dist/bin/next", "start"]
 FROM runtime AS worker
 
 USER root
-RUN apt-get update \
-  && apt-get install --no-install-recommends --yes git ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache git ca-certificates
 USER 1000:1000
 
 WORKDIR /workspace/apps/worker
