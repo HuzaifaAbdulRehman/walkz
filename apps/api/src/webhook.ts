@@ -55,51 +55,53 @@ export function registerGitHubWebhookRoutes(
   if (options.promptVersion.trim().length === 0) {
     throw new Error('Review prompt version is required.');
   }
-  app.addContentTypeParser(
-    'application/json',
-    { parseAs: 'buffer' },
-    (_request, body, done) => done(null, body),
-  );
+  app.register(async (webhookApp) => {
+    webhookApp.addContentTypeParser(
+      'application/json',
+      { parseAs: 'buffer' },
+      (_request, body, done) => done(null, body),
+    );
 
-  app.post('/webhooks/github', async (request, reply) => {
-    const payload = request.body as Buffer;
-    const signature = headerValue(request.headers['x-hub-signature-256']);
-    if (!verifyGitHubWebhookSignature(payload, signature, options.secret)) {
-      return reply.code(401).send({ error: 'invalid_signature' });
-    }
+    webhookApp.post('/webhooks/github', async (request, reply) => {
+      const payload = request.body as Buffer;
+      const signature = headerValue(request.headers['x-hub-signature-256']);
+      if (!verifyGitHubWebhookSignature(payload, signature, options.secret)) {
+        return reply.code(401).send({ error: 'invalid_signature' });
+      }
 
-    const deliveryId = headerValue(request.headers['x-github-delivery']);
-    const eventName = headerValue(request.headers['x-github-event']);
-    if (deliveryId === null || eventName === null) {
-      return reply.code(400).send({ error: 'missing_delivery_metadata' });
-    }
+      const deliveryId = headerValue(request.headers['x-github-delivery']);
+      const eventName = headerValue(request.headers['x-github-event']);
+      if (deliveryId === null || eventName === null) {
+        return reply.code(400).send({ error: 'missing_delivery_metadata' });
+      }
 
-    let parsedPayload: unknown;
-    try {
-      parsedPayload = JSON.parse(payload.toString('utf8'));
-    } catch {
-      return reply.code(400).send({ error: 'invalid_payload' });
-    }
-
-    let review: ReturnType<typeof parsePullRequestReviewTrigger> = null;
-    if (eventName === 'pull_request') {
+      let parsedPayload: unknown;
       try {
-        review = parsePullRequestReviewTrigger(parsedPayload);
+        parsedPayload = JSON.parse(payload.toString('utf8'));
       } catch {
         return reply.code(400).send({ error: 'invalid_payload' });
       }
-    }
 
-    const outcome = await options.intake.accept({
-      deliveryId,
-      eventName,
-      payloadHash: createHash('sha256').update(payload).digest('hex'),
-      promptVersion: options.promptVersion,
-      review,
-    });
-    return reply.code(202).send({
-      accepted: outcome.status !== 'duplicate',
-      queued: outcome.status === 'queued',
+      let review: ReturnType<typeof parsePullRequestReviewTrigger> = null;
+      if (eventName === 'pull_request') {
+        try {
+          review = parsePullRequestReviewTrigger(parsedPayload);
+        } catch {
+          return reply.code(400).send({ error: 'invalid_payload' });
+        }
+      }
+
+      const outcome = await options.intake.accept({
+        deliveryId,
+        eventName,
+        payloadHash: createHash('sha256').update(payload).digest('hex'),
+        promptVersion: options.promptVersion,
+        review,
+      });
+      return reply.code(202).send({
+        accepted: outcome.status !== 'duplicate',
+        queued: outcome.status === 'queued',
+      });
     });
   });
 }

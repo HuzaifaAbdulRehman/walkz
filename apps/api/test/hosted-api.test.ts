@@ -54,10 +54,25 @@ describe('hosted API composition', () => {
     });
     apps.push(app);
 
-    const [webhook, logout, installations, manualReview, configs, reviews, findings, callback] = await Promise.all([
+    const [
+      webhook,
+      logout,
+      installations,
+      installationSelection,
+      manualReview,
+      configs,
+      reviews,
+      findings,
+      callback,
+    ] = await Promise.all([
       app.inject({ method: 'POST', url: '/webhooks/github', payload: {} }),
       app.inject({ method: 'POST', url: '/auth/logout' }),
       app.inject({ method: 'GET', url: '/api/installations/123/repositories' }),
+      app.inject({
+        method: 'POST',
+        url: '/api/installations/123/repositories',
+        payload: { repositoryId: '456' },
+      }),
       app.inject({ method: 'POST', url: `/api/repositories/${repositoryId}/pull-requests/1/reviews` }),
       app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/configs` }),
       app.inject({ method: 'GET', url: `/api/repositories/${repositoryId}/reviews` }),
@@ -74,6 +89,7 @@ describe('hosted API composition', () => {
     expect(webhook.statusCode).toBe(401);
     expect(logout.statusCode).toBe(204);
     expect(installations.statusCode).toBe(401);
+    expect(installationSelection.statusCode).toBe(401);
     expect(manualReview.statusCode).toBe(401);
     expect(configs.statusCode).toBe(401);
     expect(reviews.statusCode).toBe(401);
