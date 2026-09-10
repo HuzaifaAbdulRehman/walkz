@@ -58,7 +58,7 @@ services:
       retries: 20
     init: true
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     restart: unless-stopped
     stop_grace_period: 30s
 
@@ -99,7 +99,7 @@ services:
       retries: 20
     init: true
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     restart: unless-stopped
 
 volumes:

@@ -108,7 +108,8 @@ merges.
 
 The hosted services can run together with Docker Desktop. This is for local
 development, not a public deployment. PostgreSQL and Redis stay inside the
-Compose network; the API listens on port 3001 and the dashboard on port 3000.
+Compose network. The dashboard listens on port 3000, while port 3001 exposes
+the API readiness check on localhost.
 
 ```powershell
 Copy-Item infra\.env.example infra\.env
@@ -119,12 +120,12 @@ docker compose --env-file infra/.env -f infra/compose.yml up --build
 Open `http://localhost:3000` after the health checks pass. The API readiness
 endpoint is `http://localhost:3001/health/ready`.
 
-For a real GitHub callback or webhook, point the GitHub App at a public HTTPS
-address that reaches port 3001. Set the OAuth callback to
-`/auth/github/callback` and the webhook endpoint to `/webhooks/github`. The
-application needs metadata read, contents read, pull-request read, checks
-read/write, and issues read. It does not need contents-write permission for
-this milestone.
+For a real GitHub callback or webhook, use one public HTTPS address that reaches
+the dashboard on port 3000. The dashboard forwards allowlisted hosted routes to
+the private API service. Set the OAuth callback to `/auth/github/callback` and
+the webhook endpoint to `/webhooks/github`. The application needs metadata
+read, contents read, pull-request read, checks read/write, and issues read. It
+does not need contents-write permission for this milestone.
 
 The dashboard needs an authenticated session and a repository ID before it can
 show review history. The current setup proves that the hosted services start
