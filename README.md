@@ -112,10 +112,13 @@ Compose network. The dashboard listens on port 3000, while port 3001 exposes
 the API readiness check on localhost.
 
 ```powershell
-Copy-Item infra\.env.example infra\.env
-# Fill in the GitHub App settings and local secrets in infra\.env.
+npm run hosted:init -- --public-url https://your-public-origin
+# Add the GitHub App ID, client values, and base64 private key to infra\.env.
 docker compose --env-file infra/.env -f infra/compose.yml up --build
 ```
+
+The setup command generates the local secrets and refuses to replace an existing
+`infra/.env` file. Keep that file on your machine.
 
 Open `http://localhost:3000` after the health checks pass. The API readiness
 endpoint is `http://localhost:3001/health/ready`.
