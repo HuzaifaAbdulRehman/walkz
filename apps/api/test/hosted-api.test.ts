@@ -14,6 +14,7 @@ afterEach(async () => {
 describe('hosted API composition', () => {
   it('serves every hosted boundary from one Fastify instance', async () => {
     const authenticator = { authenticate: vi.fn().mockResolvedValue(null) };
+    const logLines: string[] = [];
     const app = createHostedApi({
       githubAuth: {
         stateSigner: createOAuthStateSigner('a'.repeat(32)),
@@ -43,10 +44,17 @@ describe('hosted API composition', () => {
         intake: { accept: vi.fn() },
       },
       readiness: { check: vi.fn().mockResolvedValue(true) },
+      logger: {
+        stream: {
+          write(message: string) {
+            logLines.push(message);
+          },
+        },
+      },
     });
     apps.push(app);
 
-    const [webhook, logout, installations, manualReview, configs, reviews, findings] = await Promise.all([
+    const [webhook, logout, installations, manualReview, configs, reviews, findings, callback] = await Promise.all([
       app.inject({ method: 'POST', url: '/webhooks/github', payload: {} }),
       app.inject({ method: 'POST', url: '/auth/logout' }),
       app.inject({ method: 'GET', url: '/api/installations/123/repositories' }),
@@ -57,6 +65,10 @@ describe('hosted API composition', () => {
         method: 'GET',
         url: `/api/repositories/${repositoryId}/reviews/${repositoryId}/findings`,
       }),
+      app.inject({
+        method: 'GET',
+        url: '/auth/github/callback?code=sensitive-code&state=sensitive-state',
+      }),
     ]);
 
     expect(webhook.statusCode).toBe(401);
@@ -66,7 +78,12 @@ describe('hosted API composition', () => {
     expect(configs.statusCode).toBe(401);
     expect(reviews.statusCode).toBe(401);
     expect(findings.statusCode).toBe(401);
+    expect(callback.statusCode).toBe(400);
     expect(configs.headers['cache-control']).toBe('private, no-store');
+    const logs = logLines.join('');
+    expect(logs).toContain('/auth/github/callback');
+    expect(logs).not.toContain('sensitive-code');
+    expect(logs).not.toContain('sensitive-state');
   });
 
   it('keeps liveness independent from database readiness', async () => {

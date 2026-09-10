@@ -1,4 +1,10 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import type { Server } from 'node:http';
+
+import Fastify, {
+  type FastifyHttpOptions,
+  type FastifyInstance,
+  type FastifyLoggerOptions,
+} from 'fastify';
 import { ZodError } from 'zod';
 
 import {
@@ -22,6 +28,8 @@ import {
   type GitHubWebhookApiOptions,
 } from './webhook.js';
 
+type HostedLoggerOptions = Exclude<FastifyHttpOptions<Server>['logger'], boolean | undefined>;
+
 export interface HostedApiOptions {
   githubAuth: GitHubAuthApiOptions;
   installations: InstallationApiOptions;
@@ -31,11 +39,41 @@ export interface HostedApiOptions {
   readiness: {
     check(): Promise<boolean>;
   };
-  logger?: boolean;
+  logger?: boolean | HostedLoggerOptions;
+}
+
+const querySafeRequestSerializer: NonNullable<
+  NonNullable<FastifyLoggerOptions['serializers']>['req']
+> =
+  (request) => {
+    const queryStart = request.url.indexOf('?');
+    return {
+      method: request.method,
+      url: queryStart === -1 ? request.url : request.url.slice(0, queryStart),
+      host: request.host,
+      remoteAddress: request.ip,
+      ...(request.socket.remotePort === undefined
+        ? {}
+        : { remotePort: request.socket.remotePort }),
+    };
+  };
+
+function querySafeLogger(
+  logger: HostedApiOptions['logger'],
+): false | HostedLoggerOptions {
+  if (logger === undefined || logger === false) return false;
+  const options = logger === true ? {} : logger;
+  return {
+    ...options,
+    serializers: {
+      ...options.serializers,
+      req: querySafeRequestSerializer,
+    },
+  };
 }
 
 export function createHostedApi(options: HostedApiOptions): FastifyInstance {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({ logger: querySafeLogger(options.logger) });
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/') || request.url.startsWith('/auth/')) {
       reply.header('cache-control', 'private, no-store');
