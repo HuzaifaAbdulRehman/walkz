@@ -10,6 +10,7 @@ import { readSessionCookie } from './session-auth.js';
 const callbackQuerySchema = z.object({
   code: z.string().trim().min(1),
   state: z.string().trim().min(1),
+  iss: z.literal('https://github.com/login/oauth').optional(),
 }).strict();
 
 export interface GitHubOAuthClient {

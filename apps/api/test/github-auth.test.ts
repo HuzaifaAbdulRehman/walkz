@@ -61,7 +61,10 @@ describe('GitHub OAuth API', () => {
       returnTo: '/',
     }).token;
 
-    const response = await app.inject({ method: 'GET', url: `/auth/github/callback?code=code&state=${encodeURIComponent(state)}` });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/github/callback?code=code&state=${encodeURIComponent(state)}&iss=${encodeURIComponent('https://github.com/login/oauth')}`,
+    });
 
     expect(response.statusCode).toBe(302);
     expect(response.headers.location).toBe('/');
@@ -95,6 +98,35 @@ describe('GitHub OAuth API', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'oauth_state_invalid' });
+    expect(exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('rejects a callback from an unexpected issuer', async () => {
+    const stateSigner = createOAuthStateSigner(secret);
+    const consume = vi.fn().mockResolvedValue(true);
+    const exchangeCode = vi.fn();
+    const app = createGitHubAuthApi({
+      stateSigner,
+      oauthClient: { exchangeCode },
+      sessionIssuer: { create: vi.fn(), revoke: vi.fn() },
+      stateStore: { store: vi.fn(), consume },
+      clientId: 'client-id',
+      callbackUrl: 'https://walkz.test/auth/github/callback',
+    });
+    apps.push(app);
+    const state = stateSigner.issue({
+      stateId: '3d963b52-8203-4ba6-bcac-15bf132371f0',
+      returnTo: '/',
+    }).token;
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/github/callback?code=code&state=${encodeURIComponent(state)}&iss=${encodeURIComponent('https://attacker.example')}`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'oauth_state_invalid' });
+    expect(consume).not.toHaveBeenCalled();
     expect(exchangeCode).not.toHaveBeenCalled();
   });
 
