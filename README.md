@@ -73,20 +73,23 @@ The process exits with `0` for `SHIP`, `1` for `FIX`, `2` for `HUMAN` or
 result means the configured evidence policy found something that needs attention;
 it does not apply a patch automatically.
 
-## Planned GitHub workflow
+## Use the GitHub App
 
-The hosted GitHub App is still in development. When that milestone is complete,
-the intended developer flow will be:
+The hosted app currently runs from the local Docker stack described below. A
+normal review looks like this:
 
-1. Sign in with GitHub and install Walkz on selected repositories.
-2. Open a pull request or mark a draft pull request ready for review.
-3. Walkz creates a pending `Walkz / review` check. Every-push reviews remain an explicit repository setting.
-4. Walkz runs repository checks, reviews bounded changed-file context, and publishes one summary with bounded annotations.
-5. Open the check to see the verdict, evidence level, exact base/head commits, and any incomplete coverage.
-6. If a fix is proposed later, approve it explicitly. Walkz will re-run the proof and regression checks before the branch is considered ready.
+1. Sign in with GitHub and install Walkz on the repository you want to review.
+2. Select that repository in the dashboard and connect a Groq API key for it.
+3. Open a pull request, then enter its number under **Run a review**.
+4. Walkz records the exact base and head commits and creates a pending `Walkz / review` check.
+5. Watch the run in **Recent reviews**. The page updates as the review moves through checks, model review, and evidence collection.
+6. Open the GitHub check to see the verdict, evidence level, commit pair, and any incomplete coverage.
 
-There is no required comment tag in the current CLI. The GitHub trigger and
-dashboard commands will be documented here when they are implemented.
+No comment tag is needed. Manual review is the default. Repository configuration
+can opt into reviews when a pull request becomes ready or on every push.
+
+Walkz never merges the pull request or applies a patch on its own. Fix approval
+is planned for Milestone 5.
 
 Walkz reads command authority from the trusted base revision, runs approved
 commands without a shell, validates findings against changed lines, and reports
@@ -155,9 +158,10 @@ dashboard forwards the allowlisted OAuth, webhook, and API routes to the private
 API service. If a temporary tunnel address changes, update the two GitHub App
 URLs and `GITHUB_OAUTH_CALLBACK_URL` in `infra/.env`.
 
-The dashboard asks the signed-in user to choose an installed repository before
-showing its review history. A real pull-request check remains the final
-Milestone 4 test.
+The dashboard asks the signed-in user to choose an installed repository and
+connect a Groq key. Enter an open pull request number under **Run a review**;
+**Recent reviews** updates while the GitHub check runs. A complete check on a
+real pull request remains the final Milestone 4 test.
 
 ## Verify the project
 
