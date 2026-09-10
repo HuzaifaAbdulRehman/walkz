@@ -15,6 +15,7 @@ describe('provider credential form', () => {
     expect(html).toContain('autoComplete="new-password"');
     expect(html).toContain('Connect Groq');
     expect(html).toContain('Not connected');
+    expect(html).toContain('data-busy="false"');
     expect(html).not.toContain('gsk_');
   });
 

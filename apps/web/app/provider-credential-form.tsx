@@ -158,6 +158,7 @@ export function ProviderCredentialForm({
               className="primary-action"
               type="submit"
               disabled={busy || apiKey.length === 0}
+              data-busy={busy}
             >
               {view.operation === 'saving' ? 'Checking...' : view.connected ? 'Replace key' : 'Connect Groq'}
             </button>
@@ -166,6 +167,7 @@ export function ProviderCredentialForm({
                 className="secondary-action"
                 type="button"
                 disabled={busy}
+                data-busy={busy}
                 onClick={() => {
                   setView((current) => ({
                     ...current,
@@ -186,6 +188,7 @@ export function ProviderCredentialForm({
                   className="danger-action"
                   type="button"
                   disabled={busy}
+                  data-busy={busy}
                   onClick={removeCredential}
                 >
                   {view.operation === 'removing' ? 'Removing...' : 'Confirm removal'}
@@ -194,6 +197,7 @@ export function ProviderCredentialForm({
                   className="secondary-action"
                   type="button"
                   disabled={busy}
+                  data-busy={busy}
                   onClick={() => setView((current) => ({
                     ...current,
                     confirmingRemoval: false,
