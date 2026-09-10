@@ -104,6 +104,32 @@ The hosted GitHub App and dashboard are still being built. The current code does
 not claim a deployed App, a live production check, automatic fixes, or automatic
 merges.
 
+## Run the hosted stack locally
+
+The hosted services can run together with Docker Desktop. This is for local
+development, not a public deployment. PostgreSQL and Redis stay inside the
+Compose network; the API listens on port 3001 and the dashboard on port 3000.
+
+```powershell
+Copy-Item infra\.env.example infra\.env
+# Fill in the GitHub App settings and local secrets in infra\.env.
+docker compose --env-file infra/.env -f infra/compose.yml up --build
+```
+
+Open `http://localhost:3000` after the health checks pass. The API readiness
+endpoint is `http://localhost:3001/health/ready`.
+
+For a real GitHub callback or webhook, point the GitHub App at a public HTTPS
+address that reaches port 3001. Set the OAuth callback to
+`/auth/github/callback` and the webhook endpoint to `/webhooks/github`. The
+application needs metadata read, contents read, pull-request read, checks
+read/write, and issues read. It does not need contents-write permission for
+this milestone.
+
+The dashboard needs an authenticated session and a repository ID before it can
+show review history. The current setup proves that the hosted services start
+together; a real pull-request check remains the final Milestone 4 check.
+
 ## Verify the project
 
 ```powershell

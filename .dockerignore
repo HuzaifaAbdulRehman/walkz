@@ -1,0 +1,12 @@
+.git
+.github
+AGENTS.md
+node_modules
+**/node_modules
+dist
+**/dist
+**/.next
+coverage
+.vitest
+.env
+infra/.env

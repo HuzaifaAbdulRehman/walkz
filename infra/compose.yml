@@ -1,0 +1,106 @@
+name: walkz
+
+services:
+  postgres:
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment:
+      POSTGRES_DB: walkz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_USER: walkz
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walkz -d walkz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    volumes:
+      - walkz-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD}@postgres:5432/walkz
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD}@postgres:5432/walkz
+      PORT: "3001"
+      WALKZ_HOST: 0.0.0.0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    init: true
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD}@postgres:5432/walkz
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: web
+    env_file: .env
+    environment:
+      WALKZ_API_URL: http://api:3001
+      WALKZ_REPOSITORY_ID: ${WALKZ_REPOSITORY_ID:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    init: true
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  walkz-postgres-data:
