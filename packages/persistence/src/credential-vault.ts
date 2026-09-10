@@ -208,3 +208,36 @@ export async function loadProviderCredential(
   if (row === undefined) return null;
   return decryptCredential(vault, storedCredentialSchema.parse(row), binding);
 }
+
+export async function hasProviderCredential(
+  pool: Pick<Pool, 'query'>,
+  input: unknown,
+): Promise<boolean> {
+  const binding = credentialBindingSchema.parse(input);
+  const result = await pool.query<{ exists: boolean }>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM provider_credentials
+        WHERE repository_id = $1 AND provider = $2
+      ) AS "exists"
+    `,
+    [binding.repositoryId, binding.provider],
+  );
+  return result.rows[0]?.exists === true;
+}
+
+export async function deleteProviderCredential(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<boolean> {
+  const binding = credentialBindingSchema.parse(input);
+  const result = await client.query(
+    `
+      DELETE FROM provider_credentials
+      WHERE repository_id = $1 AND provider = $2
+    `,
+    [binding.repositoryId, binding.provider],
+  );
+  return (result.rowCount ?? 0) > 0;
+}

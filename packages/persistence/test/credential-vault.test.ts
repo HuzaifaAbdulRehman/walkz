@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createCredentialVault,
+  deleteProviderCredential,
   decryptCredential,
   encryptCredential,
+  hasProviderCredential,
   loadProviderCredential,
   storeProviderCredential,
 } from '../src/index.js';
@@ -111,5 +113,38 @@ describe('credential vault', () => {
     const query = vi.fn().mockResolvedValue({ rows: [] });
 
     await expect(loadProviderCredential({ query }, vault, binding)).resolves.toBeNull();
+  });
+
+  it('reports credential status without loading encrypted bytes', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ exists: true }] });
+
+    await expect(hasProviderCredential({ query }, binding)).resolves.toBe(true);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('SELECT EXISTS'),
+      [binding.repositoryId, binding.provider],
+    );
+    expect(query.mock.calls[0]?.[0]).not.toContain('encrypted_value');
+  });
+
+  it('returns false when credential status has no matching row', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ exists: false }] });
+
+    await expect(hasProviderCredential({ query }, binding)).resolves.toBe(false);
+  });
+
+  it('deletes only the bound repository credential', async () => {
+    const query = vi.fn().mockResolvedValue({ rowCount: 1 });
+
+    await expect(deleteProviderCredential({ query }, binding)).resolves.toBe(true);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('repository_id = $1 AND provider = $2'),
+      [binding.repositoryId, binding.provider],
+    );
+  });
+
+  it('keeps credential deletion idempotent', async () => {
+    const query = vi.fn().mockResolvedValue({ rowCount: 0 });
+
+    await expect(deleteProviderCredential({ query }, binding)).resolves.toBe(false);
   });
 });

@@ -38,8 +38,10 @@ export type {
 export {
   createCredentialVault,
   credentialEncryptionConfigSchema,
+  deleteProviderCredential,
   decryptCredential,
   encryptCredential,
+  hasProviderCredential,
   loadProviderCredential,
   storeProviderCredential,
 } from './credential-vault.js';
