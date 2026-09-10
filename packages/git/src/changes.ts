@@ -14,6 +14,11 @@ const METADATA_LIMIT_BYTES = 16 * 1024 * 1024;
 const RAW_RECORD_PATTERN =
   /^:(\d{6}) (\d{6}) ([0-9a-f]+) ([0-9a-f]+) ([A-Z])(\d*)$/;
 
+export interface CollectChangedFilesOptions {
+  githubToken?: string | undefined;
+  signal?: AbortSignal | undefined;
+}
+
 interface RawChangedFile {
   path: string;
   oldPath?: string;
@@ -186,7 +191,7 @@ function fileKind(
 export async function collectChangedFiles(
   repositoryRoot: string,
   references: ResolvedGitReferences,
-  signal?: AbortSignal,
+  options: CollectChangedFilesOptions = {},
 ): Promise<ChangedFile[]> {
   const comparison = comparisonArguments(references);
   const commonOptions = [
@@ -199,12 +204,20 @@ export async function collectChangedFiles(
     runGitBuffer(
       repositoryRoot,
       ['--literal-pathspecs', 'diff', '--raw', '-z', '--no-abbrev', ...commonOptions],
-      { maxOutputBytes: METADATA_LIMIT_BYTES, signal },
+      {
+        githubToken: options.githubToken,
+        maxOutputBytes: METADATA_LIMIT_BYTES,
+        signal: options.signal,
+      },
     ),
     runGitBuffer(
       repositoryRoot,
       ['--literal-pathspecs', 'diff', '--numstat', '-z', ...commonOptions],
-      { maxOutputBytes: METADATA_LIMIT_BYTES, signal },
+      {
+        githubToken: options.githubToken,
+        maxOutputBytes: METADATA_LIMIT_BYTES,
+        signal: options.signal,
+      },
     ),
   ]);
   const rawFiles = parseRawChanges(rawOutput);

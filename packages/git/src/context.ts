@@ -14,6 +14,7 @@ import type {
 export interface CollectReviewContextOptions {
   fileBudget: number;
   diffBudgetBytes: number;
+  githubToken?: string | undefined;
   guidanceBudgetBytes?: number;
   include?: readonly string[];
   exclude?: readonly string[];
@@ -63,7 +64,10 @@ export async function collectReviewContext(
   const allFiles = await collectChangedFiles(
     repositoryRoot,
     references,
-    options.signal,
+    {
+      githubToken: options.githubToken,
+      signal: options.signal,
+    },
   );
   const omissions: CoverageOmission[] = [];
   const eligibleFiles = allFiles.filter((file) => {
@@ -89,10 +93,12 @@ export async function collectReviewContext(
 
   const [diff, guidance] = await Promise.all([
     collectUnifiedDiff(repositoryRoot, references, selectedFiles, {
+      githubToken: options.githubToken,
       maxBytes: options.diffBudgetBytes,
       signal: options.signal,
     }),
     loadRepositoryGuidance(repositoryRoot, references, {
+      githubToken: options.githubToken,
       ...(options.guidanceBudgetBytes !== undefined && {
         maxBytes: options.guidanceBudgetBytes,
       }),

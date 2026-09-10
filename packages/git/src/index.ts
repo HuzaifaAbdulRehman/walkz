@@ -1,4 +1,5 @@
 export { collectChangedFiles } from './changes.js';
+export type { CollectChangedFilesOptions } from './changes.js';
 export {
   buildDiffLineIndex,
   collectUnifiedDiff,

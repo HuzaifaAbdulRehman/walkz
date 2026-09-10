@@ -6,8 +6,14 @@ import {
 } from '@walkz/engine';
 import type { GitHubInstallationToken } from '@walkz/github';
 import {
+  collectReviewContext,
+  resolveGitReferences,
   withHostedGitHubCheckout,
+  type CollectReviewContextOptions,
   type HostedCheckoutOptions,
+  type ResolveGitReferencesOptions,
+  type ResolvedGitReferences,
+  type ReviewContext,
 } from '@walkz/git';
 import type {
   ClaimedHostedReviewRun,
@@ -88,7 +94,16 @@ export interface HostedReviewHandlerOptions {
   workerId: string;
   leaseMs: number;
   checkout?: Checkout;
+  collectContext?: (
+    repositoryRoot: string,
+    references: ResolvedGitReferences,
+    options: CollectReviewContextOptions,
+  ) => Promise<ReviewContext>;
   createProvider?: (apiKey: string) => ProviderAdapter;
+  resolveReferences?: (
+    repositoryRoot: string,
+    options: ResolveGitReferencesOptions,
+  ) => Promise<ResolvedGitReferences>;
   runPipeline?: typeof runLocalReviewPipeline;
 }
 
@@ -197,9 +212,11 @@ export function createHostedReviewJobHandler(
     leaseMs: input.leaseMs,
   });
   const checkout = input.checkout ?? withHostedGitHubCheckout;
+  const collectContext = input.collectContext ?? collectReviewContext;
   const createProvider = input.createProvider ?? ((apiKey: string) =>
     createGroqProvider({ apiKey }));
   const runPipeline = input.runPipeline ?? runLocalReviewPipeline;
+  const resolveReferences = input.resolveReferences ?? resolveGitReferences;
 
   return {
     async handle(reviewRunId) {
@@ -250,6 +267,17 @@ export function createHostedReviewJobHandler(
           },
           config: run.config,
           ...(provider === undefined ? {} : { provider }),
+          dependencies: {
+            collectContext: (root, references, options) => collectContext(
+              root,
+              references,
+              { ...options, githubToken: installation.token },
+            ),
+            resolveReferences: (root, options) => resolveReferences(
+              root,
+              { ...options, githubToken: installation.token },
+            ),
+          },
           runIdFactory: () => run.reviewRunId,
           signal: controller.signal,
         })), { signal: controller.signal });

@@ -57,6 +57,17 @@ describe('hosted review job handler', () => {
     const provider = { name: 'groq' };
     const createProvider = vi.fn().mockReturnValue(provider);
     const runPipeline = vi.fn().mockResolvedValue(pipelineResult());
+    const references = {
+      mode: 'branch' as const,
+      baseRef: 'refs/walkz/base',
+      baseTipSha: baseSha,
+      baseSha,
+      headRef: 'HEAD',
+      headSha,
+      guidanceSha: baseSha,
+    };
+    const resolveReferences = vi.fn().mockResolvedValue(references);
+    const collectContext = vi.fn().mockResolvedValue({});
     const tokens = {
       getInstallationToken: vi.fn().mockResolvedValue({
         token: 'installation-token',
@@ -69,7 +80,9 @@ describe('hosted review job handler', () => {
       workerId: 'worker-1',
       leaseMs: 60_000,
       checkout,
+      collectContext,
       createProvider,
+      resolveReferences,
       runPipeline,
     });
 
@@ -92,6 +105,24 @@ describe('hosted review job handler', () => {
       }),
       provider,
     }));
+    const pipelineInput = runPipeline.mock.calls[0]?.[0];
+    const dependencies = pipelineInput?.dependencies;
+    await dependencies?.resolveReferences?.('C:/temp/repo', { staged: false });
+    await dependencies?.collectContext?.(
+      'C:/temp/repo',
+      references,
+      { fileBudget: 1, diffBudgetBytes: 1 },
+    );
+    expect(resolveReferences).toHaveBeenCalledWith(
+      'C:/temp/repo',
+      expect.objectContaining({ githubToken: 'installation-token' }),
+    );
+    expect(collectContext).toHaveBeenCalledWith(
+      'C:/temp/repo',
+      references,
+      expect.objectContaining({ githubToken: 'installation-token' }),
+    );
+    expect(JSON.stringify(pipelineInput)).not.toContain('installation-token');
     expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
       reviewRunId,
       workerId: 'worker-1',

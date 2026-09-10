@@ -17,6 +17,7 @@ const GUIDANCE_PATHS = [
 ] as const;
 
 export interface LoadRepositoryGuidanceOptions {
+  githubToken?: string | undefined;
   maxBytes?: number;
   signal?: AbortSignal | undefined;
 }
@@ -30,12 +31,16 @@ async function readTreeEntry(
   repositoryRoot: string,
   sha: string,
   path: string,
-  signal?: AbortSignal,
+  options: LoadRepositoryGuidanceOptions = {},
 ): Promise<TreeEntry | null> {
   const output = await runGitBuffer(
     repositoryRoot,
     ['--literal-pathspecs', 'ls-tree', '-z', sha, '--', path],
-    { maxOutputBytes: 8 * 1024, signal },
+    {
+      githubToken: options.githubToken,
+      maxOutputBytes: 8 * 1024,
+      signal: options.signal,
+    },
   );
   if (output.length === 0) {
     return null;
@@ -67,7 +72,7 @@ export async function loadRepositoryGuidance(
       repositoryRoot,
       references.guidanceSha,
       path,
-      options.signal,
+      options,
     );
     if (entry === null) {
       continue;
@@ -88,7 +93,11 @@ export async function loadRepositoryGuidance(
       const content = await runGitBuffer(
         repositoryRoot,
         ['cat-file', 'blob', references.guidanceSha + ':' + path],
-        { maxOutputBytes: remainingBytes, signal: options.signal },
+        {
+          githubToken: options.githubToken,
+          maxOutputBytes: remainingBytes,
+          signal: options.signal,
+        },
       );
       if (!isUtf8(content)) {
         omissions.push({ path, reason: 'invalid_encoding' });

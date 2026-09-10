@@ -55,6 +55,15 @@ describe('hosted GitHub checkout', () => {
     expect(fetchCall?.[1]).toContain(`+${baseSha}:refs/walkz/base`);
     expect(fetchCall?.[1]).toContain(`+${headSha}:refs/walkz/head`);
     expect(fetchCall?.[2]).toMatchObject({ githubToken, timeoutMs: 120_000 });
+    const authenticatedCommands = calls.filter(([, args]) =>
+      args[0] === 'fetch' ||
+      args[0] === 'rev-parse' ||
+      args[0] === 'checkout'
+    );
+    expect(authenticatedCommands).toHaveLength(4);
+    expect(authenticatedCommands.every(([, , options]) =>
+      options?.githubToken === githubToken
+    )).toBe(true);
     expect(calls.flatMap(([, args]) => args)).not.toContain(githubToken);
     expect(calls.find(([, args]) => args[0] === 'remote')?.[1]).toContain(
       'https://github.com/walkz-owner/private.repo.git',

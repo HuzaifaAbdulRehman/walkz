@@ -1,12 +1,19 @@
-import { GitCommandError, runGitText } from './process.js';
+import {
+  GitCommandError,
+  runGitText,
+  type RunGitOptions,
+} from './process.js';
 import type { ResolvedGitReferences } from './types.js';
 import { assertCommitSha } from './validation.js';
 
 export interface ResolveGitReferencesOptions {
   baseRef?: string | null;
+  githubToken?: string | undefined;
   staged?: boolean;
   signal?: AbortSignal | undefined;
 }
+
+type ReferenceGitOptions = Pick<RunGitOptions, 'githubToken' | 'signal'>;
 
 function validateReference(reference: string): void {
   if (
@@ -21,14 +28,14 @@ function validateReference(reference: string): void {
 async function resolveCommit(
   repositoryRoot: string,
   reference: string,
-  signal?: AbortSignal,
+  options: ReferenceGitOptions = {},
 ): Promise<string> {
   validateReference(reference);
   const output = (
     await runGitText(
       repositoryRoot,
       ['rev-parse', '--verify', '--end-of-options', reference + '^{commit}'],
-      { signal },
+      options,
     )
   ).trim();
   assertCommitSha(output);
@@ -38,10 +45,10 @@ async function resolveCommit(
 async function tryResolveCommit(
   repositoryRoot: string,
   reference: string,
-  signal?: AbortSignal,
+  options: ReferenceGitOptions = {},
 ): Promise<string | null> {
   try {
-    return await resolveCommit(repositoryRoot, reference, signal);
+    return await resolveCommit(repositoryRoot, reference, options);
   } catch (error) {
     if (error instanceof GitCommandError && error.exitCode !== null) {
       return null;
@@ -52,18 +59,18 @@ async function tryResolveCommit(
 
 async function defaultBaseReference(
   repositoryRoot: string,
-  signal?: AbortSignal,
+  options: ReferenceGitOptions = {},
 ): Promise<{ reference: string; sha: string }> {
   try {
     const symbolic = (
       await runGitText(
         repositoryRoot,
         ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-        { signal },
+        options,
       )
     ).trim();
     if (symbolic.length > 0) {
-      const sha = await tryResolveCommit(repositoryRoot, symbolic, signal);
+      const sha = await tryResolveCommit(repositoryRoot, symbolic, options);
       if (sha !== null) {
         return { reference: symbolic, sha };
       }
@@ -80,7 +87,7 @@ async function defaultBaseReference(
     'refs/remotes/origin/master',
     'refs/heads/master',
   ]) {
-    const sha = await tryResolveCommit(repositoryRoot, reference, signal);
+    const sha = await tryResolveCommit(repositoryRoot, reference, options);
     if (sha !== null) {
       return { reference, sha };
     }
@@ -94,7 +101,11 @@ export async function resolveGitReferences(
   repositoryRoot: string,
   options: ResolveGitReferencesOptions = {},
 ): Promise<ResolvedGitReferences> {
-  const headSha = await resolveCommit(repositoryRoot, 'HEAD', options.signal);
+  const gitOptions = {
+    githubToken: options.githubToken,
+    signal: options.signal,
+  };
+  const headSha = await resolveCommit(repositoryRoot, 'HEAD', gitOptions);
   if (options.staged === true) {
     return {
       mode: 'staged',
@@ -109,20 +120,20 @@ export async function resolveGitReferences(
 
   const selectedBase =
     options.baseRef === undefined || options.baseRef === null
-      ? await defaultBaseReference(repositoryRoot, options.signal)
+      ? await defaultBaseReference(repositoryRoot, gitOptions)
       : {
           reference: options.baseRef,
           sha: await resolveCommit(
             repositoryRoot,
             options.baseRef,
-            options.signal,
+            gitOptions,
           ),
         };
   const mergeBase = (
     await runGitText(
       repositoryRoot,
       ['merge-base', selectedBase.sha, headSha],
-      { signal: options.signal },
+      gitOptions,
     )
   ).trim();
   assertCommitSha(mergeBase);

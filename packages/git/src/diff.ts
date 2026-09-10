@@ -12,6 +12,7 @@ import type {
 import { assertRepositoryPath } from './validation.js';
 
 export interface CollectUnifiedDiffOptions {
+  githubToken?: string | undefined;
   maxBytes: number;
   signal?: AbortSignal | undefined;
 }
@@ -71,7 +72,11 @@ export async function collectUnifiedDiff(
           '--',
           ...pathspecs,
         ],
-        { maxOutputBytes: remainingBytes, signal: options.signal },
+        {
+          githubToken: options.githubToken,
+          maxOutputBytes: remainingBytes,
+          signal: options.signal,
+        },
       );
       const patchBytes = Buffer.byteLength(patch);
       if (patchBytes === 0) {

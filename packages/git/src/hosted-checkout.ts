@@ -55,12 +55,13 @@ async function verifyRevision(
   repositoryRoot: string,
   reference: string,
   expectedSha: string,
+  githubToken: string,
   signal?: AbortSignal,
 ): Promise<void> {
   const actualSha = (await runGit(
     repositoryRoot,
     ['rev-parse', '--verify', '--end-of-options', `${reference}^{commit}`],
-    { signal },
+    { githubToken, signal },
   )).trim();
   if (actualSha.toLowerCase() !== expectedSha.toLowerCase()) {
     throw new GitCommandError('Fetched revision does not match the durable review run.');
@@ -110,6 +111,7 @@ export async function withHostedGitHubCheckout<T>(
       repositoryRoot,
       'refs/walkz/base',
       checkout.baseSha,
+      checkout.githubToken,
       options.signal,
     );
     await verifyRevision(
@@ -117,12 +119,13 @@ export async function withHostedGitHubCheckout<T>(
       repositoryRoot,
       'refs/walkz/head',
       checkout.headSha,
+      checkout.githubToken,
       options.signal,
     );
     await runGit(
       repositoryRoot,
       ['checkout', '--quiet', '--detach', 'refs/walkz/head'],
-      { signal: options.signal },
+      { githubToken: checkout.githubToken, signal: options.signal },
     );
     return await operation(repositoryRoot);
   } finally {
