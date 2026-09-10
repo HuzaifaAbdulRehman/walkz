@@ -1,28 +1,81 @@
 import { cookies } from 'next/headers';
 
+import { AuthPanel, InstallationError } from './auth-panel';
 import { ConfigurationHistory } from './configuration-history';
 import {
   loadDashboardConfigurations,
+  loadDashboardInstallations,
   loadDashboardReviews,
   type DashboardConfiguration,
   type DashboardReview,
 } from './lib/reviews';
+import { RepositoryPicker } from './repository-picker';
 import { ReviewHistory } from './review-history';
 
 export const dynamic = 'force-dynamic';
 
+function Hero() {
+  return (
+    <header className="hero">
+      <p className="eyebrow">WALKZ / REVIEW DASHBOARD</p>
+      <h1>Evidence before merge.</h1>
+      <p className="lede">Walkz separates model suggestions from deterministic review evidence.</p>
+    </header>
+  );
+}
+
 export default async function HomePage() {
   const session = (await cookies()).get('walkz_session')?.value;
-  const cookieHeader = session === undefined ? undefined : `walkz_session=${encodeURIComponent(session)}`;
+  if (session === undefined) {
+    return (
+      <main className="shell">
+        <Hero />
+        <AuthPanel />
+      </main>
+    );
+  }
+  const cookieHeader = `walkz_session=${encodeURIComponent(session)}`;
+  const installationResult = await Promise.allSettled([
+    loadDashboardInstallations(process.env.WALKZ_API_URL, cookieHeader),
+  ]);
+  const installationState = installationResult[0];
+  if (installationState.status === 'rejected') {
+    return (
+      <main className="shell">
+        <Hero />
+        <InstallationError />
+      </main>
+    );
+  }
+  if (installationState.value === null) {
+    return (
+      <main className="shell">
+        <Hero />
+        <AuthPanel expired />
+      </main>
+    );
+  }
+  const installations = installationState.value;
+  const selectedRepository = installations
+    .flatMap((installation) => installation.repositories)
+    .find((repository) => repository.selectedRepositoryId !== null);
+  if (selectedRepository?.selectedRepositoryId === undefined || selectedRepository.selectedRepositoryId === null) {
+    return (
+      <main className="shell">
+        <Hero />
+        <RepositoryPicker installations={installations} />
+      </main>
+    );
+  }
   const [reviewHistory, configurationHistory] = await Promise.allSettled([
     loadDashboardReviews(
       process.env.WALKZ_API_URL,
-      process.env.WALKZ_REPOSITORY_ID,
+      selectedRepository.selectedRepositoryId,
       cookieHeader || undefined,
     ),
     loadDashboardConfigurations(
       process.env.WALKZ_API_URL,
-      process.env.WALKZ_REPOSITORY_ID,
+      selectedRepository.selectedRepositoryId,
       cookieHeader || undefined,
     ),
   ]);
@@ -32,11 +85,10 @@ export default async function HomePage() {
     : [];
   return (
     <main className="shell">
-      <header className="hero">
-        <p className="eyebrow">WALKZ / REVIEW DASHBOARD</p>
-        <h1>Evidence before merge.</h1>
-        <p className="lede">Walkz separates model suggestions from deterministic review evidence.</p>
-      </header>
+      <Hero />
+      <p className="repository-context">
+        Repository <strong>{selectedRepository.owner}/{selectedRepository.name}</strong>
+      </p>
       <section aria-labelledby="recent-reviews">
         <div className="section-heading">
           <h2 id="recent-reviews">Recent reviews</h2>

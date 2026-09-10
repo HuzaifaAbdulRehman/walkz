@@ -88,7 +88,6 @@ services:
     env_file: .env
     environment:
       WALKZ_API_URL: http://api:3001
-      WALKZ_REPOSITORY_ID: ${WALKZ_REPOSITORY_ID:-}
     depends_on:
       api:
         condition: service_healthy

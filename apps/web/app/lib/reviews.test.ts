@@ -3,8 +3,75 @@ import { describe, expect, it } from 'vitest';
 import {
   loadDashboardConfigurations,
   loadDashboardFindings,
+  loadDashboardInstallations,
   loadDashboardReviews,
 } from './reviews.js';
+
+describe('loadDashboardInstallations', () => {
+  it('loads repository choices for the signed-in user', async () => {
+    const fetcher = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      expect(String(input)).toBe('https://api.example.test/api/installations');
+      expect(init?.headers).toEqual({ cookie: 'walkz_session=session-1' });
+      return new Response(JSON.stringify({ installations: [{
+        id: '123',
+        repositories: [{
+          id: '456',
+          owner: 'octocat',
+          name: 'hello-world',
+          selectedRepositoryId: 'fdad3d5a-bbbb-4be3-8cb5-fc08fc1a4357',
+        }],
+      }] }), { status: 200 });
+    };
+
+    await expect(loadDashboardInstallations(
+      'https://api.example.test/',
+      'walkz_session=session-1',
+      fetcher,
+    )).resolves.toEqual([{
+      id: '123',
+      repositories: [{
+        id: '456',
+        owner: 'octocat',
+        name: 'hello-world',
+        selectedRepositoryId: 'fdad3d5a-bbbb-4be3-8cb5-fc08fc1a4357',
+      }],
+    }]);
+  });
+
+  it('rejects an invalid selected repository identifier', async () => {
+    const fetcher = async () => new Response(JSON.stringify({ installations: [{
+      id: '123',
+      repositories: [{
+        id: '456',
+        owner: 'octocat',
+        name: 'hello-world',
+        selectedRepositoryId: '456',
+      }],
+    }] }), { status: 200 });
+
+    await expect(loadDashboardInstallations(
+      'https://api.example.test',
+      'walkz_session=session-1',
+      fetcher,
+    )).rejects.toThrow('Installation response was invalid.');
+  });
+
+  it('reports an expired session without treating it as an outage', async () => {
+    const fetcher = async () => new Response(
+      JSON.stringify({ error: 'authentication_required' }),
+      { status: 401 },
+    );
+
+    await expect(loadDashboardInstallations(
+      'https://api.example.test',
+      'walkz_session=expired',
+      fetcher,
+    )).resolves.toBeNull();
+  });
+});
 
 describe('loadDashboardReviews', () => {
   it('returns no reviews when the hosted API is not configured', async () => {

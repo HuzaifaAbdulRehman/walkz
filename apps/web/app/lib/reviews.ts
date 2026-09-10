@@ -10,6 +10,18 @@ export interface DashboardReview {
   completedAt: string | null;
 }
 
+export interface DashboardRepository {
+  id: string;
+  owner: string;
+  name: string;
+  selectedRepositoryId: string | null;
+}
+
+export interface DashboardInstallation {
+  id: string;
+  repositories: DashboardRepository[];
+}
+
 export interface DashboardConfiguration {
   id: string;
   schemaVersion: number;
@@ -79,6 +91,72 @@ const findingLifecycles = new Set<DashboardFinding['lifecycleStatus']>([
 const findingEvidenceLevels = new Set<DashboardFinding['evidenceLevel']>([
   'VERIFIED', 'SUPPORTED', 'UNVERIFIED',
 ]);
+const githubIdPattern = /^[1-9][0-9]{0,18}$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseDashboardInstallations(input: unknown): DashboardInstallation[] {
+  if (typeof input !== 'object' || input === null || !('installations' in input)) {
+    throw new Error('Installation response was invalid.');
+  }
+  const installations = (input as { installations: unknown }).installations;
+  if (!Array.isArray(installations) || installations.length > 100) {
+    throw new Error('Installation response was invalid.');
+  }
+  return installations.map((installation) => {
+    if (typeof installation !== 'object' || installation === null) {
+      throw new Error('Installation response was invalid.');
+    }
+    const value = installation as Record<string, unknown>;
+    if (
+      typeof value.id !== 'string' || !githubIdPattern.test(value.id) ||
+      !Array.isArray(value.repositories) || value.repositories.length > 1_000
+    ) {
+      throw new Error('Installation response was invalid.');
+    }
+    const repositories = value.repositories.map((repository): DashboardRepository => {
+      if (typeof repository !== 'object' || repository === null) {
+        throw new Error('Installation response was invalid.');
+      }
+      const item = repository as Record<string, unknown>;
+      if (
+        typeof item.id !== 'string' || !githubIdPattern.test(item.id) ||
+        typeof item.owner !== 'string' || item.owner.trim().length === 0 || item.owner.length > 100 ||
+        typeof item.name !== 'string' || item.name.trim().length === 0 || item.name.length > 100 ||
+        (item.selectedRepositoryId !== null && (
+          typeof item.selectedRepositoryId !== 'string' || !uuidPattern.test(item.selectedRepositoryId)
+        ))
+      ) {
+        throw new Error('Installation response was invalid.');
+      }
+      return {
+        id: item.id,
+        owner: item.owner,
+        name: item.name,
+        selectedRepositoryId: item.selectedRepositoryId,
+      };
+    });
+    return { id: value.id, repositories };
+  });
+}
+
+export async function loadDashboardInstallations(
+  apiUrl: string | undefined,
+  cookie: string | undefined,
+  fetcher: typeof fetch = fetch,
+): Promise<DashboardInstallation[] | null> {
+  if (
+    apiUrl === undefined || apiUrl.trim().length === 0 ||
+    cookie === undefined || cookie.trim().length === 0
+  ) return [];
+  const response = await fetcher(`${apiUrl.replace(/\/$/, '')}/api/installations`, {
+    cache: 'no-store',
+    headers: { cookie },
+  });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`Installation request failed with ${response.status}.`);
+  const body: unknown = await response.json();
+  return parseDashboardInstallations(body);
+}
 
 function isDashboardVerdict(value: string): value is NonNullable<DashboardReview['verdict']> {
   return verdicts.has(value as NonNullable<DashboardReview['verdict']>);
