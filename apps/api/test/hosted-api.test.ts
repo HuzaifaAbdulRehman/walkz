@@ -32,6 +32,11 @@ describe('hosted API composition', () => {
         authenticator,
         reviews: { start: vi.fn() },
       },
+      providerCredentials: {
+        authenticator,
+        credentials: { has: vi.fn(), save: vi.fn(), delete: vi.fn() },
+        validator: { validate: vi.fn() },
+      },
       repositories: {
         authenticator,
         configHistory: { list: vi.fn() },
@@ -63,6 +68,7 @@ describe('hosted API composition', () => {
       configs,
       reviews,
       findings,
+      credentialStatus,
       callback,
     ] = await Promise.all([
       app.inject({ method: 'POST', url: '/webhooks/github', payload: {} }),
@@ -82,6 +88,10 @@ describe('hosted API composition', () => {
       }),
       app.inject({
         method: 'GET',
+        url: `/api/repositories/${repositoryId}/provider-credentials/groq`,
+      }),
+      app.inject({
+        method: 'GET',
         url: '/auth/github/callback?code=sensitive-code&state=sensitive-state',
       }),
     ]);
@@ -94,6 +104,7 @@ describe('hosted API composition', () => {
     expect(configs.statusCode).toBe(401);
     expect(reviews.statusCode).toBe(401);
     expect(findings.statusCode).toBe(401);
+    expect(credentialStatus.statusCode).toBe(401);
     expect(callback.statusCode).toBe(400);
     expect(configs.headers['cache-control']).toBe('private, no-store');
     const logs = logLines.join('');
@@ -115,6 +126,11 @@ describe('hosted API composition', () => {
       },
       installations: { authenticator, repositories: { list: vi.fn(), select: vi.fn() } },
       manualReviews: { authenticator, reviews: { start: vi.fn() } },
+      providerCredentials: {
+        authenticator,
+        credentials: { has: vi.fn(), save: vi.fn(), delete: vi.fn() },
+        validator: { validate: vi.fn() },
+      },
       repositories: {
         authenticator,
         configHistory: { list: vi.fn() },

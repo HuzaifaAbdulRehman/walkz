@@ -7,6 +7,7 @@ const privateKey = Buffer.from([
   'test-value',
   '-----END PRIVATE KEY-----',
 ].join('\n')).toString('base64');
+const credentialKey = Buffer.alloc(32, 9).toString('base64');
 
 function environment(): NodeJS.ProcessEnv {
   return {
@@ -18,6 +19,10 @@ function environment(): NodeJS.ProcessEnv {
     GITHUB_OAUTH_CALLBACK_URL: 'https://walkz.test/auth/github/callback',
     GITHUB_WEBHOOK_SECRET: 'w'.repeat(32),
     WALKZ_OAUTH_STATE_SECRET: 's'.repeat(32),
+    WALKZ_CREDENTIAL_ACTIVE_KEY_ID: 'primary-2026',
+    WALKZ_CREDENTIAL_KEYS_JSON: JSON.stringify({
+      'primary-2026': credentialKey,
+    }),
   };
 }
 
@@ -27,6 +32,7 @@ describe('hosted API runtime configuration', () => {
 
     expect(parsed.githubPrivateKey).toContain('BEGIN PRIVATE KEY');
     expect(parsed).not.toHaveProperty('GITHUB_PRIVATE_KEY_BASE64');
+    expect(parsed.credentialVault.keys.get('primary-2026')).toEqual(Buffer.alloc(32, 9));
     expect(parsed.port).toBe(3001);
     expect(parsed.host).toBe('0.0.0.0');
   });
@@ -44,5 +50,16 @@ describe('hosted API runtime configuration', () => {
       ...environment(),
       GITHUB_PRIVATE_KEY_BASE64: Buffer.from('not-a-key').toString('base64'),
     })).toThrow('must contain a PEM private key');
+  });
+
+  it('rejects invalid credential encryption configuration', () => {
+    expect(() => parseHostedApiEnvironment({
+      ...environment(),
+      WALKZ_CREDENTIAL_KEYS_JSON: 'not-json',
+    })).toThrow('must contain a JSON object');
+    expect(() => parseHostedApiEnvironment({
+      ...environment(),
+      WALKZ_CREDENTIAL_ACTIVE_KEY_ID: 'missing',
+    })).toThrow('active encryption key');
   });
 });

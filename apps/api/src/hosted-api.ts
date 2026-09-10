@@ -20,6 +20,10 @@ import {
   type ManualReviewApiOptions,
 } from './manual-review-api.js';
 import {
+  registerProviderCredentialRoutes,
+  type ProviderCredentialApiOptions,
+} from './provider-credential-api.js';
+import {
   registerRepositoryRoutes,
   type RepositoryApiOptions,
 } from './repository-api.js';
@@ -34,6 +38,7 @@ export interface HostedApiOptions {
   githubAuth: GitHubAuthApiOptions;
   installations: InstallationApiOptions;
   manualReviews: ManualReviewApiOptions;
+  providerCredentials: ProviderCredentialApiOptions;
   repositories: RepositoryApiOptions;
   webhook: GitHubWebhookApiOptions;
   readiness: {
@@ -100,6 +105,7 @@ export function createHostedApi(options: HostedApiOptions): FastifyInstance {
   registerGitHubAuthRoutes(app, options.githubAuth);
   registerInstallationRoutes(app, options.installations);
   registerManualReviewRoutes(app, options.manualReviews);
+  registerProviderCredentialRoutes(app, options.providerCredentials);
   registerRepositoryRoutes(app, options.repositories);
   return app;
 }

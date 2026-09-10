@@ -41,6 +41,19 @@ export {
   registerManualReviewRoutes,
 } from './manual-review-api.js';
 
+export {
+  createPersistentProviderCredentialStore,
+  createProviderCredentialApi,
+  registerProviderCredentialRoutes,
+} from './provider-credential-api.js';
+export type {
+  ProviderCredentialApiOptions,
+  ProviderCredentialAuthenticator,
+  ProviderCredentialStore,
+  ProviderCredentialValidation,
+  ProviderCredentialValidator,
+} from './provider-credential-api.js';
+
 export { createHostedApi } from './hosted-api.js';
 export type { HostedApiOptions } from './hosted-api.js';
 export {

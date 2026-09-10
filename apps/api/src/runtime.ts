@@ -8,6 +8,7 @@ import {
 } from '@walkz/github';
 import {
   consumeOAuthState,
+  createCredentialVault,
   createDatabasePool,
   createPersistentGitHubSessionService,
   listReviewFindings,
@@ -15,11 +16,13 @@ import {
   listReviewHistory,
   storeOAuthState,
 } from '@walkz/persistence';
+import { classifyProviderError, validateProviderAccess } from '@walkz/providers';
 import { z } from 'zod';
 
 import { createHostedApi } from './hosted-api.js';
 import { createPersistentInstallationRepositoryStore } from './installation-store.js';
 import { createPersistentManualReviewStarter } from './manual-review-api.js';
+import { createPersistentProviderCredentialStore } from './provider-credential-api.js';
 import { createApiSessionAuthenticator } from './session-auth.js';
 import { createPersistentGitHubWebhookIntake } from './webhook.js';
 
@@ -33,6 +36,8 @@ const environmentSchema = z.object({
   GITHUB_OAUTH_CALLBACK_URL: z.url(),
   GITHUB_WEBHOOK_SECRET: z.string().min(32).max(1_024),
   WALKZ_OAUTH_STATE_SECRET: z.string().min(32).max(1_024),
+  WALKZ_CREDENTIAL_ACTIVE_KEY_ID: z.string().trim().min(1).max(128),
+  WALKZ_CREDENTIAL_KEYS_JSON: z.string().min(1).max(100_000),
   WALKZ_PROMPT_VERSION: z.string().trim().min(1).max(128)
     .default('walkz-review-v1'),
   WALKZ_HOST: z.string().trim().min(1).max(255).default('0.0.0.0'),
@@ -48,6 +53,7 @@ export interface HostedApiEnvironment {
   githubOAuthCallbackUrl: string;
   githubWebhookSecret: string;
   oauthStateSecret: string;
+  credentialVault: ReturnType<typeof createCredentialVault>;
   promptVersion: string;
   host: string;
   port: number;
@@ -65,6 +71,14 @@ function decodePrivateKey(encoded: string): string {
   return decoded;
 }
 
+function parseCredentialKeys(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error('WALKZ_CREDENTIAL_KEYS_JSON must contain a JSON object.');
+  }
+}
+
 export function parseHostedApiEnvironment(input: NodeJS.ProcessEnv): HostedApiEnvironment {
   const environment = environmentSchema.parse(input);
   return {
@@ -76,6 +90,10 @@ export function parseHostedApiEnvironment(input: NodeJS.ProcessEnv): HostedApiEn
     githubOAuthCallbackUrl: environment.GITHUB_OAUTH_CALLBACK_URL,
     githubWebhookSecret: environment.GITHUB_WEBHOOK_SECRET,
     oauthStateSecret: environment.WALKZ_OAUTH_STATE_SECRET,
+    credentialVault: createCredentialVault({
+      activeKeyId: environment.WALKZ_CREDENTIAL_ACTIVE_KEY_ID,
+      keys: parseCredentialKeys(environment.WALKZ_CREDENTIAL_KEYS_JSON),
+    }),
     promptVersion: environment.WALKZ_PROMPT_VERSION,
     host: environment.WALKZ_HOST,
     port: environment.PORT,
@@ -100,6 +118,10 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
     createGitHubUserIdentityClient(),
   );
   const authenticator = createApiSessionAuthenticator(sessions);
+  const providerCredentials = createPersistentProviderCredentialStore(
+    pool,
+    config.credentialVault,
+  );
   const app = createHostedApi({
     githubAuth: {
       stateSigner: createOAuthStateSigner(config.oauthStateSecret),
@@ -130,6 +152,31 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
         createInstallationPullRequestReaderFactory(githubApp),
         config.promptVersion,
       ),
+    },
+    providerCredentials: {
+      authenticator,
+      credentials: providerCredentials,
+      validator: {
+        async validate(apiKey) {
+          try {
+            const access = await validateProviderAccess({
+              apiKey,
+              requestedModel: 'auto',
+              timeoutMs: 10_000,
+              maxResponseBytes: 1_048_576,
+            });
+            return { valid: true, selectedModel: access.selectedModel };
+          } catch (error) {
+            const failure = classifyProviderError(error);
+            return {
+              valid: false,
+              reason: failure.code === 'authentication' || failure.code === 'permission'
+                ? 'rejected'
+                : 'unavailable',
+            };
+          }
+        },
+      },
     },
     repositories: {
       authenticator,
