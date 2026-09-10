@@ -10,6 +10,7 @@ import {
   type DashboardReview,
 } from './lib/reviews';
 import { loadProviderCredentialStatus } from './lib/provider-credentials';
+import { ManualReviewForm } from './manual-review-form';
 import { ProviderCredentialForm } from './provider-credential-form';
 import { RepositoryPicker } from './repository-picker';
 import { ReviewHistory } from './review-history';
@@ -102,6 +103,7 @@ export default async function HomePage() {
         initialConnected={credentialStatus.status === 'fulfilled' && credentialStatus.value.connected}
         statusUnavailable={credentialStatus.status === 'rejected'}
       />
+      <ManualReviewForm repositoryId={selectedRepository.selectedRepositoryId} />
       <section aria-labelledby="recent-reviews">
         <div className="section-heading">
           <h2 id="recent-reviews">Recent reviews</h2>

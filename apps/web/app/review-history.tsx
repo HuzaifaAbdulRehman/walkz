@@ -6,6 +6,7 @@ import {
   parseDashboardReviewHistory,
   type DashboardReview,
 } from './lib/reviews';
+import { manualReviewQueuedEvent } from './lib/manual-reviews';
 import { ReviewFindings } from './review-findings';
 
 const refreshIntervalMs = 15_000;
@@ -30,14 +31,18 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
     let active = true;
     let controller: AbortController | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    let refreshGeneration = 0;
 
     const refresh = async () => {
-      controller = new AbortController();
+      const generation = ++refreshGeneration;
+      controller?.abort();
+      const refreshController = new AbortController();
+      controller = refreshController;
       setRefreshState('updating');
       try {
         const response = await fetch('/api/reviews', {
           cache: 'no-store',
-          signal: controller.signal,
+          signal: refreshController.signal,
         });
         if (!response.ok) throw new Error('Review history refresh failed.');
         const body: unknown = await response.json();
@@ -46,16 +51,25 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
         setReviews(nextReviews);
         setRefreshState('current');
       } catch {
-        if (!active || controller.signal.aborted) return;
+        if (!active || refreshController.signal.aborted) return;
         setRefreshState('unavailable');
       } finally {
-        if (active) timeout = setTimeout(refresh, refreshIntervalMs);
+        if (active && generation === refreshGeneration) {
+          timeout = setTimeout(refresh, refreshIntervalMs);
+        }
       }
     };
 
+    const refreshAfterQueue = () => {
+      if (timeout !== undefined) clearTimeout(timeout);
+      void refresh();
+    };
+
     timeout = setTimeout(refresh, refreshIntervalMs);
+    window.addEventListener(manualReviewQueuedEvent, refreshAfterQueue);
     return () => {
       active = false;
+      window.removeEventListener(manualReviewQueuedEvent, refreshAfterQueue);
       controller?.abort();
       if (timeout !== undefined) clearTimeout(timeout);
     };
