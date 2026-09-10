@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 const paramsSchema = z.object({ installationId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict();
 const selectionSchema = z.object({ repositoryId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict();
+const installationListConcurrency = 4;
 
 export interface InstallationRepositoryStore {
   list(input: { userId: string; installationId: string }): Promise<readonly unknown[]>;
@@ -25,10 +26,45 @@ export interface InstallationApiOptions {
   repositories: InstallationRepositoryStore;
 }
 
+async function listInstallations(
+  identity: NonNullable<Awaited<ReturnType<InstallationAuthenticator['authenticate']>>>,
+  repositories: InstallationRepositoryStore,
+) {
+  const installations: Array<{ id: string; repositories: readonly unknown[] }> =
+    new Array(identity.installationIds.length);
+  let nextIndex = 0;
+  await Promise.all(Array.from(
+    { length: Math.min(installationListConcurrency, identity.installationIds.length) },
+    async () => {
+      while (nextIndex < identity.installationIds.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const installationId = identity.installationIds[index];
+        if (installationId === undefined) return;
+        installations[index] = {
+          id: installationId,
+          repositories: await repositories.list({
+            userId: identity.userId,
+            installationId,
+          }),
+        };
+      }
+    },
+  ));
+  return installations;
+}
+
 export function registerInstallationRoutes(
   app: FastifyInstance,
   options: InstallationApiOptions,
 ): void {
+  app.get('/api/installations', async (request, reply) => {
+    const identity = await options.authenticator.authenticate(request);
+    if (identity === null) return reply.code(401).send({ error: 'authentication_required' });
+    return reply.send({
+      installations: await listInstallations(identity, options.repositories),
+    });
+  });
   app.get('/api/installations/:installationId/repositories', async (request, reply) => {
     const { installationId } = paramsSchema.parse(request.params);
     const identity = await options.authenticator.authenticate(request);
