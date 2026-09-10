@@ -9,6 +9,8 @@ import {
   type DashboardConfiguration,
   type DashboardReview,
 } from './lib/reviews';
+import { loadProviderCredentialStatus } from './lib/provider-credentials';
+import { ProviderCredentialForm } from './provider-credential-form';
 import { RepositoryPicker } from './repository-picker';
 import { ReviewHistory } from './review-history';
 
@@ -67,7 +69,12 @@ export default async function HomePage() {
       </main>
     );
   }
-  const [reviewHistory, configurationHistory] = await Promise.allSettled([
+  const [credentialStatus, reviewHistory, configurationHistory] = await Promise.allSettled([
+    loadProviderCredentialStatus(
+      process.env.WALKZ_API_URL,
+      selectedRepository.selectedRepositoryId,
+      cookieHeader || undefined,
+    ),
     loadDashboardReviews(
       process.env.WALKZ_API_URL,
       selectedRepository.selectedRepositoryId,
@@ -89,6 +96,12 @@ export default async function HomePage() {
       <p className="repository-context">
         Repository <strong>{selectedRepository.owner}/{selectedRepository.name}</strong>
       </p>
+      <ProviderCredentialForm
+        key={selectedRepository.selectedRepositoryId}
+        repositoryId={selectedRepository.selectedRepositoryId}
+        initialConnected={credentialStatus.status === 'fulfilled' && credentialStatus.value.connected}
+        statusUnavailable={credentialStatus.status === 'rejected'}
+      />
       <section aria-labelledby="recent-reviews">
         <div className="section-heading">
           <h2 id="recent-reviews">Recent reviews</h2>

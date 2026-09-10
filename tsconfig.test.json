@@ -5,6 +5,9 @@
     "declaration": false,
     "declarationMap": false,
     "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ES2024"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": true
   },
   "include": [

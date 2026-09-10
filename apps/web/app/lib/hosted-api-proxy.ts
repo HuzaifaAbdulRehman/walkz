@@ -112,7 +112,7 @@ function forwardedRequestHeaders(request: Request): Headers {
   return headers;
 }
 
-async function boundedBody(request: Request): Promise<Buffer | undefined> {
+async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | undefined> {
   if (request.method === 'GET' || request.method === 'HEAD') return undefined;
   const contentLength = request.headers.get('content-length');
   if (contentLength !== null) {
@@ -141,7 +141,9 @@ async function boundedBody(request: Request): Promise<Buffer | undefined> {
   } finally {
     reader.releaseLock();
   }
-  return receivedBytes === 0 ? undefined : Buffer.concat(chunks, receivedBytes);
+  return receivedBytes === 0
+    ? undefined
+    : new Uint8Array(Buffer.concat(chunks, receivedBytes));
 }
 
 function forwardedResponse(upstream: Response): Response {
@@ -165,7 +167,7 @@ export async function proxyToHostedApi(
   options: HostedApiProxyOptions,
 ): Promise<Response> {
   let target: URL;
-  let body: Buffer | undefined;
+  let body: Uint8Array<ArrayBuffer> | undefined;
   try {
     target = buildTarget(request, options.apiUrl, options.pathSegments);
     body = await boundedBody(request);

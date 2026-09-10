@@ -4,6 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "preserve",
+    "lib": ["DOM", "DOM.Iterable", "ES2024"],
     "noEmit": true,
     "allowJs": false,
     "incremental": true,

@@ -16,10 +16,12 @@ section { padding-top: 42px; }
 .setup-card { background: #101c30; border: 1px solid #385276; border-radius: 14px; padding: 24px; }
 .setup-card h2 { margin: 0 0 12px; }
 .setup-copy { color: #c4d0df; line-height: 1.5; margin: 0 0 20px; max-width: 620px; }
-.primary-action, .secondary-action { border-radius: 8px; display: inline-flex; font-weight: 700; min-height: 44px; padding: 0 16px; text-decoration: none; align-items: center; }
+.primary-action, .secondary-action, .danger-action { border-radius: 8px; cursor: pointer; display: inline-flex; font: inherit; font-weight: 700; min-height: 44px; padding: 0 16px; text-decoration: none; align-items: center; }
 .primary-action { background: #73a7ff; color: #09111f; }
 .secondary-action { border: 1px solid #385276; color: #a8c8ff; }
-.primary-action:focus-visible, .secondary-action:focus-visible, .repository-choice:focus-visible { outline: 2px solid #e7edf7; outline-offset: 4px; }
+.danger-action { background: #7f3040; border: 1px solid #b54e61; color: #ffe7ea; }
+.primary-action:disabled, .secondary-action:disabled, .danger-action:disabled { cursor: wait; opacity: .65; }
+.primary-action:focus-visible, .secondary-action:focus-visible, .danger-action:focus-visible, .repository-choice:focus-visible, .credential-form input:focus-visible { outline: 2px solid #e7edf7; outline-offset: 4px; }
 .repository-choices { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
 .repository-choice { align-items: center; background: #0c1728; border: 1px solid #385276; border-radius: 10px; color: #e7edf7; cursor: pointer; display: flex; font: inherit; justify-content: space-between; min-height: 52px; padding: 12px 14px; text-align: left; width: 100%; }
 .repository-choice:hover:not(:disabled) { border-color: #73a7ff; }
@@ -28,6 +30,19 @@ section { padding-top: 42px; }
 .selection-error { color: #ffb5be; margin: 16px 0 0; }
 .repository-context { color: #91a4bf; font-size: 14px; margin: 24px 0 -18px; }
 .repository-context strong { color: #c4d0df; }
+.credential-card { max-width: 720px; }
+.credential-form { display: grid; gap: 10px; }
+.credential-form label { font-size: 14px; font-weight: 700; }
+.credential-form input { background: #09111f; border: 1px solid #385276; border-radius: 8px; color: #e7edf7; font: inherit; min-height: 46px; padding: 10px 12px; width: 100%; }
+.credential-form input:disabled { opacity: .65; }
+.field-help { color: #91a4bf; font-size: 13px; margin: 0 0 8px; }
+.field-help a { color: #a8c8ff; }
+.credential-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.removal-confirmation { border-top: 1px solid #385276; margin-top: 8px; padding-top: 16px; }
+.removal-confirmation p { color: #ffcad0; margin: 0 0 12px; }
+.form-message { margin: 8px 0 0; overflow-wrap: anywhere; }
+.form-error { color: #ffb5be; }
+.form-success { color: #8ce0ac; }
 .section-heading { align-items: center; display: flex; justify-content: space-between; }
 h2 { font-size: 26px; }
 .badge, .status { border: 1px solid #385276; border-radius: 999px; color: #a8c8ff; font-size: 12px; padding: 6px 10px; }
