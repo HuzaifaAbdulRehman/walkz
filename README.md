@@ -98,41 +98,66 @@ after the repository checks run.
 - Local CLI review with deterministic checks, mock and Groq providers, changed-line validation, and `SHIP`, `FIX`, `HUMAN`, `INCONCLUSIVE`, and `ERROR` verdicts.
 - Counterfactual proof that runs a bounded reproducer against exact base and head revisions.
 - Hosted PostgreSQL state, Redis and BullMQ workers, transactional outbox delivery, leases, restart recovery, encrypted provider credentials, audit retention, cancellation, and stale-run supersession.
-- GitHub integration foundations: signed OAuth sessions, read-only installation discovery, explicit review triggers, exact-SHA check payloads, authenticated configuration history, and review-history routes.
+- GitHub App support with signed OAuth sessions, selected-repository discovery,
+  verified webhooks, explicit review triggers, exact-SHA checks, repository
+  configuration, review history, and finding details.
 
-The hosted GitHub App and dashboard are still being built. The current code does
-not claim a deployed App, a live production check, automatic fixes, or automatic
-merges.
+The hosted stack now runs locally, but it is not a production deployment. A live
+pull-request check remains the final Milestone 4 test. Automatic fixes and merges
+are not implemented.
 
 ## Run the hosted stack locally
 
-The hosted services can run together with Docker Desktop. This is for local
-development, not a public deployment. PostgreSQL and Redis stay inside the
-Compose network. The dashboard listens on port 3000, while port 3001 exposes
-the API readiness check on localhost.
+The hosted services run together with Docker Desktop. PostgreSQL and Redis stay
+inside the Compose network. The dashboard listens on port 3000, while port 3001
+exposes the API readiness check on localhost.
+
+First expose dashboard port 3000 through a public HTTPS tunnel. Copy its origin,
+without a trailing slash, into this command:
 
 ```powershell
 npm run hosted:init -- --public-url https://your-public-origin
-# Add the GitHub App ID, client values, and base64 private key to infra\.env.
-docker compose --env-file infra/.env -f infra/compose.yml up --build
 ```
 
 The setup command generates the local secrets and refuses to replace an existing
 `infra/.env` file. Keep that file on your machine.
 
-Open `http://localhost:3000` after the health checks pass. The API readiness
-endpoint is `http://localhost:3001/health/ready`.
+Register a GitHub App with these settings:
 
-For a real GitHub callback or webhook, use one public HTTPS address that reaches
-the dashboard on port 3000. The dashboard forwards allowlisted hosted routes to
-the private API service. Set the OAuth callback to `/auth/github/callback` and
-the webhook endpoint to `/webhooks/github`. The application needs metadata
-read, contents read, pull-request read, checks read/write, and issues read. It
-does not need contents-write permission for this milestone.
+- Set the callback URL to `https://your-public-origin/auth/github/callback`.
+- Enable webhooks and use `https://your-public-origin/webhooks/github`.
+- Copy `GITHUB_WEBHOOK_SECRET` from `infra/.env` into the webhook secret field.
+- Request metadata read, contents read, issues read, pull requests read, and
+  checks read/write. Leave every other permission off.
+- Subscribe only to the pull request event and keep SSL verification enabled.
+- Leave wildcard callbacks, OAuth during installation, Device Flow, the setup
+  URL, and the IP allow list disabled or blank.
+- Limit installation to your account. During installation, select only the
+  repositories that Walkz should review.
 
-The dashboard needs an authenticated session and a repository ID before it can
-show review history. The current setup proves that the hosted services start
-together; a real pull-request check remains the final Milestone 4 check.
+After creating the App, copy its App ID and Client ID into `infra/.env`, then
+generate a client secret. The client secret is a text value. The private key is
+a separate `.pem` download; store it outside the repository and put its Base64
+content in `GITHUB_PRIVATE_KEY_BASE64`.
+
+Start the stack after all placeholders in `infra/.env` have been replaced:
+
+```powershell
+docker compose --env-file infra/.env -f infra/compose.yml up -d --build
+```
+
+Open the public HTTPS origin and sign in with GitHub after the health checks pass.
+The local dashboard is at `http://localhost:3000`, and the API readiness endpoint
+is `http://localhost:3001/health/ready`.
+
+The public address must reach the dashboard rather than the API port. The
+dashboard forwards the allowlisted OAuth, webhook, and API routes to the private
+API service. If a temporary tunnel address changes, update the two GitHub App
+URLs and `GITHUB_OAUTH_CALLBACK_URL` in `infra/.env`.
+
+The dashboard asks the signed-in user to choose an installed repository before
+showing its review history. A real pull-request check remains the final
+Milestone 4 test.
 
 ## Verify the project
 
