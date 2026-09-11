@@ -68,6 +68,17 @@ export interface DeterministicCheckRun {
 }
 
 export {
+  modelPatchResponseSchema,
+  parseModelPatchResponse,
+  parsePatchCandidate,
+  patchCandidateSchema,
+  patchPathSchema,
+} from './patch-generation.js';
+export type {
+  ModelPatchResponse,
+  PatchCandidate,
+} from './patch-generation.js';
+export {
   approvedCommandSchema,
   createDefaultWalkzConfig,
   evidenceLevelSchema,
@@ -107,6 +118,8 @@ export type {
   ProviderUsage,
   StructuredReviewRequest,
   StructuredReviewResult,
+  StructuredPatchRequest,
+  StructuredPatchResult,
 } from './provider.js';
 
 export type {

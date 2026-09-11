@@ -191,3 +191,24 @@ proposal stale without erasing who approved it. Raw patch text stays ephemeral; 
 database keeps hashes, decision metadata, and GitHub references only. We did not clone
 a reference repository because GitHub's endpoint contracts answered this question
 directly.
+
+## Groq patch generation: verify more than the schema
+
+We applied the Groq structured-output guidance checked on 7 September 2026 to the
+approved fix loop.
+
+- The provider requires every patch field and rejects extra properties, but Walkz still
+  validates identifiers, paths, ranges, sizes, token accounting, and approval after the
+  response arrives.
+- The model receives a bounded window from the exact head file. Invisible formatting
+  controls are exposed, repository text remains untrusted, and the request grants no
+  tools or write access.
+- A candidate contains one same-file replacement that overlaps the verified finding.
+  Its hash covers the finding, revisions, original-content hash, replacement, delivery
+  mode, and approval requirement.
+- The candidate stays in memory. The persistence boundary accepts only its identifiers,
+  revisions, delivery mode, and hash.
+
+Patch requests use the provider's existing timeout and retry layer. Walkz does not add
+another retry around it. No extra reference repository was needed because the existing
+Groq and GitHub endpoint research covered the provider and delivery boundaries.

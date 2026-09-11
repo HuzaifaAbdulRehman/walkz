@@ -60,6 +60,21 @@ export type {
 } from './proof-evidence.js';
 export { runLocalReviewPipeline } from './pipeline.js';
 export { evaluateGoldenProofs } from './golden-evaluation.js';
+export {
+  buildPatchPrompt,
+  generatePatchCandidate,
+  PatchGenerationError,
+  toPatchProposalPersistenceInput,
+  verifyPatchCandidateIntegrity,
+  WALKZ_PATCH_PROMPT_VERSION,
+} from './patch-generation.js';
+export type {
+  BuiltPatchPrompt,
+  GeneratedPatchCandidate,
+  GeneratePatchCandidateOptions,
+  PatchGenerationFailureCode,
+  PatchProposalPersistenceInput,
+} from './patch-generation.js';
 export type {
   FindingRejection,
   FindingRejectionReason,

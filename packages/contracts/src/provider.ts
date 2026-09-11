@@ -1,4 +1,5 @@
 import type { ModelReviewResponse } from './review.js';
+import type { ModelPatchResponse } from './patch-generation.js';
 
 export type ProviderName = 'groq' | 'mock';
 
@@ -52,6 +53,18 @@ export interface StructuredReviewResult {
   requestId: string | null;
 }
 
+export type StructuredPatchRequest = StructuredReviewRequest;
+
+export interface StructuredPatchResult {
+  provider: ProviderName;
+  model: string;
+  promptVersion: string;
+  schemaVersion: string;
+  patch: ModelPatchResponse;
+  usage: ProviderUsage;
+  requestId: string | null;
+}
+
 export interface ProviderRequestOptions {
   signal?: AbortSignal | undefined;
 }
@@ -67,4 +80,8 @@ export interface ProviderAdapter {
     request: StructuredReviewRequest,
     options?: ProviderRequestOptions,
   ): Promise<StructuredReviewResult>;
+  requestStructuredPatch?(
+    request: StructuredPatchRequest,
+    options?: ProviderRequestOptions,
+  ): Promise<StructuredPatchResult>;
 }
