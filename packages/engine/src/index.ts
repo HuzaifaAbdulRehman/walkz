@@ -84,6 +84,12 @@ export type {
   PreparedPatchSuggestion,
   PreparePatchSuggestionInput,
 } from './patch-publication.js';
+export { runApprovedPatchReproof } from './patch-reproof.js';
+export type {
+  ApprovedPatchReproofInput,
+  ApprovedPatchReproofRun,
+  RunApprovedPatchReproofOptions,
+} from './patch-reproof.js';
 export type {
   FindingRejection,
   FindingRejectionReason,

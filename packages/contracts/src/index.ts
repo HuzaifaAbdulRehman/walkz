@@ -211,3 +211,13 @@ export type {
   PatchGithubReference,
   PatchProposal,
 } from './patch.js';
+
+export {
+  parsePatchReproofResult,
+  patchReproofCheckSchema,
+  patchReproofResultSchema,
+} from './reproof.js';
+export type {
+  PatchReproofCheck,
+  PatchReproofResult,
+} from './reproof.js';
