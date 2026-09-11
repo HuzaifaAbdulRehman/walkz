@@ -213,6 +213,18 @@ export type {
 } from './patch.js';
 
 export {
+  patchFixFailureCodeSchema,
+  patchFixJobSchema,
+  patchFixStatusSchema,
+  parsePatchFixJob,
+} from './patch-fix.js';
+export type {
+  PatchFixFailureCode,
+  PatchFixJob,
+  PatchFixStatus,
+} from './patch-fix.js';
+
+export {
   parsePatchReproofResult,
   patchReproofCheckSchema,
   patchReproofResultSchema,

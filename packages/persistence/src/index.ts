@@ -15,6 +15,7 @@ export {
   createGitHubCheckCompletedOutboxEvent,
   createGitHubCheckQueuedOutboxEvent,
   createOutboxEventStore,
+  createPatchFixQueuedOutboxEvent,
   createReviewRunQueuedOutboxEvent,
   listRecoverableOutboxEventIds,
   markOutboxEventPublished,
@@ -22,6 +23,7 @@ export {
   githubCheckResultFindingSchema,
   githubCheckVerdictSchema,
   githubCheckQueuedOutboxEventSchema,
+  patchFixQueuedOutboxEventSchema,
   reviewRunQueuedOutboxEventSchema,
   withTransaction,
 } from './outbox.js';
@@ -32,6 +34,7 @@ export type {
   GitHubCheckQueuedOutboxEvent,
   OutboxEventLeaseInput,
   OutboxEventStore,
+  PatchFixQueuedOutboxEvent,
   ReviewRunQueuedOutboxEvent,
 } from './outbox.js';
 
@@ -112,7 +115,9 @@ export type { ReviewFindingItem } from './review-findings.js';
 
 export {
   createPatchProposal,
+  createPatchProposalInTransaction,
   decidePatchProposal,
+  decidePatchProposalInTransaction,
   preparePatchSuggestionPublication,
   recordPatchSuggestionPublication,
   releasePatchSuggestionPublication,
@@ -131,6 +136,22 @@ export type {
   PatchReproofRecordOutcome,
   PatchReproofRecordResult,
 } from './patch-reproof.js';
+
+export {
+  claimPatchFixJob,
+  completePatchFixJob,
+  createPatchFixProposal,
+  decidePatchFixProposal,
+  failPatchFixJob,
+  getPatchFixJob,
+  listRecoverablePatchFixProposalIds,
+  releasePatchFixJob,
+  renewPatchFixJobLease,
+} from './patch-fix.js';
+export type {
+  CreatedPatchFixProposal,
+  DecidedPatchFixProposal,
+} from './patch-fix.js';
 
 export {
   consumeOAuthState,

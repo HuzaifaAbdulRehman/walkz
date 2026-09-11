@@ -5,6 +5,7 @@ import {
   createGitHubCheckCompletedOutboxEvent,
   createGitHubCheckQueuedOutboxEvent,
   createOutboxEventStore,
+  createPatchFixQueuedOutboxEvent,
   createReviewRunQueuedOutboxEvent,
   markOutboxEventPublished,
   withTransaction,
@@ -80,6 +81,20 @@ describe('transactional outbox', () => {
     expect(payload).not.toHaveProperty('token');
     expect(payload).not.toHaveProperty('source');
     expect(payload).toMatchObject({ verdict: 'SHIP', findings: [] });
+  });
+
+  it('queues a patch fix using identifiers only', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 'event-id' }] });
+    const proposalId = '34e04c9f-bf3a-4ab9-9c81-902ad75d0110';
+
+    await expect(createPatchFixQueuedOutboxEvent({ query }, {
+      aggregateId: proposalId,
+      eventType: 'patch_fix.queued',
+      payload: { proposalId },
+    })).resolves.toBe('event-id');
+    const payload = JSON.parse(query.mock.calls[0]?.[1]?.[2] as string);
+    expect(payload).toEqual({ proposalId });
+    expect(query.mock.calls[0]?.[0]).toContain('ON CONFLICT');
   });
 
   it('rolls back and releases a failed transaction', async () => {

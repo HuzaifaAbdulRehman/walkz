@@ -21,6 +21,26 @@ export type ReviewRunQueuedOutboxEvent = z.infer<
   typeof reviewRunQueuedOutboxEventSchema
 >;
 
+export const patchFixQueuedOutboxEventSchema = z
+  .object({
+    aggregateId: z.uuid(),
+    eventType: z.literal('patch_fix.queued'),
+    payload: z
+      .object({
+        proposalId: z.uuid(),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine((event) => event.aggregateId === event.payload.proposalId, {
+    message: 'Outbox events must use the patch proposal as their aggregate.',
+    path: ['aggregateId'],
+  });
+
+export type PatchFixQueuedOutboxEvent = z.infer<
+  typeof patchFixQueuedOutboxEventSchema
+>;
+
 const shaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
 const githubIdSchema = z
   .string()
@@ -185,6 +205,29 @@ export async function createReviewRunQueuedOutboxEvent(
   const row = result.rows[0];
   if (row === undefined) {
     throw new Error('Outbox event insert did not return an ID.');
+  }
+  return row.id;
+}
+
+export async function createPatchFixQueuedOutboxEvent(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<string> {
+  const event = patchFixQueuedOutboxEventSchema.parse(input);
+  const result = await client.query<{ id: string }>(
+    `
+      INSERT INTO outbox_events (aggregate_id, event_type, payload)
+      VALUES ($1, $2, $3::jsonb)
+      ON CONFLICT (aggregate_id, event_type)
+        WHERE event_type = 'patch_fix.queued'
+        DO UPDATE SET aggregate_id = EXCLUDED.aggregate_id
+      RETURNING id
+    `,
+    [event.aggregateId, event.eventType, JSON.stringify(event.payload)],
+  );
+  const row = result.rows[0];
+  if (row === undefined) {
+    throw new Error('Patch fix outbox event insert did not return an ID.');
   }
   return row.id;
 }

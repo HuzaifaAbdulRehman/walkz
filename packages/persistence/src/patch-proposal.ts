@@ -232,70 +232,77 @@ async function findExistingProposal(
   return row === undefined ? null : parsePatchProposalRow(row);
 }
 
+export async function createPatchProposalInTransaction(
+  client: Pick<PoolClient, 'query'>,
+  input: unknown,
+): Promise<CreatedPatchProposal> {
+  const proposal = createPatchProposalSchema.parse(input);
+  const inserted = await client.query(
+    `
+      WITH eligible AS (
+        SELECT rr.id AS review_run_id, f.id AS finding_id
+        FROM review_runs rr
+        JOIN pull_requests pr ON pr.id = rr.pull_request_id
+        JOIN findings f
+          ON f.review_run_id = rr.id AND f.id = $2
+        WHERE rr.id = $1
+          AND rr.base_sha = $3
+          AND rr.head_sha = $4
+          AND pr.head_sha = $4
+          AND rr.status = 'awaiting_human'
+          AND f.lifecycle_status = 'verified'
+          AND f.evidence_level = 'VERIFIED'
+        FOR UPDATE OF rr, pr, f
+      )
+      INSERT INTO patch_proposals (
+        review_run_id, finding_id, base_sha, head_sha, patch_hash,
+        delivery_mode, approval_status, updated_at
+      )
+      SELECT review_run_id, finding_id, $3, $4, $5, $6, 'pending', now()
+      FROM eligible
+      ON CONFLICT (finding_id, head_sha, patch_hash, delivery_mode)
+        DO NOTHING
+      RETURNING ${proposalColumns.replaceAll('pp.', '')}
+    `,
+    [
+      proposal.reviewRunId,
+      proposal.findingId,
+      proposal.baseSha,
+      proposal.headSha,
+      proposal.patchHash,
+      proposal.deliveryMode,
+    ],
+  );
+  const row = inserted.rows[0];
+  if (row === undefined) {
+    const existing = await findExistingProposal(client, proposal);
+    if (existing !== null) return { proposal: existing, created: false };
+    throw new Error(
+      'Patch proposals require an awaiting-human run and a verified finding.',
+    );
+  }
+
+  const created = parsePatchProposalRow(row);
+  await recordAuditEvent(client, {
+    actorUserId: null,
+    eventType: 'patch_proposal.created',
+    summary: 'Walkz created a patch proposal for a verified finding.',
+    metadata: {
+      operation: 'create_patch_proposal',
+      outcome: 'completed',
+      subjectId: created.id,
+    },
+  });
+  return { proposal: created, created: true };
+}
+
 export async function createPatchProposal(
   pool: Pick<Pool, 'connect'>,
   input: unknown,
 ): Promise<CreatedPatchProposal> {
   const proposal = createPatchProposalSchema.parse(input);
-  return withTransaction(pool, async (client) => {
-    const inserted = await client.query(
-      `
-        WITH eligible AS (
-          SELECT rr.id AS review_run_id, f.id AS finding_id
-          FROM review_runs rr
-          JOIN pull_requests pr ON pr.id = rr.pull_request_id
-          JOIN findings f
-            ON f.review_run_id = rr.id AND f.id = $2
-          WHERE rr.id = $1
-            AND rr.base_sha = $3
-            AND rr.head_sha = $4
-            AND pr.head_sha = $4
-            AND rr.status = 'awaiting_human'
-            AND f.lifecycle_status = 'verified'
-            AND f.evidence_level = 'VERIFIED'
-          FOR UPDATE OF rr, pr, f
-        )
-        INSERT INTO patch_proposals (
-          review_run_id, finding_id, base_sha, head_sha, patch_hash,
-          delivery_mode, approval_status, updated_at
-        )
-        SELECT review_run_id, finding_id, $3, $4, $5, $6, 'pending', now()
-        FROM eligible
-        ON CONFLICT (finding_id, head_sha, patch_hash, delivery_mode)
-          DO NOTHING
-        RETURNING ${proposalColumns.replaceAll('pp.', '')}
-      `,
-      [
-        proposal.reviewRunId,
-        proposal.findingId,
-        proposal.baseSha,
-        proposal.headSha,
-        proposal.patchHash,
-        proposal.deliveryMode,
-      ],
-    );
-    const row = inserted.rows[0];
-    if (row === undefined) {
-      const existing = await findExistingProposal(client, proposal);
-      if (existing !== null) return { proposal: existing, created: false };
-      throw new Error(
-        'Patch proposals require an awaiting-human run and a verified finding.',
-      );
-    }
-
-    const created = parsePatchProposalRow(row);
-    await recordAuditEvent(client, {
-      actorUserId: null,
-      eventType: 'patch_proposal.created',
-      summary: 'Walkz created a patch proposal for a verified finding.',
-      metadata: {
-        operation: 'create_patch_proposal',
-        outcome: 'completed',
-        subjectId: created.id,
-      },
-    });
-    return { proposal: created, created: true };
-  });
+  return withTransaction(pool, (client) =>
+    createPatchProposalInTransaction(client, proposal));
 }
 
 async function recordDecisionAudit(
@@ -675,162 +682,169 @@ export async function releasePatchSuggestionPublication(
   return result.rows.length === 1;
 }
 
-export async function decidePatchProposal(
-  pool: Pick<Pool, 'connect'>,
+export async function decidePatchProposalInTransaction(
+  client: Pick<PoolClient, 'query'>,
   input: unknown,
 ): Promise<PatchProposalDecisionResult> {
   const decision = patchProposalDecisionSchema.parse(input);
   const operation = `${decision.decision === 'approved' ? 'approve' : 'reject'}_patch_proposal`;
 
-  return withTransaction(pool, async (client) => {
-    const locked = await lockAuthorizedProposal(
-      client,
-      decision.proposalId,
-      decision.actorUserId,
-      decision.repositoryId,
-    );
-    if (locked === null) {
-      await recordDecisionAudit(client, {
-        actorUserId: decision.actorUserId,
-        eventType: 'patch_proposal.decision_denied',
-        operation,
-        outcome: 'rejected',
-        proposalId: decision.proposalId,
-        summary: 'A patch proposal decision was denied.',
-      });
-      return { outcome: 'denied', proposal: null };
-    }
-
-    const proposal = toPatchProposal(locked);
-    if (
-      proposal.patchHash !== decision.expectedPatchHash ||
-      proposal.headSha !== decision.expectedHeadSha
-    ) {
-      await recordDecisionAudit(client, {
-        actorUserId: decision.actorUserId,
-        eventType: 'patch_proposal.decision_conflict',
-        operation,
-        outcome: 'rejected',
-        proposalId: proposal.id,
-        summary: 'A patch proposal decision did not match its hash or head.',
-      });
-      return { outcome: 'conflict', proposal };
-    }
-
-    if (
-      proposal.staleAt !== null ||
-      locked.currentHeadSha !== proposal.headSha ||
-      locked.runStatus === 'superseded'
-    ) {
-      let staleProposal = proposal;
-      if (proposal.staleAt === null) {
-        const staleResult = await client.query(
-          `
-            UPDATE patch_proposals pp
-            SET stale_at = now(), updated_at = now()
-            WHERE pp.id = $1 AND pp.stale_at IS NULL
-            RETURNING ${proposalColumns.replaceAll('pp.', '')}
-          `,
-          [proposal.id],
-        );
-        const staleRow = staleResult.rows[0];
-        if (staleRow !== undefined) {
-          staleProposal = parsePatchProposalRow(staleRow);
-        }
-      }
-      await recordDecisionAudit(client, {
-        actorUserId: decision.actorUserId,
-        eventType: 'patch_proposal.stale',
-        operation,
-        outcome: 'rejected',
-        proposalId: proposal.id,
-        summary: 'A stale patch proposal decision was rejected.',
-      });
-      return { outcome: 'stale', proposal: staleProposal };
-    }
-
-    if (
-      locked.runStatus !== 'awaiting_human' ||
-      locked.findingLifecycleStatus !== 'verified' ||
-      locked.evidenceLevel !== 'VERIFIED'
-    ) {
-      await recordDecisionAudit(client, {
-        actorUserId: decision.actorUserId,
-        eventType: 'patch_proposal.decision_conflict',
-        operation,
-        outcome: 'rejected',
-        proposalId: proposal.id,
-        summary: 'A patch proposal decision failed its evidence or run-state gate.',
-      });
-      return { outcome: 'conflict', proposal };
-    }
-
-    if (proposal.approvalStatus === decision.decision) {
-      const outcome = proposal.decidedByUserId === decision.actorUserId
-        ? 'unchanged'
-        : 'conflict';
-      await recordDecisionAudit(client, {
-        actorUserId: decision.actorUserId,
-        eventType: outcome === 'unchanged'
-          ? 'patch_proposal.decision_unchanged'
-          : 'patch_proposal.decision_conflict',
-        operation,
-        outcome: outcome === 'unchanged' ? 'accepted' : 'rejected',
-        proposalId: proposal.id,
-        summary: outcome === 'unchanged'
-          ? 'A patch proposal decision was already stored.'
-          : 'A different user already decided this patch proposal.',
-      });
-      return { outcome, proposal };
-    }
-    if (!canTransitionPatchApproval(proposal.approvalStatus, decision.decision)) {
-      await recordDecisionAudit(client, {
-        actorUserId: decision.actorUserId,
-        eventType: 'patch_proposal.decision_conflict',
-        operation,
-        outcome: 'rejected',
-        proposalId: proposal.id,
-        summary: 'A final patch proposal decision cannot be changed.',
-      });
-      return { outcome: 'conflict', proposal };
-    }
-
-    const updated = await client.query(
-      `
-        UPDATE patch_proposals pp
-        SET approval_status = $2,
-            decided_by_user_id = $3,
-            decided_at = now(),
-            updated_at = now()
-        WHERE pp.id = $1
-          AND pp.approval_status = $4
-          AND pp.stale_at IS NULL
-          AND pp.patch_hash = $5
-          AND pp.head_sha = $6
-        RETURNING ${proposalColumns.replaceAll('pp.', '')}
-      `,
-      [
-        proposal.id,
-        decision.decision,
-        decision.actorUserId,
-        proposal.approvalStatus,
-        decision.expectedPatchHash,
-        decision.expectedHeadSha,
-      ],
-    );
-    const updatedRow = updated.rows[0];
-    if (updatedRow === undefined) {
-      throw new Error('Patch proposal changed while its decision was stored.');
-    }
-    const decidedProposal = parsePatchProposalRow(updatedRow);
+  const locked = await lockAuthorizedProposal(
+    client,
+    decision.proposalId,
+    decision.actorUserId,
+    decision.repositoryId,
+  );
+  if (locked === null) {
     await recordDecisionAudit(client, {
       actorUserId: decision.actorUserId,
-      eventType: `patch_proposal.${decision.decision}`,
+      eventType: 'patch_proposal.decision_denied',
       operation,
-      outcome: 'accepted',
-      proposalId: proposal.id,
-      summary: `A user ${decision.decision} a patch proposal.`,
+      outcome: 'rejected',
+      proposalId: decision.proposalId,
+      summary: 'A patch proposal decision was denied.',
     });
-    return { outcome: 'applied', proposal: decidedProposal };
+    return { outcome: 'denied', proposal: null };
+  }
+
+  const proposal = toPatchProposal(locked);
+  if (
+    proposal.patchHash !== decision.expectedPatchHash ||
+    proposal.headSha !== decision.expectedHeadSha
+  ) {
+    await recordDecisionAudit(client, {
+      actorUserId: decision.actorUserId,
+      eventType: 'patch_proposal.decision_conflict',
+      operation,
+      outcome: 'rejected',
+      proposalId: proposal.id,
+      summary: 'A patch proposal decision did not match its hash or head.',
+    });
+    return { outcome: 'conflict', proposal };
+  }
+
+  if (
+    proposal.staleAt !== null ||
+    locked.currentHeadSha !== proposal.headSha ||
+    locked.runStatus === 'superseded'
+  ) {
+    let staleProposal = proposal;
+    if (proposal.staleAt === null) {
+      const staleResult = await client.query(
+        `
+          UPDATE patch_proposals pp
+          SET stale_at = now(), updated_at = now()
+          WHERE pp.id = $1 AND pp.stale_at IS NULL
+          RETURNING ${proposalColumns.replaceAll('pp.', '')}
+        `,
+        [proposal.id],
+      );
+      const staleRow = staleResult.rows[0];
+      if (staleRow !== undefined) {
+        staleProposal = parsePatchProposalRow(staleRow);
+      }
+    }
+    await recordDecisionAudit(client, {
+      actorUserId: decision.actorUserId,
+      eventType: 'patch_proposal.stale',
+      operation,
+      outcome: 'rejected',
+      proposalId: proposal.id,
+      summary: 'A stale patch proposal decision was rejected.',
+    });
+    return { outcome: 'stale', proposal: staleProposal };
+  }
+
+  if (
+    locked.runStatus !== 'awaiting_human' ||
+    locked.findingLifecycleStatus !== 'verified' ||
+    locked.evidenceLevel !== 'VERIFIED'
+  ) {
+    await recordDecisionAudit(client, {
+      actorUserId: decision.actorUserId,
+      eventType: 'patch_proposal.decision_conflict',
+      operation,
+      outcome: 'rejected',
+      proposalId: proposal.id,
+      summary: 'A patch proposal decision failed its evidence or run-state gate.',
+    });
+    return { outcome: 'conflict', proposal };
+  }
+
+  if (proposal.approvalStatus === decision.decision) {
+    const outcome = proposal.decidedByUserId === decision.actorUserId
+      ? 'unchanged'
+      : 'conflict';
+    await recordDecisionAudit(client, {
+      actorUserId: decision.actorUserId,
+      eventType: outcome === 'unchanged'
+        ? 'patch_proposal.decision_unchanged'
+        : 'patch_proposal.decision_conflict',
+      operation,
+      outcome: outcome === 'unchanged' ? 'accepted' : 'rejected',
+      proposalId: proposal.id,
+      summary: outcome === 'unchanged'
+        ? 'A patch proposal decision was already stored.'
+        : 'A different user already decided this patch proposal.',
+    });
+    return { outcome, proposal };
+  }
+  if (!canTransitionPatchApproval(proposal.approvalStatus, decision.decision)) {
+    await recordDecisionAudit(client, {
+      actorUserId: decision.actorUserId,
+      eventType: 'patch_proposal.decision_conflict',
+      operation,
+      outcome: 'rejected',
+      proposalId: proposal.id,
+      summary: 'A final patch proposal decision cannot be changed.',
+    });
+    return { outcome: 'conflict', proposal };
+  }
+
+  const updated = await client.query(
+    `
+      UPDATE patch_proposals pp
+      SET approval_status = $2,
+          decided_by_user_id = $3,
+          decided_at = now(),
+          updated_at = now()
+      WHERE pp.id = $1
+        AND pp.approval_status = $4
+        AND pp.stale_at IS NULL
+        AND pp.patch_hash = $5
+        AND pp.head_sha = $6
+      RETURNING ${proposalColumns.replaceAll('pp.', '')}
+    `,
+    [
+      proposal.id,
+      decision.decision,
+      decision.actorUserId,
+      proposal.approvalStatus,
+      decision.expectedPatchHash,
+      decision.expectedHeadSha,
+    ],
+  );
+  const updatedRow = updated.rows[0];
+  if (updatedRow === undefined) {
+    throw new Error('Patch proposal changed while its decision was stored.');
+  }
+  const decidedProposal = parsePatchProposalRow(updatedRow);
+  await recordDecisionAudit(client, {
+    actorUserId: decision.actorUserId,
+    eventType: `patch_proposal.${decision.decision}`,
+    operation,
+    outcome: 'accepted',
+    proposalId: proposal.id,
+    summary: `A user ${decision.decision} a patch proposal.`,
   });
+  return { outcome: 'applied', proposal: decidedProposal };
+}
+
+export async function decidePatchProposal(
+  pool: Pick<Pool, 'connect'>,
+  input: unknown,
+): Promise<PatchProposalDecisionResult> {
+  const decision = patchProposalDecisionSchema.parse(input);
+  return withTransaction(pool, (client) =>
+    decidePatchProposalInTransaction(client, decision));
 }
