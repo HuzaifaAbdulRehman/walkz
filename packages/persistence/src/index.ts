@@ -126,6 +126,12 @@ export type {
   PatchSuggestionPublicationTarget,
 } from './patch-proposal.js';
 
+export { recordPatchReproofResult } from './patch-reproof.js';
+export type {
+  PatchReproofRecordOutcome,
+  PatchReproofRecordResult,
+} from './patch-reproof.js';
+
 export {
   consumeOAuthState,
   createPersistentGitHubSessionService,
