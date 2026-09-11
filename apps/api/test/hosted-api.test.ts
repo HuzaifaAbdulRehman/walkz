@@ -37,6 +37,10 @@ describe('hosted API composition', () => {
         credentials: { has: vi.fn(), save: vi.fn(), delete: vi.fn() },
         validator: { validate: vi.fn() },
       },
+      patchSuggestions: {
+        authenticator,
+        publisher: { publish: vi.fn() },
+      },
       repositories: {
         authenticator,
         configHistory: { list: vi.fn() },
@@ -69,6 +73,7 @@ describe('hosted API composition', () => {
       reviews,
       findings,
       credentialStatus,
+      patchSuggestion,
       callback,
     ] = await Promise.all([
       app.inject({ method: 'POST', url: '/webhooks/github', payload: {} }),
@@ -91,6 +96,11 @@ describe('hosted API composition', () => {
         url: `/api/repositories/${repositoryId}/provider-credentials/groq`,
       }),
       app.inject({
+        method: 'POST',
+        url: `/api/repositories/${repositoryId}/patch-proposals/${repositoryId}/publish-suggestion`,
+        payload: {},
+      }),
+      app.inject({
         method: 'GET',
         url: '/auth/github/callback?code=sensitive-code&state=sensitive-state',
       }),
@@ -105,6 +115,7 @@ describe('hosted API composition', () => {
     expect(reviews.statusCode).toBe(401);
     expect(findings.statusCode).toBe(401);
     expect(credentialStatus.statusCode).toBe(401);
+    expect(patchSuggestion.statusCode).toBe(401);
     expect(callback.statusCode).toBe(400);
     expect(configs.headers['cache-control']).toBe('private, no-store');
     const logs = logLines.join('');
@@ -130,6 +141,10 @@ describe('hosted API composition', () => {
         authenticator,
         credentials: { has: vi.fn(), save: vi.fn(), delete: vi.fn() },
         validator: { validate: vi.fn() },
+      },
+      patchSuggestions: {
+        authenticator,
+        publisher: { publish: vi.fn() },
       },
       repositories: {
         authenticator,

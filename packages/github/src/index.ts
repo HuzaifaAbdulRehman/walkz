@@ -72,3 +72,16 @@ export type {
   InstallationRepositoryCatalog,
   InstallationRepositoryCatalogFactory,
 } from './repository-catalog.js';
+
+export {
+  createGitHubSuggestionService,
+  createInstallationGitHubSuggestionServiceFactory,
+  SuggestionPublicationError,
+} from './suggestion.js';
+export type {
+  GitHubHeadFile,
+  GitHubSuggestionService,
+  InstallationGitHubSuggestionServiceFactory,
+  PublishedSuggestion,
+  SuggestionPublicationFailureCode,
+} from './suggestion.js';

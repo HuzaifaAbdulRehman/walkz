@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@walkz/contracts": "0.0.0",
+    "@walkz/engine": "0.0.0",
     "@walkz/github": "0.0.0",
     "@walkz/persistence": "0.0.0",
     "@walkz/providers": "0.0.0",

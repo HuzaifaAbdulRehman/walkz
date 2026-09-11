@@ -4,6 +4,7 @@ import {
   createGitHubUserIdentityClient,
   createInstallationPullRequestReaderFactory,
   createInstallationRepositoryCatalogFactory,
+  createInstallationGitHubSuggestionServiceFactory,
   createOAuthStateSigner,
 } from '@walkz/github';
 import {
@@ -14,6 +15,9 @@ import {
   listReviewFindings,
   listRepositoryConfigVersions,
   listReviewHistory,
+  preparePatchSuggestionPublication,
+  recordPatchSuggestionPublication,
+  releasePatchSuggestionPublication,
   storeOAuthState,
 } from '@walkz/persistence';
 import { classifyProviderError, validateProviderAccess } from '@walkz/providers';
@@ -23,6 +27,7 @@ import { createHostedApi } from './hosted-api.js';
 import { createPersistentInstallationRepositoryStore } from './installation-store.js';
 import { createPersistentManualReviewStarter } from './manual-review-api.js';
 import { createPersistentProviderCredentialStore } from './provider-credential-api.js';
+import { createPatchSuggestionPublisher } from './patch-suggestion-api.js';
 import { createApiSessionAuthenticator } from './session-auth.js';
 import { createPersistentGitHubWebhookIntake } from './webhook.js';
 
@@ -177,6 +182,17 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
           }
         },
       },
+    },
+    patchSuggestions: {
+      authenticator,
+      publisher: createPatchSuggestionPublisher(
+        {
+          prepare: (input) => preparePatchSuggestionPublication(pool, input),
+          record: (input) => recordPatchSuggestionPublication(pool, input),
+          release: (input) => releasePatchSuggestionPublication(pool, input),
+        },
+        createInstallationGitHubSuggestionServiceFactory(githubApp),
+      ),
     },
     repositories: {
       authenticator,

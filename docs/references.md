@@ -212,3 +212,10 @@ approved fix loop.
 Patch requests use the provider's existing timeout and retry layer. Walkz does not add
 another retry around it. No extra reference repository was needed because the existing
 Groq and GitHub endpoint research covered the provider and delivery boundaries.
+
+GitHub does not expose an idempotency key for review-comment creation. Walkz holds a
+short PostgreSQL lease while it calls GitHub and tags each suggestion with a
+deterministic marker. A retry scans a bounded comment history for the exact body,
+commit, location, and marker. Conflicting reuse fails closed. If the head moves during
+a new publish, Walkz deletes only the comment it just created. An expired lease lets a
+new request recover after the process dies.

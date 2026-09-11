@@ -45,14 +45,14 @@ describe('GitHub user authentication clients', () => {
     );
   });
 
-  it('revalidates user identity and read-only installation permissions', async () => {
+  it('revalidates identity and least-privilege suggestion permissions', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ id: 123, login: 'octocat', extra: true }))
       .mockResolvedValueOnce(jsonResponse({ installations: [{
         id: 456,
         account: { login: 'octocat', id: 123 },
         permissions: {
-          metadata: 'read', contents: 'read', pull_requests: 'read', checks: 'write', issues: 'read',
+          metadata: 'read', contents: 'read', pull_requests: 'write', checks: 'write', issues: 'read',
         },
       }], total_count: 1 }))
       .mockResolvedValueOnce(jsonResponse({ repositories: [{
@@ -85,7 +85,7 @@ describe('GitHub user authentication clients', () => {
       id: index + 1,
       account: { login: `owner-${index + 1}` },
       permissions: {
-        metadata: 'read', contents: 'read', pull_requests: 'read', checks: 'write', issues: 'read',
+        metadata: 'read', contents: 'read', pull_requests: 'write', checks: 'write', issues: 'read',
       },
     }));
     const fetcher = vi.fn()
@@ -95,7 +95,7 @@ describe('GitHub user authentication clients', () => {
         id: 101,
         account: { login: 'owner-101' },
         permissions: {
-          metadata: 'read', contents: 'read', pull_requests: 'read', checks: 'write', issues: 'read',
+          metadata: 'read', contents: 'read', pull_requests: 'write', checks: 'write', issues: 'read',
         },
       }] }));
 
@@ -109,19 +109,48 @@ describe('GitHub user authentication clients', () => {
     );
   });
 
-  it('rejects installations with write access to source or pull requests', async () => {
+  it('rejects source write and missing pull-request write permissions', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ id: 123, login: 'octocat' }))
       .mockResolvedValueOnce(jsonResponse({ installations: [{
         id: 456,
         account: { login: 'octocat' },
         permissions: {
-          metadata: 'read', contents: 'write', pull_requests: 'read', checks: 'write', issues: 'read',
+          metadata: 'read', contents: 'write', pull_requests: 'write', checks: 'write', issues: 'read',
         },
       }] }));
 
     await expect(createGitHubUserIdentityClient(fetcher).load('ghu_user-token')).rejects.toThrow(
       'GitHub installation permissions exceed the Walkz boundary.',
     );
+
+    const readOnlyPullRequests = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 123, login: 'octocat' }))
+      .mockResolvedValueOnce(jsonResponse({ installations: [{
+        id: 456,
+        account: { login: 'octocat' },
+        permissions: {
+          metadata: 'read', contents: 'read', pull_requests: 'read', checks: 'write', issues: 'read',
+        },
+      }] }));
+    await expect(createGitHubUserIdentityClient(readOnlyPullRequests).load('ghu_user-token'))
+      .rejects.toThrow('GitHub installation permissions exceed the Walkz boundary.');
+
+    const extraPermission = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 123, login: 'octocat' }))
+      .mockResolvedValueOnce(jsonResponse({ installations: [{
+        id: 456,
+        account: { login: 'octocat' },
+        permissions: {
+          metadata: 'read',
+          contents: 'read',
+          pull_requests: 'write',
+          checks: 'write',
+          issues: 'read',
+          actions: 'read',
+        },
+      }] }));
+    await expect(createGitHubUserIdentityClient(extraPermission).load('ghu_user-token'))
+      .rejects.toThrow('GitHub installation permissions exceed the Walkz boundary.');
   });
 });

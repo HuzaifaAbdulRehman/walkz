@@ -34,6 +34,13 @@ const repositoryPageSize = 100;
 const maximumInstallationCount = 100;
 const maximumRepositoryPages = 10;
 const discoveryConcurrency = 4;
+const requiredRepositoryPermissions = new Set([
+  'metadata',
+  'contents',
+  'pull_requests',
+  'checks',
+  'issues',
+]);
 
 async function readBoundedJson(response: Response): Promise<unknown> {
   const text = await response.text();
@@ -151,9 +158,12 @@ export function createGitHubUserIdentityClient(
             const installation = installations[index];
             if (installation === undefined) return;
         if (
+          Object.keys(installation.permissions).some(
+            (permission) => !requiredRepositoryPermissions.has(permission),
+          ) ||
           installation.permissions.metadata !== 'read' ||
           installation.permissions.contents !== 'read' ||
-          installation.permissions.pull_requests !== 'read' ||
+          installation.permissions.pull_requests !== 'write' ||
           installation.permissions.checks !== 'write' ||
           installation.permissions.issues !== 'read'
         ) {

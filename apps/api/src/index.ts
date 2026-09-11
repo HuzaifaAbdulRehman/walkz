@@ -46,6 +46,19 @@ export {
   createProviderCredentialApi,
   registerProviderCredentialRoutes,
 } from './provider-credential-api.js';
+
+export {
+  createPatchSuggestionApi,
+  createPatchSuggestionPublisher,
+  PatchSuggestionWorkflowError,
+  registerPatchSuggestionRoutes,
+} from './patch-suggestion-api.js';
+export type {
+  PatchSuggestionApiOptions,
+  PatchSuggestionAuthenticator,
+  PatchSuggestionPublisher,
+  PatchSuggestionStore,
+} from './patch-suggestion-api.js';
 export type {
   ProviderCredentialApiOptions,
   ProviderCredentialAuthenticator,
