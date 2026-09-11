@@ -19,10 +19,28 @@ export const patchReproofCheckSchema = z.object({
     'infrastructure_error',
   ]),
   exitCode: z.number().int().nullable(),
-  durationMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative().max(5 * 60 * 1_000),
   sanitizedSummary: z.string().max(16_385),
   artifacts: z.array(proofArtifactSchema).max(32),
-}).strict();
+}).strict().superRefine((check, context) => {
+  if (check.outcome === 'passed' && check.exitCode !== 0) {
+    context.addIssue({
+      code: 'custom',
+      message: 'A passing reproof check must exit with code zero.',
+      path: ['exitCode'],
+    });
+  }
+  if (
+    check.outcome === 'failed' &&
+    (check.exitCode === null || check.exitCode === 0)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'A failing reproof check must have a nonzero exit code.',
+      path: ['exitCode'],
+    });
+  }
+});
 
 export const patchReproofResultSchema = z.object({
   schemaVersion: z.literal(1),
@@ -59,10 +77,10 @@ export const patchReproofResultSchema = z.object({
     check.outcome === 'cancelled' ||
     check.outcome === 'infrastructure_error');
   const hasFailure = checks.some((check) => check.outcome === 'failed');
-  const expected = hasIncomplete
-    ? 'inconclusive'
-    : hasFailure
-      ? 'unresolved'
+  const expected = hasFailure
+    ? 'unresolved'
+    : hasIncomplete
+      ? 'inconclusive'
       : 'resolved';
   if (result.outcome !== expected) {
     context.addIssue({

@@ -48,6 +48,26 @@ describe('patch reproof result contract', () => {
       outcome: 'inconclusive',
       proof: { ...proof, outcome: 'timed_out', exitCode: null },
     })).toMatchObject({ outcome: 'inconclusive' });
+    expect(parsePatchReproofResult({
+      ...result,
+      outcome: 'unresolved',
+      regressions: [
+        { ...proof, kind: 'regression', outcome: 'failed', exitCode: 1 },
+        { ...proof, kind: 'regression', outcome: 'timed_out', exitCode: null },
+      ],
+    })).toMatchObject({ outcome: 'unresolved' });
+  });
+
+  it('rejects exit codes that contradict check outcomes', () => {
+    expect(() => parsePatchReproofResult({
+      ...result,
+      proof: { ...proof, exitCode: 1 },
+    })).toThrow('code zero');
+    expect(() => parsePatchReproofResult({
+      ...result,
+      outcome: 'unresolved',
+      proof: { ...proof, outcome: 'failed', exitCode: 0 },
+    })).toThrow('nonzero');
   });
 
   it('rejects patch text and mislabeled checks', () => {

@@ -413,6 +413,53 @@ describe('approved patch reproof', () => {
     });
   });
 
+  it('stays unresolved when one regression fails and another cannot finish', async () => {
+    const data = await fixture();
+    const secondRegression = {
+      ...data.regressionPlan,
+      files: data.regressionPlan.files.map((file) => ({
+        ...file,
+        path: '.walkz-proof/second-regression.mjs',
+      })),
+      command: {
+        ...data.regressionPlan.command,
+        args: ['.walkz-proof/second-regression.mjs'],
+      },
+    };
+    secondRegression.commandDigest = digestProofCommand(secondRegression.command);
+    data.authorization.authorizedCommandDigests.add(secondRegression.commandDigest);
+    const executor: DockerCommandExecutor = async (spec) => {
+      if (spec.args[0] !== 'run') return commandResult('succeeded');
+      if (spec.args.includes('.walkz-proof/reproducer.mjs')) {
+        return commandResult('succeeded');
+      }
+      return spec.args.includes('.walkz-proof/regression.mjs')
+        ? commandResult('failed')
+        : commandResult('timed_out');
+    };
+
+    const run = await runApprovedPatchReproof({
+      attempt: 1,
+      finding: data.finding,
+      proposal: data.proposal,
+      candidate: data.candidate,
+      proofPlan: data.proofPlan,
+      originalExecution: data.originalExecution,
+      regressionPlans: [data.regressionPlan, secondRegression],
+    }, {
+      repositoryRoot: data.repository.root,
+      authorization: data.authorization,
+      budget: { ...budget, maxAttempts: 3 },
+      workspaceLimits: { maxFiles: 100, maxBytes: 1024 * 1_024 },
+      docker: { executor, containerUser: '1000:1000' },
+    });
+
+    expect(run.result).toMatchObject({
+      outcome: 'unresolved',
+      regressions: [{ outcome: 'failed' }, { outcome: 'timed_out' }],
+    });
+  });
+
   it('cancels remaining checks when the total reproof budget expires', async () => {
     const data = await fixture({
       planLimits: { ...limits, timeoutMs: 100 },

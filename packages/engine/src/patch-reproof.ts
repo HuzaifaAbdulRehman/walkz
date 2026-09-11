@@ -197,15 +197,16 @@ function checkFromExecution(
 }
 
 function resultOutcome(checks: readonly PatchReproofCheck[]): PatchReproofResult['outcome'] {
+  if (checks.some((check) => check.outcome === 'failed')) {
+    return 'unresolved';
+  }
   if (checks.some((check) =>
     check.outcome === 'timed_out' ||
     check.outcome === 'cancelled' ||
     check.outcome === 'infrastructure_error')) {
     return 'inconclusive';
   }
-  return checks.some((check) => check.outcome === 'failed')
-    ? 'unresolved'
-    : 'resolved';
+  return 'resolved';
 }
 
 function createTimedSignal(
