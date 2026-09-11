@@ -62,6 +62,7 @@ describe('GitHub webhook review intake', () => {
       .mockResolvedValueOnce({ rows: [{ id: ids.reviewRun }] })
       .mockResolvedValueOnce({ rows: [{ id: ids.reviewEvent }] })
       .mockResolvedValueOnce({ rows: [{ id: ids.oldRun }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: ids.checkEvent }] })
       .mockResolvedValueOnce({ rows: [] });
 
@@ -81,6 +82,7 @@ describe('GitHub webhook review intake', () => {
       expect.stringContaining('INSERT INTO review_runs'),
       expect.stringContaining('INSERT INTO outbox_events'),
       expect.stringContaining("SET status = 'superseded'"),
+      expect.stringContaining('WITH stale_proposals AS'),
       expect.stringContaining('INSERT INTO outbox_events'),
       'COMMIT',
     ]);

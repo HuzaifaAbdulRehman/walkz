@@ -16,6 +16,14 @@ describe('review run control', () => {
       expect.stringContaining("SET status = 'cancelled'"),
       [runId, expect.arrayContaining(['queued', 'reproving'])],
     );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('WITH stale_proposals AS'),
+      [
+        [runId],
+        'Cancelling the review run made a patch proposal stale.',
+        'cancelled_patch_proposal',
+      ],
+    );
   });
 
   it('supersedes active siblings without touching terminal runs', async () => {
@@ -34,6 +42,14 @@ describe('review run control', () => {
         '09e7392c-03bb-4b34-b099-0803fb0d9023',
         replacementRunId,
         expect.arrayContaining(['queued', 'reproving']),
+      ],
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('WITH stale_proposals AS'),
+      [
+        [runId],
+        'A newer pull request head made a patch proposal stale.',
+        'superseded_patch_proposal',
       ],
     );
   });

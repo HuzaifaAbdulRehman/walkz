@@ -111,6 +111,16 @@ export { listReviewFindings } from './review-findings.js';
 export type { ReviewFindingItem } from './review-findings.js';
 
 export {
+  createPatchProposal,
+  decidePatchProposal,
+} from './patch-proposal.js';
+export type {
+  CreatedPatchProposal,
+  PatchProposalDecisionOutcome,
+  PatchProposalDecisionResult,
+} from './patch-proposal.js';
+
+export {
   consumeOAuthState,
   createPersistentGitHubSessionService,
   purgeExpiredOAuthStates,
