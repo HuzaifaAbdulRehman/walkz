@@ -4,10 +4,15 @@ import type {
   ProviderModel,
   ProviderRequestOptions,
   ProviderRateLimit,
+  StructuredPatchRequest,
+  StructuredPatchResult,
   StructuredReviewRequest,
   StructuredReviewResult,
 } from '@walkz/contracts';
-import { parseModelReviewResponse } from '@walkz/contracts';
+import {
+  parseModelPatchResponse,
+  parseModelReviewResponse,
+} from '@walkz/contracts';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 
@@ -24,6 +29,7 @@ import { calculateRetryDelay } from './retry.js';
 
 const GROQ_DATA_CONTROLS_URL = 'https://console.groq.com/settings/data-controls';
 export const WALKZ_REVIEW_SCHEMA_VERSION = 'walkz-review-v1';
+export const WALKZ_PATCH_SCHEMA_VERSION = 'walkz-patch-v1';
 const GROQ_PRIVACY_NOTICE =
   'Walkz sends bounded repository context to Groq for review. Groq says inference inputs and outputs are not retained by default, but temporary logging may apply unless Zero Data Retention is enabled. Check Groq Data Controls before reviewing private code.';
 
@@ -79,6 +85,17 @@ const groqFindingSchema = z
   .strict();
 const groqStructuredReviewSchema = z
   .object({ findings: z.array(groqFindingSchema) })
+  .strict();
+const groqStructuredPatchSchema = z
+  .object({
+    findingId: z.string(),
+    headSha: z.string(),
+    path: z.string(),
+    startLine: z.number().int(),
+    endLine: z.number().int(),
+    replacement: z.string(),
+    approvalRequired: z.boolean(),
+  })
   .strict();
 const groqChatResponseSchema = z
   .object({
@@ -156,6 +173,29 @@ const GROQ_REVIEW_JSON_SCHEMA = {
     },
   },
   required: ['findings'],
+  additionalProperties: false,
+} as const;
+
+const GROQ_PATCH_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    findingId: { type: 'string' },
+    headSha: { type: 'string' },
+    path: { type: 'string' },
+    startLine: { type: 'integer' },
+    endLine: { type: 'integer' },
+    replacement: { type: 'string' },
+    approvalRequired: { type: 'boolean', enum: [true] },
+  },
+  required: [
+    'findingId',
+    'headSha',
+    'path',
+    'startLine',
+    'endLine',
+    'replacement',
+    'approvalRequired',
+  ],
   additionalProperties: false,
 } as const;
 
@@ -391,6 +431,27 @@ function createRequestBody(request: StructuredReviewRequest): string {
   });
 }
 
+function createPatchRequestBody(request: StructuredPatchRequest): string {
+  return JSON.stringify({
+    model: request.model,
+    messages: [
+      { role: 'system', content: request.systemPrompt },
+      { role: 'user', content: request.userPrompt },
+    ],
+    stream: false,
+    n: 1,
+    max_completion_tokens: request.maxOutputTokens,
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: WALKZ_PATCH_SCHEMA_VERSION.replaceAll('-', '_'),
+        strict: true,
+        schema: GROQ_PATCH_JSON_SCHEMA,
+      },
+    },
+  });
+}
+
 function connectionOptions(
   options: GroqProviderOptions,
   signal: AbortSignal | undefined,
@@ -456,6 +517,64 @@ async function requestStructuredReviewOnce(
   };
 }
 
+function parseStructuredPatch(content: string) {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(content);
+  } catch {
+    throw responseFailure('Groq returned malformed structured patch JSON.');
+  }
+  try {
+    return parseModelPatchResponse(groqStructuredPatchSchema.parse(decoded));
+  } catch {
+    throw responseFailure('Groq returned an invalid structured patch.');
+  }
+}
+
+async function requestStructuredPatchOnce(
+  request: StructuredPatchRequest,
+  options: GroqProviderOptions,
+  signal: AbortSignal | undefined,
+): Promise<StructuredPatchResult> {
+  const response = await requestGroqJson(
+    {
+      method: 'POST',
+      path: '/openai/v1/chat/completions',
+      body: createPatchRequestBody(request),
+    },
+    connectionOptions(options, signal),
+  );
+  let envelope: z.infer<typeof groqChatResponseSchema>;
+  try {
+    envelope = groqChatResponseSchema.parse(response.data);
+  } catch {
+    throw responseFailure('Groq returned an invalid chat completion.');
+  }
+  if (envelope.model !== request.model) {
+    throw responseFailure('Groq returned a response from an unexpected model.');
+  }
+  const choice = envelope.choices[0];
+  if (choice === undefined || choice.finish_reason !== 'stop') {
+    throw responseFailure('Groq did not finish the structured patch cleanly.');
+  }
+  const headerRequestId = parseHeaderText(response.headers, 'x-request-id');
+  return {
+    provider: 'groq',
+    model: envelope.model,
+    promptVersion: request.promptVersion,
+    schemaVersion: WALKZ_PATCH_SCHEMA_VERSION,
+    patch: parseStructuredPatch(choice.message.content),
+    usage: {
+      promptTokens: envelope.usage.prompt_tokens,
+      completionTokens: envelope.usage.completion_tokens,
+      totalTokens: envelope.usage.total_tokens,
+      latencyMs: 0,
+      rateLimit: rateLimitFrom(response.headers),
+    },
+    requestId: headerRequestId ?? envelope.x_groq?.id ?? envelope.id,
+  };
+}
+
 function signalIsAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true;
 }
@@ -481,11 +600,18 @@ async function waitForRetry(
   }
 }
 
-export async function requestStructuredReview(
+async function requestStructuredWithRetry<
+  Result extends { usage: { latencyMs: number } },
+>(
   request: StructuredReviewRequest,
   options: GroqProviderOptions,
-  requestOptions: ProviderRequestOptions = {},
-): Promise<StructuredReviewResult> {
+  requestOptions: ProviderRequestOptions,
+  operation: (
+    request: StructuredReviewRequest,
+    options: GroqProviderOptions,
+    signal: AbortSignal | undefined,
+  ) => Promise<Result>,
+): Promise<Result> {
   const normalized = normalizeRequest(request);
   if (!strictModelIds.has(normalized.model)) {
     throw requestFailure(
@@ -501,12 +627,11 @@ export async function requestStructuredReview(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const result = await requestStructuredReviewOnce(
-        normalized,
-        options,
-        requestOptions.signal,
+      const result = await operation(normalized, options, requestOptions.signal);
+      result.usage.latencyMs = Math.max(
+        0,
+        Math.round(monotonicNow() - startedAt),
       );
-      result.usage.latencyMs = Math.max(0, Math.round(monotonicNow() - startedAt));
       return result;
     } catch (error) {
       const normalizedError = toProviderError(error);
@@ -528,7 +653,33 @@ export async function requestStructuredReview(
       }
     }
   }
-  throw responseFailure('Groq review attempts ended without a result.');
+  throw responseFailure('Groq structured attempts ended without a result.');
+}
+
+export async function requestStructuredReview(
+  request: StructuredReviewRequest,
+  options: GroqProviderOptions,
+  requestOptions: ProviderRequestOptions = {},
+): Promise<StructuredReviewResult> {
+  return requestStructuredWithRetry(
+    request,
+    options,
+    requestOptions,
+    requestStructuredReviewOnce,
+  );
+}
+
+export async function requestStructuredPatch(
+  request: StructuredPatchRequest,
+  options: GroqProviderOptions,
+  requestOptions: ProviderRequestOptions = {},
+): Promise<StructuredPatchResult> {
+  return requestStructuredWithRetry(
+    request,
+    options,
+    requestOptions,
+    requestStructuredPatchOnce,
+  );
 }
 
 export function createGroqProvider(
@@ -553,5 +704,7 @@ export function createGroqProvider(
       }),
     requestStructuredReview: (request, requestOptions = {}) =>
       requestStructuredReview(request, options, requestOptions),
+    requestStructuredPatch: (request, requestOptions = {}) =>
+      requestStructuredPatch(request, options, requestOptions),
   };
 }

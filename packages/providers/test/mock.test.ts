@@ -1,4 +1,7 @@
-import type { StructuredReviewRequest } from '@walkz/contracts';
+import type {
+  StructuredPatchRequest,
+  StructuredReviewRequest,
+} from '@walkz/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { createMockProvider } from '../src/index.js';
@@ -11,6 +14,19 @@ const request: StructuredReviewRequest = {
   promptVersion: 'review-v1',
 };
 const cleanReview = { findings: [] };
+const patchRequest: StructuredPatchRequest = {
+  ...request,
+  promptVersion: 'walkz-patch-v1',
+};
+const patch = {
+  findingId: '15d3e79e-02eb-42c3-91c5-0e48c4b5bf68',
+  headSha: 'b'.repeat(40),
+  path: 'src/a.ts',
+  startLine: 4,
+  endLine: 4,
+  replacement: 'return value ?? fallback;',
+  approvalRequired: true,
+} as const;
 
 describe('createMockProvider', () => {
   it('reports an in-process model and privacy notice', async () => {
@@ -64,6 +80,22 @@ describe('createMockProvider', () => {
     await expect(
       provider.requestStructuredReview(request),
     ).rejects.toMatchObject({ code: 'invalid_response', retryable: false });
+  });
+
+  it('returns a separately typed patch outcome', async () => {
+    const provider = createMockProvider({
+      outcomes: [{ type: 'patch', patch }],
+    });
+
+    await expect(
+      provider.requestStructuredPatch?.(patchRequest),
+    ).resolves.toMatchObject({
+      schemaVersion: 'walkz-patch-v1',
+      patch,
+    });
+    await expect(
+      provider.requestStructuredPatch?.(patchRequest),
+    ).rejects.toMatchObject({ code: 'invalid_response' });
   });
 
   it('rejects malformed queued output instead of repairing it', async () => {

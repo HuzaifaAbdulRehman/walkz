@@ -1,10 +1,13 @@
 import {
+  parseModelPatchResponse,
   parseModelReviewResponse,
   type ProviderAccessResult,
   type ProviderAdapter,
   type ProviderModel,
   type ProviderRequestOptions,
   type ProviderUsage,
+  type StructuredPatchRequest,
+  type StructuredPatchResult,
   type StructuredReviewRequest,
   type StructuredReviewResult,
 } from '@walkz/contracts';
@@ -44,6 +47,12 @@ export type MockProviderOutcome =
   | {
       type: 'review';
       review: unknown;
+      usage?: ProviderUsage;
+      requestId?: string | null;
+    }
+  | {
+      type: 'patch';
+      patch: unknown;
       usage?: ProviderUsage;
       requestId?: string | null;
     }
@@ -154,6 +163,9 @@ export function createMockProvider(
     if (outcome.type === 'error') {
       throw new ProviderError(outcome.failure);
     }
+    if (outcome.type !== 'review') {
+      throw invalidResponse('The queued mock outcome is not a review.');
+    }
 
     let review;
     try {
@@ -176,5 +188,48 @@ export function createMockProvider(
     };
   };
 
-  return { name: 'mock', listModels, validateAccess, requestStructuredReview };
+  const requestStructuredPatch = async (
+    request: StructuredPatchRequest,
+    requestOptions: ProviderRequestOptions = {},
+  ): Promise<StructuredPatchResult> => {
+    cancelled(requestOptions.signal);
+    const model = selectModel(models, request.model);
+    const outcome = outcomes.shift();
+    if (outcome === undefined) {
+      throw invalidResponse('No mock provider outcome is queued.');
+    }
+    if (outcome.type === 'error') {
+      throw new ProviderError(outcome.failure);
+    }
+    if (outcome.type !== 'patch') {
+      throw invalidResponse('The queued mock outcome is not a patch.');
+    }
+
+    let patch;
+    try {
+      patch = parseModelPatchResponse(outcome.patch);
+    } catch {
+      throw invalidResponse('The queued mock patch is invalid.');
+    }
+    requestNumber += 1;
+    return {
+      provider: 'mock',
+      model,
+      promptVersion: request.promptVersion,
+      schemaVersion: 'walkz-patch-v1',
+      patch,
+      usage: cloneUsage(outcome.usage ?? EMPTY_USAGE),
+      requestId: outcome.requestId === undefined
+        ? 'mock-request-' + requestNumber
+        : outcome.requestId,
+    };
+  };
+
+  return {
+    name: 'mock',
+    listModels,
+    validateAccess,
+    requestStructuredReview,
+    requestStructuredPatch,
+  };
 }
