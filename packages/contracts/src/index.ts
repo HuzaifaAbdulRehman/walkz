@@ -178,3 +178,23 @@ export type {
   HostedReviewRun,
   ReviewRunStatus,
 } from './hosted.js';
+
+export {
+  canTransitionPatchApproval,
+  isPatchProposalActionable,
+  parsePatchApprovalRequest,
+  parsePatchProposal,
+  patchApprovalRequestSchema,
+  patchApprovalStatusSchema,
+  patchDeliveryModeSchema,
+  patchGithubReferenceSchema,
+  patchProposalSchema,
+} from './patch.js';
+
+export type {
+  PatchApprovalRequest,
+  PatchApprovalStatus,
+  PatchDeliveryMode,
+  PatchGithubReference,
+  PatchProposal,
+} from './patch.js';

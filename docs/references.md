@@ -169,3 +169,25 @@ Six repositories answer the current questions, but there is no fixed ceiling. Wh
 new question appears, search broadly and inspect as many relevant sources as needed.
 Clone a repository when local source search would help, then record its exact commit
 and useful decisions here.
+
+## GitHub patch delivery: keep permission paths separate
+
+We checked GitHub's official documentation on 11 September 2026.
+
+- [Pull request review comments](https://docs.github.com/en/rest/pulls/comments)
+  require pull-request write permission. Comments should use `line`, `side`, and the
+  exact `commit_id`; the older diff `position` field is closing down.
+- [Suggested changes](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/reviewing-proposed-changes-in-a-pull-request)
+  are review comments that the pull-request author may apply. Walkz can publish this
+  option without contents-write permission.
+- [Git references](https://docs.github.com/en/rest/git/refs) and
+  [repository contents](https://docs.github.com/en/rest/repos/contents) require
+  contents-write permission. GitHub also requires workflows-write permission when an
+  app changes files under `.github/workflows`.
+
+Walkz will represent suggestions and fix branches as different delivery modes. An
+approval is bound to the proposal hash and reviewed head SHA. A later head makes the
+proposal stale without erasing who approved it. Raw patch text stays ephemeral; the
+database keeps hashes, decision metadata, and GitHub references only. We did not clone
+a reference repository because GitHub's endpoint contracts answered this question
+directly.
