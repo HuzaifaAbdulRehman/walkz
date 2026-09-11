@@ -113,11 +113,17 @@ export type { ReviewFindingItem } from './review-findings.js';
 export {
   createPatchProposal,
   decidePatchProposal,
+  preparePatchSuggestionPublication,
+  recordPatchSuggestionPublication,
+  releasePatchSuggestionPublication,
 } from './patch-proposal.js';
 export type {
   CreatedPatchProposal,
   PatchProposalDecisionOutcome,
   PatchProposalDecisionResult,
+  PatchSuggestionPublicationOutcome,
+  PatchSuggestionPublicationResult,
+  PatchSuggestionPublicationTarget,
 } from './patch-proposal.js';
 
 export {

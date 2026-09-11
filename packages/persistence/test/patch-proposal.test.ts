@@ -4,6 +4,9 @@ import type { Pool } from 'pg';
 import {
   createPatchProposal,
   decidePatchProposal,
+  preparePatchSuggestionPublication,
+  recordPatchSuggestionPublication,
+  releasePatchSuggestionPublication,
 } from '../src/index.js';
 
 const repositoryId = '8aa2dfc8-c97f-454f-b838-cc0cda4a7460';
@@ -35,6 +38,26 @@ function proposalRow(overrides: Record<string, unknown> = {}) {
     updatedAt: createdAt,
     ...overrides,
   };
+}
+
+function publicationRow(overrides: Record<string, unknown> = {}) {
+  return proposalRow({
+    approvalStatus: 'approved',
+    decidedByUserId: actorUserId,
+    decidedAt: new Date('2026-09-11T00:01:00.000Z'),
+    updatedAt: new Date('2026-09-11T00:01:00.000Z'),
+    currentHeadSha: headSha,
+    runStatus: 'awaiting_human',
+    findingLifecycleStatus: 'verified',
+    evidenceLevel: 'VERIFIED',
+    installationId: '1234',
+    owner: 'octocat',
+    repository: 'walkz',
+    pullRequestNumber: 7,
+    publicationLeaseOwner: null,
+    publicationLeaseExpiresAt: null,
+    ...overrides,
+  });
 }
 
 function createPool(
@@ -368,5 +391,233 @@ describe('patch proposal persistence', () => {
       decision: 'approved',
     })).rejects.toThrow('audit unavailable');
     expect(query).toHaveBeenCalledWith('ROLLBACK');
+  });
+
+  it('loads only an authorized approved suggestion bound to the current head', async () => {
+    const query = vi.fn(async (sql: string, _values?: readonly unknown[]) => {
+      if (sql.includes('gi.github_id::text')) {
+        return { rows: [publicationRow()] };
+      }
+      if (sql.includes('SET publication_lease_owner')) {
+        return { rows: [{ id: proposalId }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(preparePatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({
+      outcome: 'ready',
+      target: {
+        installationId: '1234',
+        owner: 'octocat',
+        repository: 'walkz',
+        pullRequestNumber: 7,
+        proposal: { id: proposalId, approvalStatus: 'approved' },
+      },
+    });
+    const lock = query.mock.calls.find(([sql]) => String(sql).includes('gi.github_id::text'));
+    expect(String(lock?.[0])).toContain('JOIN user_repository_access');
+    expect(lock?.[1]).toEqual([proposalId, actorUserId, repositoryId]);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO audit_events')))
+      .toBe(false);
+  });
+
+  it('refuses and marks a publication stale when the pull request moved', async () => {
+    const staleAt = new Date('2026-09-11T00:02:00.000Z');
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('gi.github_id::text')) {
+        return { rows: [publicationRow({
+          currentHeadSha: 'd'.repeat(40),
+          runStatus: 'superseded',
+        })] };
+      }
+      if (sql.includes('SET publication_lease_owner')) {
+        return { rows: [{ id: proposalId }] };
+      }
+      if (sql.includes('SET stale_at')) {
+        return { rows: [proposalRow({
+          approvalStatus: 'approved',
+          decidedByUserId: actorUserId,
+          decidedAt: new Date('2026-09-11T00:01:00.000Z'),
+          staleAt,
+          updatedAt: staleAt,
+        })] };
+      }
+      if (sql.includes('INSERT INTO audit_events')) {
+        return { rows: [{ id: 'audit-id' }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(preparePatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({
+      outcome: 'stale',
+      target: { proposal: { staleAt } },
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO audit_events'),
+      expect.arrayContaining(['patch_proposal.publication_stale']),
+    );
+  });
+
+  it('returns busy when another request holds the publication lease', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('gi.github_id::text')) {
+        return { rows: [publicationRow({
+          publicationLeaseOwner: actorUserId,
+          publicationLeaseExpiresAt: new Date('2026-09-11T00:10:00.000Z'),
+        })] };
+      }
+      if (sql.includes('SET publication_lease_owner')) return { rows: [] };
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(preparePatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({ outcome: 'busy' });
+    expect(query.mock.calls.some(([sql]) =>
+      String(sql).includes('SET github_reference_kind'))).toBe(false);
+  });
+
+  it('records the GitHub reference and audit event atomically', async () => {
+    const reference = 'https://github.com/octocat/walkz/pull/7#discussion_r321';
+    const updatedAt = new Date('2026-09-11T00:03:00.000Z');
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('gi.github_id::text')) {
+        return { rows: [publicationRow({ publicationLeaseOwner: proposalId })] };
+      }
+      if (sql.includes("SET github_reference_kind = 'review_comment'")) {
+        return { rows: [proposalRow({
+          approvalStatus: 'approved',
+          decidedByUserId: actorUserId,
+          decidedAt: new Date('2026-09-11T00:01:00.000Z'),
+          githubReferenceKind: 'review_comment',
+          githubReferenceValue: reference,
+          updatedAt,
+        })] };
+      }
+      if (sql.includes('INSERT INTO audit_events')) {
+        return { rows: [{ id: 'audit-id' }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(recordPatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      githubReferenceValue: reference,
+    })).resolves.toMatchObject({
+      outcome: 'applied',
+      target: { proposal: { githubReference: { kind: 'review_comment', value: reference } } },
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("SET github_reference_kind = 'review_comment'"),
+      [proposalId, reference, false, patchHash, headSha, proposalId],
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO audit_events'),
+      expect.arrayContaining(['patch_proposal.suggestion_published']),
+    );
+    expect(query).toHaveBeenCalledWith('COMMIT');
+  });
+
+  it('treats the same recorded GitHub reference as an idempotent result', async () => {
+    const reference = 'https://github.com/octocat/walkz/pull/7#discussion_r321';
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('gi.github_id::text')) {
+        return { rows: [publicationRow({
+          githubReferenceKind: 'review_comment',
+          githubReferenceValue: reference,
+        })] };
+      }
+      if (sql.includes('INSERT INTO audit_events')) {
+        return { rows: [{ id: 'audit-id' }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(recordPatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      githubReferenceValue: reference,
+    })).resolves.toMatchObject({ outcome: 'unchanged' });
+    expect(query.mock.calls.some(([sql]) =>
+      String(sql).includes("SET github_reference_kind = 'review_comment'")))
+      .toBe(false);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO audit_events'),
+      expect.arrayContaining(['patch_proposal.publication_unchanged']),
+    );
+  });
+
+  it('does not reveal whether a missing publication target exists', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('INSERT INTO audit_events')) {
+        return { rows: [{ id: 'audit-id' }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(preparePatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      publicationLeaseMs: 120_000,
+    })).resolves.toEqual({ outcome: 'denied', target: null });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO audit_events'),
+      expect.arrayContaining(['patch_proposal.publication_denied']),
+    );
+  });
+
+  it('releases only the matching publication lease', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: proposalId }] });
+    const pool = { query } as unknown as Pick<Pool, 'query'>;
+
+    await expect(releasePatchSuggestionPublication(pool, {
+      proposalId,
+      publicationLeaseOwner: actorUserId,
+    })).resolves.toBe(true);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('publication_lease_owner = $2'),
+      [proposalId, actorUserId],
+    );
   });
 });

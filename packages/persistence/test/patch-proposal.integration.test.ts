@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createPatchProposal,
   decidePatchProposal,
+  preparePatchSuggestionPublication,
+  recordPatchSuggestionPublication,
+  releasePatchSuggestionPublication,
   supersedeActiveReviewRuns,
 } from '../src/index.js';
 
@@ -169,6 +172,57 @@ describe('PostgreSQL patch proposal decisions', () => {
       },
     });
 
+    const firstLease = randomUUID();
+    const secondLease = randomUUID();
+    const publicationInput = {
+      repositoryId,
+      actorUserId: userId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+    };
+    await expect(preparePatchSuggestionPublication(pool, {
+      ...publicationInput,
+      publicationLeaseOwner: firstLease,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({ outcome: 'ready' });
+    await expect(preparePatchSuggestionPublication(pool, {
+      ...publicationInput,
+      publicationLeaseOwner: secondLease,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({ outcome: 'busy' });
+    await expect(releasePatchSuggestionPublication(pool, {
+      proposalId,
+      publicationLeaseOwner: firstLease,
+    })).resolves.toBe(true);
+    await expect(preparePatchSuggestionPublication(pool, {
+      ...publicationInput,
+      publicationLeaseOwner: secondLease,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({ outcome: 'ready' });
+    const githubReferenceValue =
+      'https://github.com/owner/repo/pull/1#discussion_r123';
+    await expect(recordPatchSuggestionPublication(pool, {
+      ...publicationInput,
+      publicationLeaseOwner: secondLease,
+      githubReferenceValue,
+    })).resolves.toMatchObject({
+      outcome: 'applied',
+      target: {
+        proposal: {
+          githubReference: {
+            kind: 'review_comment',
+            value: githubReferenceValue,
+          },
+        },
+      },
+    });
+    await expect(preparePatchSuggestionPublication(pool, {
+      ...publicationInput,
+      publicationLeaseOwner: randomUUID(),
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({ outcome: 'published' });
+
     await pool.query(
       'UPDATE pull_requests SET head_sha = $2 WHERE id = $1',
       [pullRequestId, replacementHeadSha],
@@ -226,6 +280,7 @@ describe('PostgreSQL patch proposal decisions', () => {
     expect(audits.rows.map((row) => row.eventType)).toEqual([
       'patch_proposal.created',
       'patch_proposal.approved',
+      'patch_proposal.suggestion_published',
       'patch_proposal.stale',
     ]);
     const patchColumns = await pool.query(
@@ -236,6 +291,12 @@ describe('PostgreSQL patch proposal decisions', () => {
     );
     expect(patchColumns.rows.map((row) => row.column_name)).not.toContain(
       'patch_text',
+    );
+    expect(patchColumns.rows.map((row) => row.column_name)).toEqual(
+      expect.arrayContaining([
+        'publication_lease_owner',
+        'publication_lease_expires_at',
+      ]),
     );
   });
 });

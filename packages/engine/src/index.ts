@@ -75,6 +75,15 @@ export type {
   PatchGenerationFailureCode,
   PatchProposalPersistenceInput,
 } from './patch-generation.js';
+export {
+  PatchPublicationError,
+  prepareApprovedPatchSuggestion,
+} from './patch-publication.js';
+export type {
+  PatchPublicationFailureCode,
+  PreparedPatchSuggestion,
+  PreparePatchSuggestionInput,
+} from './patch-publication.js';
 export type {
   FindingRejection,
   FindingRejectionReason,
