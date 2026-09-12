@@ -7,8 +7,11 @@ import {
 
 const proposalId = 'ed395cbc-3f3f-4702-a3a2-619dd94c93d0';
 const findingId = '2d437195-a9f0-4af9-aaf4-3cbda1c8f61f';
+const reviewRunId = '3d963b52-8203-4ba6-bcac-15bf132371f0';
+const baseSha = 'c'.repeat(40);
 const headSha = 'a'.repeat(40);
 const patchHash = 'b'.repeat(64);
+const originalHash = 'd'.repeat(64);
 const timestamp = '2026-09-11T10:00:00.000Z';
 
 describe('patch fix dashboard boundary', () => {
@@ -32,13 +35,19 @@ describe('patch fix dashboard boundary', () => {
   it('keeps replacement text only in the transient proposal result', () => {
     const result = parsePatchProposalResponse({
       candidate: {
+        schemaVersion: 1,
+        reviewRunId,
         findingId,
+        baseSha,
         headSha,
+        deliveryMode: 'suggestion',
         patchHash,
+        originalHash,
         path: 'src/value.ts',
         startLine: 3,
         endLine: 3,
         replacement: 'return safe;',
+        approvalRequired: true,
       },
       proposal: {
         id: proposalId,

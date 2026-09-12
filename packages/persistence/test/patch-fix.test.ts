@@ -269,9 +269,10 @@ describe('hosted patch fix persistence', () => {
     })).resolves.toMatchObject({ status: 'reproving', attempt: 1 });
     const sql = String(query.mock.calls[0]?.[0]);
     expect(sql).toContain("pp.approval_status = 'approved'");
+    expect(sql).toContain("pp.github_reference_kind = 'review_comment'");
+    expect(sql).toContain('pp.github_reference IS NOT NULL');
     expect(sql).toContain('pp.head_sha = pr.head_sha');
     expect(sql).toContain("f.evidence_level = 'VERIFIED'");
-    expect(sql).not.toContain('pp.github_reference IS NULL');
   });
 
   it('requires matching reproof evidence before completion', async () => {
@@ -329,7 +330,9 @@ describe('hosted patch fix persistence', () => {
     await expect(listRecoverablePatchFixProposalIds({ query }, 50))
       .resolves.toEqual([proposalId]);
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql).toContain('attempt < 5');
-    expect(sql).toContain('lease_expires_at <= now()');
+    expect(sql).toContain("pp.github_reference_kind = 'review_comment'");
+    expect(sql).toContain('pp.github_reference IS NOT NULL');
+    expect(sql).toContain('pfj.attempt < 5');
+    expect(sql).toContain('pfj.lease_expires_at <= now()');
   });
 });

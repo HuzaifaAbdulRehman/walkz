@@ -25,6 +25,19 @@ const pendingProposal = {
 } as const;
 
 describe('patch proposal contracts', () => {
+  it('allows a pending proposal to retain its exact GitHub suggestion', () => {
+    expect(parsePatchProposal({
+      ...pendingProposal,
+      githubReference: {
+        kind: 'review_comment',
+        value: 'https://github.com/owner/repo/pull/1#discussion_r123',
+      },
+    })).toMatchObject({
+      approvalStatus: 'pending',
+      githubReference: { kind: 'review_comment' },
+    });
+  });
+
   it('accepts a pending proposal without private patch content', () => {
     expect(parsePatchProposal(pendingProposal)).toEqual(pendingProposal);
     expect(() =>

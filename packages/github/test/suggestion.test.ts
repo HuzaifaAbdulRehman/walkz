@@ -75,6 +75,63 @@ describe('GitHub patch suggestions', () => {
     );
   });
 
+  it('reloads the exact approved suggestion from its GitHub reference', async () => {
+    const reference = 'https://github.com/octocat/walkz/pull/7#discussion_r321';
+    const replacement = '  return value ?? fallback;';
+    const marker = `<!-- walkz-suggestion:${proposalId}:${patchHash} -->`;
+    const request = vi.fn()
+      .mockResolvedValueOnce(pullRequest())
+      .mockResolvedValueOnce({
+        data: existingComment([
+          'Walkz prepared this change from verified evidence. Apply it only after review.',
+          '',
+          '```suggestion',
+          replacement,
+          '```',
+          '',
+          marker,
+        ].join('\n')),
+      });
+    const service = createGitHubSuggestionService({ request });
+
+    await expect(service.loadPublishedSuggestion({
+      ...target,
+      proposalId,
+      headSha,
+      patchHash,
+      githubReference: reference,
+    })).resolves.toEqual({
+      commentId: '321',
+      htmlUrl: reference,
+      headSha,
+      path: suggestion.path,
+      startLine: suggestion.startLine,
+      endLine: suggestion.endLine,
+      replacement,
+    });
+    expect(request).toHaveBeenLastCalledWith(
+      'GET /repos/{owner}/{repo}/pulls/comments/{comment_id}',
+      { owner: target.owner, repo: target.repository, comment_id: 321 },
+    );
+  });
+
+  it('rejects an edited approved suggestion before returning patch text', async () => {
+    const reference = 'https://github.com/octocat/walkz/pull/7#discussion_r321';
+    const marker = `<!-- walkz-suggestion:${proposalId}:${patchHash} -->`;
+    const request = vi.fn()
+      .mockResolvedValueOnce(pullRequest())
+      .mockResolvedValueOnce({ data: existingComment(`edited suggestion\n${marker}`) });
+    const service = createGitHubSuggestionService({ request });
+
+    await expect(service.loadPublishedSuggestion({
+      ...target,
+      proposalId,
+      headSha,
+      patchHash,
+      githubReference: reference,
+    })).rejects.toMatchObject({ code: 'marker_conflict' });
+  });
+
   it('publishes one exact-head multiline suggestion without merge or contents writes', async () => {
     const request = vi.fn(async (route: string, parameters: Record<string, unknown>) => {
       if (route === 'GET /repos/{owner}/{repo}/pulls/{pull_number}') {

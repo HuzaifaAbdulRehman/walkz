@@ -120,7 +120,12 @@ function approvedProposal(patchHash: string, reference: string | null = null) {
 describe('patch suggestion publication API', () => {
   it('publishes transient approved content and persists only its GitHub reference', async () => {
     const selected = await candidate();
-    const proposal = approvedProposal(selected.patchHash);
+    const proposal = {
+      ...approvedProposal(selected.patchHash),
+      approvalStatus: 'pending' as const,
+      decidedByUserId: null,
+      decidedAt: null,
+    };
     const prepare = vi.fn().mockResolvedValue({
       outcome: 'ready',
       target: {

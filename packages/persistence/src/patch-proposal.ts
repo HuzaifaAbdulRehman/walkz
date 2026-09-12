@@ -444,7 +444,7 @@ function publicationConflict(
   return row.patchHash.toLowerCase() !== input.expectedPatchHash.toLowerCase() ||
     row.headSha.toLowerCase() !== input.expectedHeadSha.toLowerCase() ||
     row.deliveryMode !== 'suggestion' ||
-    row.approvalStatus !== 'approved' ||
+    row.approvalStatus === 'rejected' ||
     (row.runStatus !== 'awaiting_human' && row.runStatus !== 'superseded') ||
     row.findingLifecycleStatus !== 'verified' ||
     row.evidenceLevel !== 'VERIFIED';
@@ -626,7 +626,7 @@ export async function recordPatchSuggestionPublication(
             updated_at = now()
         WHERE pp.id = $1
           AND pp.github_reference IS NULL
-          AND pp.approval_status = 'approved'
+          AND pp.approval_status IN ('pending', 'approved')
           AND pp.patch_hash = $4
           AND pp.head_sha = $5
           AND pp.publication_lease_owner = $6
@@ -767,6 +767,18 @@ export async function decidePatchProposalInTransaction(
       outcome: 'rejected',
       proposalId: proposal.id,
       summary: 'A patch proposal decision failed its evidence or run-state gate.',
+    });
+    return { outcome: 'conflict', proposal };
+  }
+
+  if (decision.decision === 'rejected' && proposal.githubReference !== null) {
+    await recordDecisionAudit(client, {
+      actorUserId: decision.actorUserId,
+      eventType: 'patch_proposal.decision_conflict',
+      operation,
+      outcome: 'rejected',
+      proposalId: proposal.id,
+      summary: 'A published patch suggestion cannot be rejected.',
     });
     return { outcome: 'conflict', proposal };
   }

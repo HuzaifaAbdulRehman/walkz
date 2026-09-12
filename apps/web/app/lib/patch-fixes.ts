@@ -24,14 +24,20 @@ export interface DashboardPatchFix {
 }
 
 export interface TransientPatchCandidate {
+  schemaVersion: 1;
   proposalId: string;
+  reviewRunId: string;
   findingId: string;
+  baseSha: string;
   headSha: string;
+  deliveryMode: 'suggestion';
   patchHash: string;
   path: string;
   startLine: number;
   endLine: number;
   replacement: string;
+  approvalRequired: true;
+  originalHash: string;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -93,13 +99,19 @@ export function parsePatchProposalResponse(input: unknown): {
     candidate === undefined || proposal === undefined || job === undefined ||
     typeof proposal.id !== 'string' || !uuidPattern.test(proposal.id) ||
     proposal.approvalStatus !== 'pending' ||
+    candidate.schemaVersion !== 1 ||
+    typeof candidate.reviewRunId !== 'string' || !uuidPattern.test(candidate.reviewRunId) ||
     typeof candidate.findingId !== 'string' || !uuidPattern.test(candidate.findingId) ||
+    typeof candidate.baseSha !== 'string' || !sha1Pattern.test(candidate.baseSha) ||
     typeof candidate.headSha !== 'string' || !sha1Pattern.test(candidate.headSha) ||
+    candidate.deliveryMode !== 'suggestion' ||
     typeof candidate.patchHash !== 'string' || !sha256Pattern.test(candidate.patchHash) ||
+    typeof candidate.originalHash !== 'string' || !sha256Pattern.test(candidate.originalHash) ||
     typeof candidate.path !== 'string' || candidate.path.length === 0 ||
     typeof candidate.startLine !== 'number' || !Number.isInteger(candidate.startLine) ||
     typeof candidate.endLine !== 'number' || !Number.isInteger(candidate.endLine) ||
     typeof candidate.replacement !== 'string' ||
+    candidate.approvalRequired !== true ||
     candidate.startLine < 1 || candidate.endLine < candidate.startLine ||
     job.status !== 'awaiting_approval'
   ) {
@@ -121,14 +133,20 @@ export function parsePatchProposalResponse(input: unknown): {
   });
   return {
     candidate: {
+      schemaVersion: 1,
       proposalId: proposal.id,
+      reviewRunId: candidate.reviewRunId,
       findingId: candidate.findingId,
+      baseSha: candidate.baseSha,
       headSha: candidate.headSha,
+      deliveryMode: 'suggestion',
       patchHash: candidate.patchHash,
       path: candidate.path,
       startLine: candidate.startLine,
       endLine: candidate.endLine,
       replacement: candidate.replacement,
+      approvalRequired: true,
+      originalHash: candidate.originalHash,
     },
     fix,
   };

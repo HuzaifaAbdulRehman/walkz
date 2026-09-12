@@ -53,6 +53,12 @@ const suggestionRequestSchema = headFileRequestSchema.extend({
   message: 'Suggestion end line must not precede its start line.',
   path: ['endLine'],
 });
+const publishedSuggestionRequestSchema = targetSchema.extend({
+  proposalId: z.uuid(),
+  headSha: shaSchema,
+  patchHash: sha256Schema,
+  githubReference: githubUrlSchema,
+}).strict();
 const pullRequestSchema = z.object({
   state: z.literal('open'),
   head: z.object({ sha: shaSchema }),
@@ -64,7 +70,7 @@ const contentSchema = z.object({
 }).passthrough();
 const reviewCommentSchema = z.object({
   id: z.number().int().positive().safe(),
-  body: z.string().nullable(),
+  body: z.string().max(65_000).nullable(),
   html_url: githubUrlSchema,
   commit_id: shaSchema,
   path: z.string(),
@@ -117,8 +123,19 @@ export interface PublishedSuggestion {
   created: boolean;
 }
 
+export interface PublishedSuggestionContent {
+  commentId: string;
+  htmlUrl: string;
+  headSha: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  replacement: string;
+}
+
 export interface GitHubSuggestionService {
   loadHeadFile(input: unknown): Promise<GitHubHeadFile>;
+  loadPublishedSuggestion(input: unknown): Promise<PublishedSuggestionContent>;
   publish(input: unknown): Promise<PublishedSuggestion>;
 }
 
@@ -235,7 +252,7 @@ function buildSuggestionBody(input: z.infer<typeof suggestionRequestSchema>): {
   body: string;
   marker: string;
 } {
-  const marker = `<!-- walkz-suggestion:${input.proposalId}:${input.patchHash.toLowerCase()} -->`;
+  const marker = suggestionMarker(input.proposalId, input.patchHash);
   const fence = suggestionFence(input.replacement);
   const replacement = input.replacement.endsWith('\n')
     ? input.replacement
@@ -255,6 +272,68 @@ function buildSuggestionBody(input: z.infer<typeof suggestionRequestSchema>): {
     );
   }
   return { body, marker };
+}
+
+function suggestionMarker(proposalId: string, patchHash: string): string {
+  return `<!-- walkz-suggestion:${proposalId}:${patchHash.toLowerCase()} -->`;
+}
+
+function commentIdFromReference(
+  reference: string,
+  input: z.infer<typeof targetSchema>,
+): number {
+  const url = new URL(reference);
+  const expectedPath = `/${input.owner}/${input.repository}/pull/${input.pullRequestNumber}`;
+  const match = /^#discussion_r([1-9][0-9]*)$/u.exec(url.hash);
+  const commentId = match === null ? Number.NaN : Number(match[1]);
+  if (
+    url.pathname.toLowerCase() !== expectedPath.toLowerCase() ||
+    !Number.isSafeInteger(commentId)
+  ) {
+    throw publicationError(
+      'invalid_input',
+      'The stored GitHub reference does not identify this pull request suggestion.',
+    );
+  }
+  return commentId;
+}
+
+function parseSuggestionReplacement(body: string, marker: string): string {
+  const prefix =
+    'Walkz prepared this change from verified evidence. Apply it only after review.\n\n';
+  const markerSuffix = `\n\n${marker}`;
+  if (!body.startsWith(prefix) || !body.endsWith(markerSuffix)) {
+    throw publicationError(
+      'marker_conflict',
+      'The stored GitHub suggestion no longer matches its approved marker.',
+    );
+  }
+  const content = body.slice(prefix.length, -markerSuffix.length);
+  const firstLineEnd = content.indexOf('\n');
+  if (firstLineEnd < 0) {
+    throw publicationError('marker_conflict', 'The stored GitHub suggestion is malformed.');
+  }
+  const opening = content.slice(0, firstLineEnd);
+  const match = /^(`{3,})suggestion$/u.exec(opening);
+  if (match === null) {
+    throw publicationError('marker_conflict', 'The stored GitHub suggestion is malformed.');
+  }
+  const closing = `\n${match[1]}`;
+  if (!content.endsWith(closing)) {
+    throw publicationError('marker_conflict', 'The stored GitHub suggestion is malformed.');
+  }
+  const replacement = content.slice(firstLineEnd + 1, -closing.length);
+  if (
+    replacement.includes('\0') ||
+    replacement.includes('\r') ||
+    Buffer.byteLength(replacement, 'utf8') > 64 * 1_024
+  ) {
+    throw publicationError(
+      'marker_conflict',
+      'The stored GitHub suggestion contains unsupported replacement text.',
+    );
+  }
+  return replacement;
 }
 
 function matchesSuggestion(
@@ -427,6 +506,76 @@ export function createGitHubSuggestionService(
         currentHeadSha: head,
         path: input.path,
         content: decodeBase64File(response.data),
+      };
+    },
+
+    async loadPublishedSuggestion(inputValue) {
+      const input = parseInput(publishedSuggestionRequestSchema, inputValue);
+      if (await currentHead(client, input) !== input.headSha.toLowerCase()) {
+        throw publicationError(
+          'stale_head',
+          'The pull request head changed before the approved suggestion was loaded.',
+        );
+      }
+      const commentId = commentIdFromReference(input.githubReference, input);
+      let response;
+      try {
+        response = await client.request(
+          'GET /repos/{owner}/{repo}/pulls/comments/{comment_id}',
+          {
+            owner: input.owner,
+            repo: input.repository,
+            comment_id: commentId,
+          },
+        );
+      } catch (error) {
+        throw publicationError(
+          'request_failed',
+          'GitHub could not load the approved patch suggestion.',
+          error,
+        );
+      }
+      let comment;
+      try {
+        comment = reviewCommentSchema.parse(response.data);
+      } catch (error) {
+        throw publicationError(
+          'invalid_github_response',
+          'GitHub returned an invalid approved patch suggestion.',
+          error,
+        );
+      }
+      const marker = suggestionMarker(input.proposalId, input.patchHash);
+      if (
+        comment.body === null ||
+        comment.html_url !== input.githubReference ||
+        comment.commit_id.toLowerCase() !== input.headSha.toLowerCase() ||
+        comment.line === null
+      ) {
+        throw publicationError(
+          'marker_conflict',
+          'The stored GitHub suggestion is not bound to the approved proposal.',
+        );
+      }
+      let path;
+      try {
+        path = repositoryPathSchema.parse(comment.path);
+      } catch (error) {
+        throw publicationError(
+          'marker_conflict',
+          'The stored GitHub suggestion path is invalid.',
+          error,
+        );
+      }
+      const startLine = comment.start_line ?? comment.line;
+      return {
+        commentId: String(comment.id),
+        htmlUrl: comment.html_url,
+        headSha: comment.commit_id.toLowerCase(),
+        path,
+        startLine,
+        endLine: comment.line,
+        replacement: parseSuggestionReplacement(comment.body, marker),
       };
     },
 

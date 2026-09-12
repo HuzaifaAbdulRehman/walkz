@@ -182,7 +182,10 @@ async function fixture(patchHash?: string) {
       patchHash: patchHash ?? generated.candidate.patchHash,
       deliveryMode: 'suggestion',
       approvalStatus: 'approved',
-      githubReference: null,
+      githubReference: {
+        kind: 'review_comment',
+        value: 'https://github.com/owner/repo/pull/27#discussion_r42',
+      },
       decidedByUserId: userId,
       decidedAt: now,
       staleAt: null,
@@ -236,8 +239,20 @@ function reproofResult(
   };
 }
 
-function dependencies(target: ClaimedPatchFixTarget) {
+function dependencies(
+  target: ClaimedPatchFixTarget,
+  candidate: Awaited<ReturnType<typeof fixture>>['generated']['candidate'],
+) {
   const service = {
+    loadPublishedSuggestion: vi.fn().mockResolvedValue({
+      commentId: '42',
+      htmlUrl: 'https://github.com/owner/repo/pull/27#discussion_r42',
+      headSha,
+      path: candidate.path,
+      startLine: candidate.startLine,
+      endLine: candidate.endLine,
+      replacement: candidate.replacement,
+    }),
     loadHeadFile: vi.fn().mockResolvedValue({
       currentHeadSha: headSha,
       path: 'src/value.ts',
@@ -284,9 +299,9 @@ function dependencies(target: ClaimedPatchFixTarget) {
 }
 
 describe('hosted approved patch fix worker', () => {
-  it('reproves before publishing and stores no candidate in queue state', async () => {
-    const { target, selectedProvider } = await fixture();
-    const deps = dependencies(target);
+  it('reproves the exact published suggestion without another model call', async () => {
+    const { target, generated } = await fixture();
+    const deps = dependencies(target, generated.candidate);
     const result = reproofResult(target, 'resolved');
     const runReproof = vi.fn().mockResolvedValue({
       result,
@@ -305,7 +320,6 @@ describe('hosted approved patch fix worker', () => {
       leaseMs: 60_000,
       proofImage,
       workspaceVolume,
-      createProvider: () => selectedProvider,
       checkout,
       runReproof,
     });
@@ -329,9 +343,15 @@ describe('hosted approved patch fix worker', () => {
       expect.objectContaining({ temporaryRoot: workspaceVolume.root }),
     );
     expect(deps.store.recordReproof).toHaveBeenCalledWith(result);
-    expect(deps.service.publish).toHaveBeenCalledOnce();
-    expect(deps.store.recordReproof.mock.invocationCallOrder[0])
-      .toBeLessThan(deps.service.publish.mock.invocationCallOrder[0] ?? 0);
+    expect(deps.service.loadPublishedSuggestion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalId,
+        patchHash: generated.candidate.patchHash,
+        githubReference: target.proposal.githubReference?.value,
+      }),
+    );
+    expect(deps.store.loadCredential).not.toHaveBeenCalled();
+    expect(deps.service.publish).not.toHaveBeenCalled();
     expect(deps.store.complete).toHaveBeenCalledWith({
       proposalId,
       workerId: 'worker-1',
@@ -341,15 +361,14 @@ describe('hosted approved patch fix worker', () => {
   });
 
   it('resumes an inconclusive reproof without a model call or publication', async () => {
-    const { target, selectedProvider } = await fixture();
-    const deps = dependencies(target);
+    const { target, generated } = await fixture();
+    const deps = dependencies(target, generated.candidate);
     deps.store.latestReproof.mockResolvedValue(reproofResult(target, 'inconclusive'));
     const handler = createHostedPatchFixJobHandler({
       ...deps,
       workerId: 'worker-1',
       leaseMs: 60_000,
       proofImage,
-      createProvider: () => selectedProvider,
     });
 
     await handler.handle(proposalId);
@@ -361,16 +380,24 @@ describe('hosted approved patch fix worker', () => {
     }));
   });
 
-  it('fails closed when regenerated patch content changes', async () => {
-    const { target, selectedProvider } = await fixture('f'.repeat(64));
-    const deps = dependencies(target);
+  it('fails closed when the published suggestion content changes', async () => {
+    const { target, generated } = await fixture();
+    const deps = dependencies(target, generated.candidate);
+    deps.service.loadPublishedSuggestion.mockResolvedValue({
+      commentId: '42',
+      htmlUrl: 'https://github.com/owner/repo/pull/27#discussion_r42',
+      headSha,
+      path: generated.candidate.path,
+      startLine: generated.candidate.startLine,
+      endLine: generated.candidate.endLine,
+      replacement: '  return tampered;',
+    });
     const runReproof = vi.fn();
     const handler = createHostedPatchFixJobHandler({
       ...deps,
       workerId: 'worker-1',
       leaseMs: 60_000,
       proofImage,
-      createProvider: () => selectedProvider,
       runReproof,
     });
 

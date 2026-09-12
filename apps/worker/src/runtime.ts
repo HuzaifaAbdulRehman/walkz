@@ -35,13 +35,10 @@ import {
   loadLatestVerifiedPatchFixSourceForPullRequest,
   loadClaimedPatchFixTarget,
   loadProviderCredential,
-  preparePatchSuggestionPublication,
   queueManualReview,
   recordPatchReproofResult,
-  recordPatchSuggestionPublication,
   releaseGitHubCommentCommand,
   releasePatchFixJob,
-  releasePatchSuggestionPublication,
   renewGitHubCommentCommandLease,
   renewPatchFixJobLease,
   renewHostedReviewRunLease,
@@ -281,16 +278,8 @@ export function createHostedWorkerFromEnvironment(
       claim: (lease) => claimPatchFixJob(pool, lease),
       renew: (lease) => renewPatchFixJobLease(pool, lease),
       loadTarget: (target) => loadClaimedPatchFixTarget(pool, target),
-      loadCredential: (binding) =>
-        loadProviderCredential(pool, config.credentialVault, binding),
       latestReproof: (proposalId) => getLatestPatchReproofResult(pool, proposalId),
       recordReproof: (result) => recordPatchReproofResult(pool, result),
-      preparePublication: (publication) =>
-        preparePatchSuggestionPublication(pool, publication),
-      recordPublication: (publication) =>
-        recordPatchSuggestionPublication(pool, publication),
-      releasePublication: (publication) =>
-        releasePatchSuggestionPublication(pool, publication),
       complete: (completion) => completePatchFixJob(pool, completion),
       release: (lease) => releasePatchFixJob(pool, lease),
       fail: (failure) => failPatchFixJob(pool, failure),

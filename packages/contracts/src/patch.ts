@@ -55,9 +55,9 @@ export const patchProposalSchema = z
   .refine(
     (proposal) =>
       proposal.githubReference === null ||
-      proposal.approvalStatus === 'approved',
+      proposal.approvalStatus !== 'rejected',
     {
-      message: 'Only approved patch proposals may have a GitHub reference.',
+      message: 'Rejected patch proposals may not have a GitHub reference.',
       path: ['githubReference'],
     },
   )

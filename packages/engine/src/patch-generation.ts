@@ -67,6 +67,40 @@ const patchGenerationInputSchema = z
     message: 'The verified finding must belong to the supplied head file.',
     path: ['headFile', 'path'],
   });
+const publishedPatchCandidateInputSchema = z.object({
+  reviewRunId: z.uuid(),
+  findingId: z.uuid(),
+  baseSha: sha1Schema,
+  headSha: sha1Schema,
+  currentHeadSha: sha1Schema,
+  expectedPatchHash: z.string().regex(/^[a-f0-9]{64}$/i),
+  path: patchPathSchema,
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  replacement: z.string().max(64 * 1_024).refine(
+    (value) => !value.includes('\0') && !value.includes('\r'),
+    { message: 'Published patch text must use bounded LF text.' },
+  ),
+  headFile: z.object({
+    path: patchPathSchema,
+    content: z.string().max(512 * 1_024).refine(
+      (value) => !value.includes('\0'),
+      { message: 'Published patch reconstruction does not accept binary content.' },
+    ),
+  }).strict(),
+}).strict()
+  .refine((input) => input.baseSha !== input.headSha, {
+    message: 'Published patches must target a changed head revision.',
+    path: ['headSha'],
+  })
+  .refine((input) => input.endLine >= input.startLine, {
+    message: 'Published patch end line must not precede its start line.',
+    path: ['endLine'],
+  })
+  .refine((input) => input.path === input.headFile.path, {
+    message: 'Published patch path must match the supplied head file.',
+    path: ['headFile', 'path'],
+  });
 
 type PatchGenerationInput = z.infer<typeof patchGenerationInputSchema>;
 
@@ -360,6 +394,63 @@ export function verifyPatchCandidateIntegrity(
     );
   }
   return candidate;
+}
+
+export function restorePublishedPatchCandidate(inputValue: unknown): PatchCandidate {
+  let input;
+  try {
+    input = publishedPatchCandidateInputSchema.parse(inputValue);
+  } catch (error) {
+    throw new PatchGenerationError(
+      'invalid_input',
+      'Published patch candidate input is invalid.',
+      error instanceof Error ? { cause: error } : undefined,
+    );
+  }
+  if (input.currentHeadSha.toLowerCase() !== input.headSha.toLowerCase()) {
+    throw new PatchGenerationError(
+      'stale_head',
+      'The pull request head changed before the approved patch was restored.',
+    );
+  }
+  const lines = normalizedLines(input.headFile.content);
+  if (input.startLine > lines.length || input.endLine > lines.length) {
+    throw new PatchGenerationError(
+      'invalid_input',
+      'The published patch is outside the supplied head file.',
+    );
+  }
+  const original = lines.slice(input.startLine - 1, input.endLine).join('\n');
+  const originalHash = sha256(original);
+  const replacements = [input.replacement, `${input.replacement}\n`];
+  for (const replacement of replacements) {
+    if (replacement === original) continue;
+    const digestInput = candidateDigestInput({
+      schemaVersion: 1,
+      reviewRunId: input.reviewRunId,
+      findingId: input.findingId,
+      baseSha: input.baseSha.toLowerCase(),
+      headSha: input.headSha.toLowerCase(),
+      deliveryMode: 'suggestion',
+      path: input.path,
+      startLine: input.startLine,
+      endLine: input.endLine,
+      originalHash,
+      replacement,
+      approvalRequired: true,
+    });
+    const patchHash = sha256(canonicalJson(digestInput));
+    if (patchHash !== input.expectedPatchHash.toLowerCase()) continue;
+    try {
+      return parsePatchCandidate({ ...digestInput, patchHash });
+    } catch {
+      break;
+    }
+  }
+  throw new PatchGenerationError(
+    'invalid_input',
+    'The published GitHub suggestion does not match the approved patch hash.',
+  );
 }
 
 function providerFailureCode(

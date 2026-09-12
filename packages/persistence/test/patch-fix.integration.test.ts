@@ -224,6 +224,18 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         outboxEventId: approved.outboxEventId,
       });
 
+      await expect(claimPatchFixJob(pool, {
+        proposalId,
+        workerId: 'worker-1',
+        leaseMs: 60_000,
+      })).resolves.toBeNull();
+      await pool.query(
+        `UPDATE patch_proposals
+         SET github_reference_kind = 'review_comment', github_reference = $2
+         WHERE id = $1`,
+        [proposalId, 'https://github.com/owner/repo/pull/7#discussion_r42'],
+      );
+
       const claimed = await claimPatchFixJob(pool, {
         proposalId,
         workerId: 'worker-1',

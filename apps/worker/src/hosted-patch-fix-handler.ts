@@ -1,22 +1,19 @@
-import { randomUUID } from 'node:crypto';
-
 import type {
-  PatchCandidate,
   PatchFixJob,
   PatchReproofResult,
-  ProviderAdapter,
 } from '@walkz/contracts';
 import {
   bindPatchProofToRepositoryCommand,
   createPatchReproofBudget,
-  generatePatchCandidate,
-  prepareApprovedPatchSuggestion,
+  PatchGenerationError,
+  restorePublishedPatchCandidate,
   runApprovedPatchReproof,
   WALKZ_PATCH_PROMPT_VERSION,
 } from '@walkz/engine';
-import type {
-  GitHubInstallationToken,
-  InstallationGitHubSuggestionServiceFactory,
+import {
+  SuggestionPublicationError,
+  type GitHubInstallationToken,
+  type InstallationGitHubSuggestionServiceFactory,
 } from '@walkz/github';
 import {
   withHostedGitHubCheckout,
@@ -25,9 +22,7 @@ import {
 import type {
   ClaimedPatchFixTarget,
   PatchReproofRecordResult,
-  PatchSuggestionPublicationResult,
 } from '@walkz/persistence';
-import { createGroqProvider } from '@walkz/providers';
 import type { DockerWorkspaceVolume } from '@walkz/sandbox';
 import { z } from 'zod';
 
@@ -46,14 +41,6 @@ interface PatchFixLeaseInput {
   leaseMs: number;
 }
 
-interface PatchSuggestionStoreInput {
-  repositoryId: string;
-  actorUserId: string;
-  proposalId: string;
-  expectedPatchHash: string;
-  expectedHeadSha: string;
-}
-
 export interface HostedPatchFixStore {
   claim(input: PatchFixLeaseInput): Promise<PatchFixJob | null>;
   renew(input: PatchFixLeaseInput): Promise<boolean>;
@@ -61,24 +48,8 @@ export interface HostedPatchFixStore {
     proposalId: string;
     workerId: string;
   }): Promise<ClaimedPatchFixTarget | null>;
-  loadCredential(input: {
-    repositoryId: string;
-    provider: string;
-  }): Promise<string | null>;
   latestReproof(proposalId: string): Promise<PatchReproofResult | null>;
   recordReproof(result: PatchReproofResult): Promise<PatchReproofRecordResult>;
-  preparePublication(input: PatchSuggestionStoreInput & {
-    publicationLeaseOwner: string;
-    publicationLeaseMs: number;
-  }): Promise<PatchSuggestionPublicationResult>;
-  recordPublication(input: PatchSuggestionStoreInput & {
-    publicationLeaseOwner: string;
-    githubReferenceValue: string;
-  }): Promise<PatchSuggestionPublicationResult>;
-  releasePublication(input: {
-    proposalId: string;
-    publicationLeaseOwner: string;
-  }): Promise<boolean>;
   complete(input: {
     proposalId: string;
     workerId: string;
@@ -113,7 +84,6 @@ export interface HostedPatchFixHandlerOptions {
   proofImage: string;
   workspaceVolume?: DockerWorkspaceVolume;
   checkout?: Checkout;
-  createProvider?: (apiKey: string) => ProviderAdapter;
   runReproof?: typeof runApprovedPatchReproof;
 }
 
@@ -205,73 +175,6 @@ function startLeaseHeartbeat(
   };
 }
 
-async function publishSuggestion(
-  store: HostedPatchFixStore,
-  github: InstallationGitHubSuggestionServiceFactory,
-  target: ClaimedPatchFixTarget,
-  candidate: PatchCandidate,
-): Promise<void> {
-  const expected = {
-    repositoryId: target.repositoryId,
-    actorUserId: target.decidedByUserId,
-    proposalId: target.proposal.id,
-    expectedPatchHash: candidate.patchHash,
-    expectedHeadSha: candidate.headSha,
-  };
-  const publicationLeaseOwner = randomUUID();
-  const publication = await store.preparePublication({
-    ...expected,
-    publicationLeaseOwner,
-    publicationLeaseMs: 2 * 60_000,
-  });
-  if (publication.outcome === 'published') return;
-  if (publication.outcome !== 'ready' || publication.target === null) {
-    throw new Error(`Patch publication is not ready: ${publication.outcome}.`);
-  }
-  try {
-    const service = await github.forInstallation(target.installationId);
-    const remote = await service.loadHeadFile({
-      owner: target.owner,
-      repository: target.repository,
-      pullRequestNumber: target.pullRequestNumber,
-      headSha: candidate.headSha,
-      path: candidate.path,
-    });
-    const prepared = prepareApprovedPatchSuggestion({
-      candidate,
-      proposal: publication.target.proposal,
-      currentHeadSha: remote.currentHeadSha,
-      headFile: { path: remote.path, content: remote.content },
-    });
-    const published = await service.publish({
-      owner: target.owner,
-      repository: target.repository,
-      pullRequestNumber: target.pullRequestNumber,
-      proposalId: prepared.proposalId,
-      headSha: prepared.headSha,
-      patchHash: prepared.patchHash,
-      path: prepared.path,
-      startLine: prepared.startLine,
-      endLine: prepared.endLine,
-      replacement: prepared.replacement,
-    });
-    const recorded = await store.recordPublication({
-      ...expected,
-      publicationLeaseOwner,
-      githubReferenceValue: published.htmlUrl,
-    });
-    if (recorded.outcome !== 'applied' && recorded.outcome !== 'published' &&
-      recorded.outcome !== 'unchanged') {
-      throw new Error(`Patch publication could not be recorded: ${recorded.outcome}.`);
-    }
-  } finally {
-    await store.releasePublication({
-      proposalId: target.proposal.id,
-      publicationLeaseOwner,
-    });
-  }
-}
-
 export function createHostedPatchFixJobHandler(
   input: HostedPatchFixHandlerOptions,
 ): PatchFixJobHandler {
@@ -281,8 +184,6 @@ export function createHostedPatchFixJobHandler(
     proofImage: input.proofImage,
   });
   const checkout = input.checkout ?? withHostedGitHubCheckout;
-  const createProvider = input.createProvider ?? ((apiKey: string) =>
-    createGroqProvider({ apiKey }));
   const runReproof = input.runReproof ?? runApprovedPatchReproof;
 
   return {
@@ -294,8 +195,9 @@ export function createHostedPatchFixJobHandler(
       const heartbeat = startLeaseHeartbeat(input.store, lease, controller);
       let failure: Parameters<HostedPatchFixStore['fail']>[0]['failureCode'] | null = null;
       let retry = false;
-      let phase: 'loading' | 'binding' | 'generation' | 'reproof' |
-        'publication' | 'completion' = 'loading';
+      let retryCause: unknown;
+      let phase: 'loading' | 'binding' | 'candidate' | 'reproof' |
+        'completion' = 'loading';
       try {
         const target = await input.store.loadTarget({
           proposalId,
@@ -305,6 +207,14 @@ export function createHostedPatchFixJobHandler(
           failure = 'proof_binding_invalid';
           return;
         }
+        if (
+          target.proposal.githubReference === null ||
+          target.proposal.githubReference.kind !== 'review_comment'
+        ) {
+          failure = 'proof_binding_invalid';
+          return;
+        }
+        const githubReference = target.proposal.githubReference.value;
         phase = 'binding';
         const binding = bindPatchProofToRepositoryCommand({
           reviewRunId: target.reviewRunId,
@@ -351,46 +261,60 @@ export function createHostedPatchFixJobHandler(
           return;
         }
 
-        const [installation, credential, service] = await Promise.all([
+        const [installation, service] = await Promise.all([
           input.tokens.getInstallationToken(installationNumber(target.installationId)),
-          input.store.loadCredential({
-            repositoryId: target.repositoryId,
-            provider: target.job.provider,
-          }),
           input.github.forInstallation(target.installationId),
         ]);
-        if (credential === null) throw new Error('Patch provider credential is unavailable.');
-        phase = 'generation';
-        const headFile = await service.loadHeadFile({
-          owner: target.owner,
-          repository: target.repository,
-          pullRequestNumber: target.pullRequestNumber,
-          headSha: target.headSha,
-          path: target.finding.file,
-        });
-        const generated = await generatePatchCandidate({
-          reviewRunId: target.reviewRunId,
-          findingId: target.findingId,
-          baseSha: target.baseSha,
-          headSha: target.headSha,
-          currentHeadSha: headFile.currentHeadSha,
-          deliveryMode: 'suggestion',
-          model: target.job.model,
-          maxModelTokens: target.config.tokenBudget,
-          finding: {
-            path: target.finding.file,
-            startLine: target.finding.line,
-            endLine: target.finding.endLine ?? target.finding.line,
-            lifecycleStatus: 'verified',
-            evidenceLevel: 'VERIFIED',
-            claim: target.finding.claim,
-            failureMechanism: target.finding.failureMechanism,
-          },
-          headFile: { path: headFile.path, content: headFile.content },
-        }, { provider: createProvider(credential), signal: controller.signal });
-        if (generated.candidate.patchHash !== target.proposal.patchHash) {
-          failure = 'candidate_changed';
-          return;
+        phase = 'candidate';
+        let candidate;
+        try {
+          const published = await service.loadPublishedSuggestion({
+            owner: target.owner,
+            repository: target.repository,
+            pullRequestNumber: target.pullRequestNumber,
+            proposalId: target.proposal.id,
+            headSha: target.headSha,
+            patchHash: target.proposal.patchHash,
+            githubReference,
+          });
+          const headFile = await service.loadHeadFile({
+            owner: target.owner,
+            repository: target.repository,
+            pullRequestNumber: target.pullRequestNumber,
+            headSha: target.headSha,
+            path: published.path,
+          });
+          candidate = restorePublishedPatchCandidate({
+            reviewRunId: target.reviewRunId,
+            findingId: target.findingId,
+            baseSha: target.baseSha,
+            headSha: target.headSha,
+            currentHeadSha: headFile.currentHeadSha,
+            expectedPatchHash: target.proposal.patchHash,
+            path: published.path,
+            startLine: published.startLine,
+            endLine: published.endLine,
+            replacement: published.replacement,
+            headFile: { path: headFile.path, content: headFile.content },
+          });
+        } catch (error) {
+          if (error instanceof PatchGenerationError) {
+            failure = error.code === 'stale_head'
+              ? 'proof_binding_invalid'
+              : 'candidate_changed';
+            return;
+          }
+          if (error instanceof SuggestionPublicationError) {
+            if (error.code === 'stale_head') {
+              failure = 'proof_binding_invalid';
+              return;
+            }
+            if (error.code === 'invalid_input' || error.code === 'marker_conflict') {
+              failure = 'candidate_changed';
+              return;
+            }
+          }
+          throw error;
         }
 
         if (reproof === null) {
@@ -405,7 +329,7 @@ export function createHostedPatchFixJobHandler(
             attempt: target.job.attempt,
             finding: target.finding,
             proposal: target.proposal,
-            candidate: generated.candidate,
+            candidate,
             proofPlan: binding.plan,
             originalExecution: originalExecution(target),
             regressionPlans: binding.regressionPlans,
@@ -440,10 +364,6 @@ export function createHostedPatchFixJobHandler(
           reproof = recorded.result;
         }
 
-        if (reproof.outcome === 'resolved') {
-          phase = 'publication';
-          await publishSuggestion(input.store, input.github, target, generated.candidate);
-        }
         phase = 'completion';
         const completed = await input.store.complete({
           proposalId,
@@ -451,7 +371,8 @@ export function createHostedPatchFixJobHandler(
           outcome: reproof.outcome,
         });
         if (completed === null) throw new Error('Patch fix lease was lost before completion.');
-      } catch {
+      } catch (error) {
+        retryCause = error;
         if (phase === 'binding') {
           failure = 'proof_binding_invalid';
         } else if (controller.signal.aborted) {
@@ -461,9 +382,7 @@ export function createHostedPatchFixJobHandler(
         } else {
           failure = phase === 'reproof'
             ? 'proof_infrastructure_failed'
-            : phase === 'publication'
-              ? 'github_publication_failed'
-              : 'workflow_failed';
+            : 'workflow_failed';
         }
       } finally {
         const leaseOwned = await heartbeat.stop();
@@ -478,7 +397,12 @@ export function createHostedPatchFixJobHandler(
           await input.store.release({ proposalId, workerId: options.workerId });
         }
       }
-      if (retry) throw new Error('Patch fix will be retried.');
+      if (retry) {
+        throw new Error(
+          'Patch fix will be retried.',
+          retryCause instanceof Error ? { cause: retryCause } : undefined,
+        );
+      }
     },
   };
 }

@@ -72,6 +72,7 @@ export {
   buildPatchPrompt,
   generatePatchCandidate,
   PatchGenerationError,
+  restorePublishedPatchCandidate,
   toPatchProposalPersistenceInput,
   verifyPatchCandidateIntegrity,
   WALKZ_PATCH_PROMPT_VERSION,
@@ -96,6 +97,7 @@ export type {
 export {
   PatchPublicationError,
   prepareApprovedPatchSuggestion,
+  preparePatchSuggestionForApproval,
 } from './patch-publication.js';
 export type {
   PatchPublicationFailureCode,

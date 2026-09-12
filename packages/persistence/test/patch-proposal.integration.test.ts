@@ -155,23 +155,6 @@ describe('PostgreSQL patch proposal decisions', () => {
       },
     });
 
-    const approved = await decidePatchProposal(pool, {
-      repositoryId,
-      actorUserId: userId,
-      proposalId,
-      expectedPatchHash: patchHash,
-      expectedHeadSha: headSha,
-      decision: 'approved',
-    });
-    expect(approved).toMatchObject({
-      outcome: 'applied',
-      proposal: {
-        approvalStatus: 'approved',
-        decidedByUserId: userId,
-        staleAt: null,
-      },
-    });
-
     const firstLease = randomUUID();
     const secondLease = randomUUID();
     const publicationInput = {
@@ -214,6 +197,26 @@ describe('PostgreSQL patch proposal decisions', () => {
             kind: 'review_comment',
             value: githubReferenceValue,
           },
+        },
+      },
+    });
+    const approved = await decidePatchProposal(pool, {
+      repositoryId,
+      actorUserId: userId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      decision: 'approved',
+    });
+    expect(approved).toMatchObject({
+      outcome: 'applied',
+      proposal: {
+        approvalStatus: 'approved',
+        decidedByUserId: userId,
+        staleAt: null,
+        githubReference: {
+          kind: 'review_comment',
+          value: githubReferenceValue,
         },
       },
     });
@@ -279,8 +282,8 @@ describe('PostgreSQL patch proposal decisions', () => {
     );
     expect(audits.rows.map((row) => row.eventType)).toEqual([
       'patch_proposal.created',
-      'patch_proposal.approved',
       'patch_proposal.suggestion_published',
+      'patch_proposal.approved',
       'patch_proposal.stale',
     ]);
     const patchColumns = await pool.query(

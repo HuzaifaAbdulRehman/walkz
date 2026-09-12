@@ -6,7 +6,7 @@ import { patchCandidateSchema, type PatchProposal } from '@walkz/contracts';
 import {
   PatchGenerationError,
   PatchPublicationError,
-  prepareApprovedPatchSuggestion,
+  preparePatchSuggestionForApproval,
   verifyPatchCandidateIntegrity,
 } from '@walkz/engine';
 import type {
@@ -137,7 +137,7 @@ export function createPatchSuggestionPublisher(
           headSha: candidate.headSha,
           path: candidate.path,
         });
-        const prepared = prepareApprovedPatchSuggestion({
+        const prepared = preparePatchSuggestionForApproval({
           candidate,
           proposal: target.proposal,
           currentHeadSha: remote.currentHeadSha,

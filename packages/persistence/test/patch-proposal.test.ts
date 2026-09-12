@@ -314,6 +314,44 @@ describe('patch proposal persistence', () => {
     );
   });
 
+  it('rejects rejection after the GitHub suggestion is published', async () => {
+    const reference = 'https://github.com/octocat/walkz/pull/7#discussion_r321';
+    const query = vi.fn(async (sql: string, _values?: readonly unknown[]) => {
+      if (sql.includes('FOR UPDATE OF pp, pr')) {
+        return {
+          rows: [proposalRow({
+            githubReferenceKind: 'review_comment',
+            githubReferenceValue: reference,
+            currentHeadSha: headSha,
+            runStatus: 'awaiting_human',
+            findingLifecycleStatus: 'verified',
+            evidenceLevel: 'VERIFIED',
+          })],
+        };
+      }
+      if (sql.includes('INSERT INTO audit_events')) {
+        return { rows: [{ id: 'audit-id' }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(decidePatchProposal(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      decision: 'rejected',
+    })).resolves.toMatchObject({ outcome: 'conflict' });
+    expect(query.mock.calls.some(([sql]) =>
+      String(sql).includes('SET approval_status'))).toBe(false);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO audit_events'),
+      expect.arrayContaining(['patch_proposal.decision_conflict']),
+    );
+  });
+
   it('audits an idempotent decision without changing it again', async () => {
     const decidedAt = new Date('2026-09-11T00:01:00.000Z');
     const query = vi.fn(async (sql: string, _values?: readonly unknown[]) => {
@@ -430,6 +468,36 @@ describe('patch proposal persistence', () => {
       .toBe(false);
   });
 
+  it('leases a pending exact suggestion before the approval write', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('gi.github_id::text')) {
+        return { rows: [publicationRow({
+          approvalStatus: 'pending',
+          decidedByUserId: null,
+          decidedAt: null,
+        })] };
+      }
+      if (sql.includes('SET publication_lease_owner')) {
+        return { rows: [{ id: proposalId }] };
+      }
+      return { rows: [] };
+    });
+    const { pool } = createPool(query);
+
+    await expect(preparePatchSuggestionPublication(pool, {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      publicationLeaseOwner: proposalId,
+      publicationLeaseMs: 120_000,
+    })).resolves.toMatchObject({
+      outcome: 'ready',
+      target: { proposal: { approvalStatus: 'pending' } },
+    });
+  });
+
   it('refuses and marks a publication stale when the pull request moved', async () => {
     const staleAt = new Date('2026-09-11T00:02:00.000Z');
     const query = vi.fn(async (sql: string) => {
@@ -542,6 +610,9 @@ describe('patch proposal persistence', () => {
       expect.stringContaining("SET github_reference_kind = 'review_comment'"),
       [proposalId, reference, false, patchHash, headSha, proposalId],
     );
+    expect(query.mock.calls.some(([sql]) =>
+      String(sql).includes("approval_status IN ('pending', 'approved')")))
+      .toBe(true);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO audit_events'),
       expect.arrayContaining(['patch_proposal.suggestion_published']),

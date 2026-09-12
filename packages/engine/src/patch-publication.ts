@@ -94,8 +94,9 @@ function parseInputs(input: PreparePatchSuggestionInput): {
   }
 }
 
-export function prepareApprovedPatchSuggestion(
+function preparePatchSuggestion(
   input: PreparePatchSuggestionInput,
+  allowPendingApproval: boolean,
 ): PreparedPatchSuggestion {
   const { candidate, proposal, currentHeadSha, headFile } = parseInputs(input);
   if (candidate.deliveryMode !== 'suggestion' || proposal.deliveryMode !== 'suggestion') {
@@ -104,7 +105,11 @@ export function prepareApprovedPatchSuggestion(
       'This publication path accepts GitHub suggestions only.',
     );
   }
-  if (proposal.approvalStatus !== 'approved' || proposal.decidedByUserId === null) {
+  if (
+    proposal.approvalStatus === 'rejected' ||
+    (!allowPendingApproval &&
+      (proposal.approvalStatus !== 'approved' || proposal.decidedByUserId === null))
+  ) {
     throw new PatchPublicationError(
       'not_approved',
       'A user must approve the exact patch proposal before publication.',
@@ -164,4 +169,16 @@ export function prepareApprovedPatchSuggestion(
     originalHash: candidate.originalHash.toLowerCase(),
     replacement: candidate.replacement,
   };
+}
+
+export function prepareApprovedPatchSuggestion(
+  input: PreparePatchSuggestionInput,
+): PreparedPatchSuggestion {
+  return preparePatchSuggestion(input, false);
+}
+
+export function preparePatchSuggestionForApproval(
+  input: PreparePatchSuggestionInput,
+): PreparedPatchSuggestion {
+  return preparePatchSuggestion(input, true);
 }

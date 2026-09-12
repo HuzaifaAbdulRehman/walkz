@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   generatePatchCandidate,
   prepareApprovedPatchSuggestion,
+  preparePatchSuggestionForApproval,
   WALKZ_PATCH_PROMPT_VERSION,
 } from '../src/index.js';
 
@@ -161,6 +162,26 @@ describe('approved patch publication preparation', () => {
       currentHeadSha: 'c'.repeat(40),
       headFile,
     })).toThrow('head changed');
+  });
+
+  it('prepares an exact pending suggestion for the approval action', async () => {
+    const { candidate, proposal } = await fixture();
+
+    expect(preparePatchSuggestionForApproval({
+      candidate,
+      proposal: {
+        ...proposal,
+        approvalStatus: 'pending',
+        decidedByUserId: null,
+        decidedAt: null,
+      },
+      currentHeadSha: headSha,
+      headFile,
+    })).toMatchObject({
+      proposalId,
+      patchHash: candidate.patchHash,
+      replacement: candidate.replacement,
+    });
   });
 
   it('rejects tampered candidates, proposals, paths, and source lines', async () => {

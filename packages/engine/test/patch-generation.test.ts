@@ -11,6 +11,7 @@ import {
   buildPatchPrompt,
   generatePatchCandidate,
   PatchGenerationError,
+  restorePublishedPatchCandidate,
   toPatchProposalPersistenceInput,
   verifyPatchCandidateIntegrity,
   WALKZ_PATCH_PROMPT_VERSION,
@@ -112,6 +113,60 @@ function provider(patch: ModelPatchResponse): ProviderAdapter {
 }
 
 describe('bounded patch generation', () => {
+  it('restores only the exact candidate published in a GitHub suggestion', async () => {
+    const generated = await generatePatchCandidate(input, {
+      provider: provider(response()),
+    });
+    const restored = restorePublishedPatchCandidate({
+      reviewRunId,
+      findingId,
+      baseSha,
+      headSha,
+      currentHeadSha: headSha,
+      expectedPatchHash: generated.candidate.patchHash,
+      path: generated.candidate.path,
+      startLine: generated.candidate.startLine,
+      endLine: generated.candidate.endLine,
+      replacement: generated.candidate.replacement,
+      headFile: input.headFile,
+    });
+
+    expect(restored).toEqual(generated.candidate);
+    expect(() => restorePublishedPatchCandidate({
+      reviewRunId,
+      findingId,
+      baseSha,
+      headSha,
+      currentHeadSha: headSha,
+      expectedPatchHash: generated.candidate.patchHash,
+      path: generated.candidate.path,
+      startLine: generated.candidate.startLine,
+      endLine: generated.candidate.endLine,
+      replacement: 'tampered replacement',
+      headFile: input.headFile,
+    })).toThrow('does not match the approved patch hash');
+  });
+
+  it('restores an approved replacement that ends with a newline', async () => {
+    const generated = await generatePatchCandidate(input, {
+      provider: provider(response({ replacement: '  return input ?? fallback;\n' })),
+    });
+
+    expect(restorePublishedPatchCandidate({
+      reviewRunId,
+      findingId,
+      baseSha,
+      headSha,
+      currentHeadSha: headSha,
+      expectedPatchHash: generated.candidate.patchHash,
+      path: generated.candidate.path,
+      startLine: generated.candidate.startLine,
+      endLine: generated.candidate.endLine,
+      replacement: generated.candidate.replacement.slice(0, -1),
+      headFile: input.headFile,
+    })).toEqual(generated.candidate);
+  });
+
   it('sends only provider contract fields for patch generation', async () => {
     const selectedProvider = provider(response());
 

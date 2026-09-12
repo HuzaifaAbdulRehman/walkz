@@ -100,5 +100,6 @@ export type {
   GitHubSuggestionService,
   InstallationGitHubSuggestionServiceFactory,
   PublishedSuggestion,
+  PublishedSuggestionContent,
   SuggestionPublicationFailureCode,
 } from './suggestion.js';

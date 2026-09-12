@@ -25,3 +25,7 @@ export function patchProposalPath(
 export function patchDecisionPath(repositoryId: string, proposalId: string): string {
   return `/api/repositories/${segment(repositoryId)}/patch-proposals/${segment(proposalId)}/decision`;
 }
+
+export function patchSuggestionPath(repositoryId: string, proposalId: string): string {
+  return `/api/repositories/${segment(repositoryId)}/patch-proposals/${segment(proposalId)}/publish-suggestion`;
+}

@@ -9,10 +9,13 @@ import {
   type TransientPatchCandidate,
 } from './lib/patch-fixes';
 import {
-  patchDecisionPath,
   patchFixesPath,
   patchProposalPath,
 } from './lib/repository-api-paths';
+import {
+  submitPatchDecision,
+  submitStoredPatchDecision,
+} from './lib/patch-fix-actions';
 
 interface PatchFixControlsProps {
   repositoryId: string;
@@ -26,7 +29,9 @@ const activeStatuses = new Set(['queued', 'reproving']);
 function statusMessage(fix: DashboardPatchFix): string {
   switch (fix.status) {
     case 'awaiting_approval':
-      return 'This proposal still needs your approval.';
+      return fix.githubReference === null
+        ? 'This proposal still needs your approval.'
+        : 'The exact suggestion is on GitHub and still needs your approval.';
     case 'queued':
       return 'Approved. Reproof is queued.';
     case 'reproving':
@@ -123,21 +128,26 @@ export function PatchFixControls({ repositoryId, reviewRunId, findingId }: Patch
     if (candidate === null) return;
     setView('deciding');
     try {
-      const response = await fetch(
-        patchDecisionPath(repositoryId, candidate.proposalId),
-        {
-          method: 'POST',
-          cache: 'no-store',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            expectedPatchHash: candidate.patchHash,
-            expectedHeadSha: candidate.headSha,
-            decision,
-          }),
-        },
-      );
-      if (!response.ok) throw new Error('Patch decision request failed.');
+      await submitPatchDecision(fetch, repositoryId, candidate, decision);
       setCandidate(null);
+      await load();
+    } catch {
+      setView('failed');
+    }
+  };
+
+  const resumeApproval = async () => {
+    if (fix === null || fix.githubReference === null) return;
+    setView('deciding');
+    try {
+      await submitStoredPatchDecision(
+        fetch,
+        repositoryId,
+        fix.proposalId,
+        fix.patchHash,
+        fix.headSha,
+        'approved',
+      );
       await load();
     } catch {
       setView('failed');
@@ -189,9 +199,21 @@ export function PatchFixControls({ repositoryId, reviewRunId, findingId }: Patch
           </div>
         </div>
       )}
+      {candidate === null && fix?.status === 'awaiting_approval' &&
+        fix.githubReference !== null ? (
+          <button
+            className="primary-action"
+            disabled={view === 'deciding'}
+            onClick={() => void resumeApproval()}
+            type="button"
+          >
+            {view === 'deciding' ? 'Approving...' : 'Resume approval and re-prove'}
+          </button>
+        ) : null}
       {candidate !== null || (fix !== null && activeStatuses.has(fix.status)) ||
         fix?.status === 'resolved' || fix?.status === 'unresolved' ||
-        fix?.status === 'inconclusive' || fix?.status === 'rejected' ? null : (
+        fix?.status === 'inconclusive' || fix?.status === 'rejected' ||
+        (fix?.status === 'awaiting_approval' && fix.githubReference !== null) ? null : (
           <button
             className="secondary-action"
             disabled={view === 'generating' || view === 'loading'}

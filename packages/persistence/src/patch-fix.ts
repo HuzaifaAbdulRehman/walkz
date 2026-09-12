@@ -354,6 +354,8 @@ export async function claimPatchFixJob(
        AND f.review_run_id = pp.review_run_id
        AND pp.approval_status = 'approved'
        AND pp.decided_by_user_id IS NOT NULL
+       AND pp.github_reference_kind = 'review_comment'
+       AND pp.github_reference IS NOT NULL
        AND pp.stale_at IS NULL
        AND pp.head_sha = pr.head_sha
        AND rr.status = 'awaiting_human'
@@ -469,16 +471,19 @@ export async function listRecoverablePatchFixProposalIds(
 ): Promise<string[]> {
   const limit = z.number().int().min(1).max(1_000).parse(inputValue);
   const result = await pool.query<{ proposalId: string }>(
-    `SELECT proposal_id AS "proposalId"
-     FROM patch_fix_jobs
-     WHERE attempt < 5
+    `SELECT pfj.proposal_id AS "proposalId"
+     FROM patch_fix_jobs pfj
+     JOIN patch_proposals pp ON pp.id = pfj.proposal_id
+     WHERE pp.github_reference_kind = 'review_comment'
+       AND pp.github_reference IS NOT NULL
+       AND pfj.attempt < 5
        AND (
-         status = 'queued' OR (
-           status = 'reproving' AND
-           (lease_expires_at IS NULL OR lease_expires_at <= now())
+         pfj.status = 'queued' OR (
+           pfj.status = 'reproving' AND
+           (pfj.lease_expires_at IS NULL OR pfj.lease_expires_at <= now())
          )
        )
-     ORDER BY updated_at ASC, proposal_id ASC
+     ORDER BY pfj.updated_at ASC, pfj.proposal_id ASC
      LIMIT $1`,
     [limit],
   );
