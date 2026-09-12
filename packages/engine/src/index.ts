@@ -30,6 +30,14 @@ export {
   verifyProofPlan,
 } from './proof-plan.js';
 export {
+  bindPatchProofToRepositoryCommand,
+  createPatchReproofBudget,
+} from './patch-proof-binding.js';
+export type {
+  BoundPatchProof,
+  PatchProofBindingInput,
+} from './patch-proof-binding.js';
+export {
   runAndAssessCounterfactualProof,
   runProofPlanInContainers,
 } from './proof-execution.js';

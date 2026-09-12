@@ -75,7 +75,9 @@ describe('patch reproof persistence', () => {
     expect(query.mock.calls[3]?.[0]).toContain("f.evidence_level = 'VERIFIED'");
     expect(query.mock.calls[4]?.[1]).toEqual([
       findingId,
+      result.proof.planDigest,
       result.proof.commandDigest,
+      result.proof.outcome,
       0,
       20,
       'Approved patch reproof was resolved; 1 regression check.',
@@ -88,7 +90,7 @@ describe('patch reproof persistence', () => {
       'resolved',
       JSON.stringify(result),
     ]);
-    const stored = JSON.parse(query.mock.calls[4]?.[1]?.[12] as string);
+    const stored = JSON.parse(query.mock.calls[4]?.[1]?.[14] as string);
     expect(stored).not.toHaveProperty('replacement');
     expect(stored).not.toHaveProperty('patchText');
     expect(release).toHaveBeenCalledOnce();

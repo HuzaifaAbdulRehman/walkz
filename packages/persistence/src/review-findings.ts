@@ -7,6 +7,7 @@ const reviewFindingQuerySchema = z.object({
 }).strict();
 
 const reviewFindingSchema = z.object({
+  id: z.uuid(),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/i),
   category: z.enum([
     'correctness',
@@ -53,7 +54,8 @@ export async function listReviewFindings(
   const query = reviewFindingQuerySchema.parse(input);
   const result = await pool.query(
     `
-      SELECT f.fingerprint,
+      SELECT f.id,
+             f.fingerprint,
              f.category,
              f.severity,
              f.file_path AS path,

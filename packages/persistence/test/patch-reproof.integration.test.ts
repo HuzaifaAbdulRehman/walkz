@@ -181,16 +181,19 @@ describe('PostgreSQL patch reproof evidence', () => {
 
     await expect(pool.query(
       `INSERT INTO evidence (
-        finding_id, evidence_kind, command_digest, head_exit_code,
+        finding_id, evidence_kind, plan_digest, command_digest,
+        head_outcome, head_exit_code,
         duration_ms, sanitized_summary, artifact_hashes,
         review_run_id, patch_proposal_id, patch_hash, head_sha,
         reproof_attempt, reproof_outcome, reproof_result
       ) VALUES (
-        $1, 'patch_reproof', $2, 0, 1, 'tampered', '[]'::jsonb,
-        $3, $4, $5, $6, 2, 'resolved', $7::jsonb
+        $1, 'patch_reproof', $2, $3, 'passed', 0,
+        1, 'tampered', '[]'::jsonb,
+        $4, $5, $6, $7, 2, 'resolved', $8::jsonb
       )`,
       [
         findingId,
+        result.proof.planDigest,
         result.proof.commandDigest,
         runId,
         proposalId,

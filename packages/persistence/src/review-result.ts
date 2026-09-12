@@ -11,6 +11,29 @@ import {
 } from './outbox.js';
 
 const shaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
+const digestSchema = z.string().regex(/^[a-f0-9]{64}$/i);
+const proofOutcomeSchema = z.enum([
+  'passed',
+  'failed',
+  'timed_out',
+  'cancelled',
+  'infrastructure_error',
+]);
+const counterfactualEvidenceSchema = z.object({
+  kind: z.literal('counterfactual_proof'),
+  planDigest: digestSchema,
+  commandDigest: digestSchema,
+  baseSha: shaSchema,
+  headSha: shaSchema,
+  baseOutcome: proofOutcomeSchema,
+  headOutcome: proofOutcomeSchema,
+  baseExitCode: z.number().int().nullable(),
+  headExitCode: z.number().int().nullable(),
+  durationMs: z.number().int().nonnegative(),
+  sanitizedSummary: z.string().max(65_536),
+  artifactHashes: z.array(digestSchema).max(64),
+  recordedAt: z.string().datetime({ offset: true }),
+}).strict();
 const persistedFindingSchema = githubCheckResultFindingSchema.extend({
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/i),
   category: z.enum([
@@ -35,6 +58,7 @@ const persistedFindingSchema = githubCheckResultFindingSchema.extend({
   claim: z.string().trim().min(1).max(2_000),
   failureMechanism: z.string().trim().min(1).max(4_000),
   suggestedProof: z.string().trim().min(1).max(4_000),
+  evidence: z.array(counterfactualEvidenceSchema).max(8).default([]),
 });
 
 const completedReviewRunInputSchema = z
@@ -51,6 +75,33 @@ const completedReviewRunInputSchema = z
   .refine((result) => result.baseSha !== result.headSha, {
     message: 'Review results must compare different base and head commits.',
     path: ['headSha'],
+  })
+  .superRefine((result, context) => {
+    result.findings.forEach((finding, findingIndex) => {
+      for (const [evidenceIndex, evidence] of finding.evidence.entries()) {
+        if (
+          evidence.baseSha.toLowerCase() !== result.baseSha.toLowerCase() ||
+          evidence.headSha.toLowerCase() !== result.headSha.toLowerCase()
+        ) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Finding evidence must match the review run revisions.',
+            path: ['findings', findingIndex, 'evidence', evidenceIndex],
+          });
+        }
+      }
+      if (
+        finding.evidenceLevel === 'VERIFIED' &&
+        !finding.evidence.some((evidence) =>
+          evidence.baseOutcome === 'passed' && evidence.headOutcome === 'failed')
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Verified findings require bound counterfactual evidence.',
+          path: ['findings', findingIndex, 'evidence'],
+        });
+      }
+    });
   });
 
 const lockedReviewRunSchema = z
@@ -81,9 +132,11 @@ export interface CompletedHostedReviewRun {
 
 function terminalStatusForVerdict(
   verdict: z.infer<typeof githubCheckVerdictSchema>,
-): 'completed' | 'inconclusive' | 'failed' {
+  hasVerifiedFinding: boolean,
+): 'awaiting_human' | 'completed' | 'inconclusive' | 'failed' {
   if (verdict === 'INCONCLUSIVE') return 'inconclusive';
   if (verdict === 'ERROR') return 'failed';
+  if (verdict === 'FIX' && hasVerifiedFinding) return 'awaiting_human';
   return 'completed';
 }
 
@@ -144,7 +197,7 @@ async function persistFindings(
   findings: z.infer<typeof persistedFindingSchema>[],
 ): Promise<void> {
   if (findings.length === 0) return;
-  await client.query(
+  const inserted = await client.query(
     `
       INSERT INTO findings (
         review_run_id, fingerprint, lifecycle_status, evidence_level,
@@ -178,10 +231,59 @@ async function persistFindings(
         "advisoryConfidence" double precision,
         claim text,
         "failureMechanism" text,
-        "suggestedProof" text
+        "suggestedProof" text,
+        evidence jsonb
       )
+      RETURNING id, fingerprint
     `,
     [reviewRunId, JSON.stringify(findings)],
+  );
+  const findingIds = new Map<string, string>(
+    inserted.rows.map((row) => [String(row.fingerprint), String(row.id)]),
+  );
+  const evidence = findings.flatMap((finding) =>
+    finding.evidence.map((item) => ({
+      findingId: findingIds.get(finding.fingerprint),
+      ...item,
+    })));
+  if (evidence.length === 0) return;
+  if (evidence.some((item) => item.findingId === undefined)) {
+    throw new Error('Finding evidence could not be bound to its durable finding.');
+  }
+  await client.query(
+    `
+      INSERT INTO evidence (
+        finding_id, evidence_kind, plan_digest, command_digest,
+        base_outcome, head_outcome, base_exit_code, head_exit_code,
+        duration_ms, sanitized_summary, artifact_hashes, created_at
+      )
+      SELECT item."findingId"::uuid,
+             'counterfactual_proof',
+             item."planDigest",
+             item."commandDigest",
+             item."baseOutcome",
+             item."headOutcome",
+             item."baseExitCode",
+             item."headExitCode",
+             item."durationMs",
+             item."sanitizedSummary",
+             item."artifactHashes",
+             item."recordedAt"::timestamptz
+      FROM jsonb_to_recordset($1::jsonb) AS item(
+        "findingId" text,
+        "planDigest" text,
+        "commandDigest" text,
+        "baseOutcome" text,
+        "headOutcome" text,
+        "baseExitCode" integer,
+        "headExitCode" integer,
+        "durationMs" integer,
+        "sanitizedSummary" text,
+        "artifactHashes" jsonb,
+        "recordedAt" text
+      )
+    `,
+    [JSON.stringify(evidence)],
   );
 }
 
@@ -218,7 +320,7 @@ export async function completeHostedReviewRun(
       },
     });
 
-    if (['completed', 'inconclusive', 'failed'].includes(run.status)) {
+    if (['awaiting_human', 'completed', 'inconclusive', 'failed'].includes(run.status)) {
       const existing = await findCompletedEvent(client, run.id);
       if (
         existing === null ||
@@ -242,14 +344,17 @@ export async function completeHostedReviewRun(
       throw new Error('Review run lease is not owned by this worker.');
     }
 
-    const terminalStatus = terminalStatusForVerdict(result.verdict);
+    const terminalStatus = terminalStatusForVerdict(
+      result.verdict,
+      result.findings.some((finding) => finding.evidenceLevel === 'VERIFIED'),
+    );
     const updated = await client.query(
       `
         UPDATE review_runs
         SET status = $2,
             verdict = $3,
             result_summary = $4,
-            completed_at = now(),
+            completed_at = CASE WHEN $2 = 'awaiting_human' THEN NULL ELSE now() END,
             worker_lease_owner = NULL,
             worker_lease_expires_at = NULL
         WHERE id = $1 AND status = $5 AND worker_lease_owner = $6

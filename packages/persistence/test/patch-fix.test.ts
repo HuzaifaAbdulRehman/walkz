@@ -205,7 +205,7 @@ describe('hosted patch fix persistence', () => {
     expect(sql).toContain("pp.approval_status = 'approved'");
     expect(sql).toContain('pp.head_sha = pr.head_sha');
     expect(sql).toContain("f.evidence_level = 'VERIFIED'");
-    expect(sql).toContain('pp.github_reference IS NULL');
+    expect(sql).not.toContain('pp.github_reference IS NULL');
   });
 
   it('requires matching reproof evidence before completion', async () => {
@@ -226,7 +226,7 @@ describe('hosted patch fix persistence', () => {
     })).resolves.toMatchObject({ status: 'resolved' });
     const sql = String(query.mock.calls[0]?.[0]);
     expect(sql).toContain("e.evidence_kind = 'patch_reproof'");
-    expect(sql).toContain('e.reproof_attempt = pfj.attempt');
+    expect(sql).not.toContain('e.reproof_attempt = pfj.attempt');
     expect(sql).toContain("pp.github_reference IS NOT NULL");
   });
 

@@ -8,6 +8,7 @@ const reviewRunId = '08d0dd85-734e-4f74-bcfc-3436ec7b4abd';
 describe('review finding persistence', () => {
   it('scopes the bounded result to one repository and run', async () => {
     const row = {
+      id: '2d437195-a9f0-4af9-aaf4-3cbda1c8f61f',
       fingerprint: 'a'.repeat(64),
       category: 'correctness',
       severity: 'high',

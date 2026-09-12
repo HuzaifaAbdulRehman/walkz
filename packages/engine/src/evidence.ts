@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import {
   parseModelReviewResponse,
   type DeterministicCheckResult,
@@ -13,6 +11,7 @@ import {
   validateFindingLocation,
   type FindingLocationFailure,
 } from './finding.js';
+import { digestProofCommand } from './proof-plan.js';
 
 export type FindingRejectionReason =
   | FindingLocationFailure
@@ -52,16 +51,11 @@ function locationAppears(
 }
 
 function commandDigest(check: DeterministicCheckResult): string {
-  return createHash('sha256')
-    .update(
-      JSON.stringify([
-        check.command.executable,
-        check.command.args,
-        check.command.cwd ?? '.',
-      ]),
-      'utf8',
-    )
-    .digest('hex');
+  return digestProofCommand({
+    executable: check.command.executable,
+    args: check.command.args,
+    cwd: check.command.cwd ?? '.',
+  });
 }
 
 function attachDeterministicSupport(

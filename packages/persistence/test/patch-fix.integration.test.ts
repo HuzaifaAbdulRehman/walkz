@@ -1,5 +1,10 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 
+import { createDefaultWalkzConfig } from '@walkz/contracts';
+import {
+  bindPatchProofToRepositoryCommand,
+  digestProofCommand,
+} from '@walkz/engine';
 import { Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +13,7 @@ import {
   completePatchFixJob,
   createPatchFixProposal,
   decidePatchFixProposal,
+  loadClaimedPatchFixTarget,
   releasePatchFixJob,
 } from '../src/index.js';
 
@@ -45,6 +51,27 @@ describe('PostgreSQL hosted patch fix jobs', () => {
     const baseSha = 'a'.repeat(40);
     const headSha = 'b'.repeat(40);
     const patchHash = 'c'.repeat(64);
+    const proofImage = `node@sha256:${'f'.repeat(64)}`;
+    const command = { executable: 'npm', args: ['test'], cwd: '.' };
+    const config = {
+      ...createDefaultWalkzConfig([{
+        id: 'test', ...command, required: true,
+      }]),
+      commandApprovalPolicy: 'trusted_config' as const,
+    };
+    const configHash = createHash('sha256')
+      .update(JSON.stringify(config), 'utf8')
+      .digest('hex');
+    const commandDigest = digestProofCommand(command);
+    const proofBinding = bindPatchProofToRepositoryCommand({
+      reviewRunId,
+      findingFingerprint: 'e'.repeat(64),
+      baseSha,
+      headSha,
+      commandDigest,
+      containerImage: proofImage,
+      config,
+    });
     let proposalId: string | null = null;
 
     try {
@@ -76,9 +103,9 @@ describe('PostgreSQL hosted patch fix jobs', () => {
       );
       await pool.query(
         `INSERT INTO repository_configs
-          (id, repository_id, schema_version, config_hash, config)
-         VALUES ($1, $2, 1, $3, '{}'::jsonb)`,
-        [configId, repositoryId, 'd'.repeat(64)],
+         (id, repository_id, schema_version, config_hash, config)
+         VALUES ($1, $2, 1, $3, $4::jsonb)`,
+        [configId, repositoryId, configHash, JSON.stringify(config)],
       );
       await pool.query(
         `INSERT INTO pull_requests
@@ -97,7 +124,7 @@ describe('PostgreSQL hosted patch fix jobs', () => {
           repositoryId,
           pullRequestId,
           configId,
-          'd'.repeat(64),
+          configHash,
           baseSha,
           headSha,
         ],
@@ -105,9 +132,24 @@ describe('PostgreSQL hosted patch fix jobs', () => {
       await pool.query(
         `INSERT INTO findings
           (id, review_run_id, fingerprint, lifecycle_status,
-           evidence_level, summary)
-         VALUES ($1, $2, $3, 'verified', 'VERIFIED', 'Verified regression')`,
+           evidence_level, summary, category, severity, file_path,
+           start_line, end_line, claim, failure_mechanism,
+           suggested_proof, advisory_confidence)
+         VALUES ($1, $2, $3, 'verified', 'VERIFIED', 'Verified regression',
+                 'correctness', 'high', 'src/value.ts', 3, 3,
+                 'The fallback is ignored.', 'Undefined is returned.',
+                 'Run npm test.', 0.99)`,
         [findingId, reviewRunId, 'e'.repeat(64)],
+      );
+      await pool.query(
+        `INSERT INTO evidence
+          (finding_id, evidence_kind, plan_digest, command_digest,
+           base_outcome, head_outcome, base_exit_code, head_exit_code,
+           duration_ms, sanitized_summary, artifact_hashes)
+         VALUES ($1, 'counterfactual_proof', $2, $3,
+                 'passed', 'failed', 0, 1, 20,
+                 'Base passed; head failed.', '[]'::jsonb)`,
+        [findingId, proofBinding.planDigest, commandDigest],
       );
 
       const created = await createPatchFixProposal(pool, {
@@ -122,8 +164,8 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         provider: 'groq',
         model: 'openai/gpt-oss-120b',
         promptVersion: 'walkz-patch-v1',
-        proofPlanDigest: 'f'.repeat(64),
-        proofCommandDigest: '1'.repeat(64),
+        proofPlanDigest: proofBinding.planDigest,
+        proofCommandDigest: commandDigest,
       });
       proposalId = created.proposal.id;
 
@@ -153,6 +195,21 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         leaseMs: 60_000,
       });
       expect(claimed).toMatchObject({ status: 'reproving', attempt: 1 });
+      await expect(loadClaimedPatchFixTarget(pool, {
+        proposalId,
+        workerId: 'worker-1',
+      })).resolves.toMatchObject({
+        repositoryId,
+        decidedByUserId: userId,
+        proof: {
+          planDigest: proofBinding.planDigest,
+          commandDigest,
+          baseOutcome: 'passed',
+          headOutcome: 'failed',
+        },
+        proposal: { patchHash, headSha },
+        job: { status: 'reproving', attempt: 1 },
+      });
       await expect(completePatchFixJob(pool, {
         proposalId,
         workerId: 'worker-1',
@@ -180,6 +237,10 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         await pool.query('DELETE FROM patch_fix_jobs WHERE proposal_id = $1', [proposalId]);
       }
       await pool.query('DELETE FROM patch_proposals WHERE review_run_id = $1', [reviewRunId]);
+      await pool.query(
+        'DELETE FROM evidence WHERE finding_id IN (SELECT id FROM findings WHERE review_run_id = $1)',
+        [reviewRunId],
+      );
       await pool.query('DELETE FROM findings WHERE review_run_id = $1', [reviewRunId]);
       await pool.query('DELETE FROM review_runs WHERE id = $1', [reviewRunId]);
       await pool.query('DELETE FROM pull_requests WHERE id = $1', [pullRequestId]);

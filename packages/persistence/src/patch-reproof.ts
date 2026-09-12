@@ -21,6 +21,26 @@ export interface PatchReproofRecordResult {
   result: PatchReproofResult | null;
 }
 
+export async function getLatestPatchReproofResult(
+  pool: Pick<Pool, 'query'>,
+  proposalIdInput: unknown,
+): Promise<PatchReproofResult | null> {
+  const proposalId = z.uuid().parse(proposalIdInput);
+  const result = await pool.query(
+    `SELECT reproof_result AS result
+     FROM evidence
+     WHERE evidence_kind = 'patch_reproof'
+       AND patch_proposal_id = $1
+     ORDER BY reproof_attempt DESC
+     LIMIT 1`,
+    [proposalId],
+  );
+  const row = result.rows[0];
+  return row === undefined
+    ? null
+    : parsePatchReproofResult(existingReproofRowSchema.parse(row).result);
+}
+
 function sameResult(left: PatchReproofResult, right: PatchReproofResult): boolean {
   return isDeepStrictEqual(left, right);
 }
@@ -169,18 +189,21 @@ export async function recordPatchReproofResult(
     await client.query(
       `
         INSERT INTO evidence (
-          finding_id, evidence_kind, command_digest, head_exit_code,
+          finding_id, evidence_kind, plan_digest, command_digest,
+          head_outcome, head_exit_code,
           duration_ms, sanitized_summary, artifact_hashes,
           review_run_id, patch_proposal_id, patch_hash, head_sha,
           reproof_attempt, reproof_outcome, reproof_result
         ) VALUES (
-          $1, 'patch_reproof', $2, $3, $4, $5, $6::jsonb,
-          $7, $8, $9, $10, $11, $12, $13::jsonb
+          $1, 'patch_reproof', $2, $3, $4, $5, $6, $7, $8::jsonb,
+          $9, $10, $11, $12, $13, $14, $15::jsonb
         )
       `,
       [
         result.findingId,
+        result.proof.planDigest,
         result.proof.commandDigest,
+        result.proof.outcome,
         result.proof.exitCode,
         durationMs,
         resultSummary(result),

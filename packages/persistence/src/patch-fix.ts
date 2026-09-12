@@ -81,6 +81,42 @@ const patchFixJobRowSchema = z.object({
   completedAt: z.coerce.date().nullable(),
 }).strict();
 
+const patchFixListInputSchema = z.object({
+  repositoryId: z.uuid(),
+  reviewRunId: z.uuid(),
+}).strict();
+const patchFixListRowSchema = z.object({
+  proposalId: z.uuid(),
+  findingId: z.uuid(),
+  headSha: sha1Schema,
+  patchHash: sha256Schema,
+  approvalStatus: z.enum(['pending', 'approved', 'rejected']),
+  githubReference: z.string().nullable(),
+  status: z.enum([
+    'awaiting_approval',
+    'queued',
+    'reproving',
+    'resolved',
+    'unresolved',
+    'inconclusive',
+    'rejected',
+    'failed',
+  ]),
+  attempt: z.number().int().nonnegative(),
+  failureCode: z.enum([
+    'candidate_changed',
+    'proof_binding_invalid',
+    'proof_infrastructure_failed',
+    'github_publication_failed',
+    'workflow_failed',
+  ]).nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  completedAt: z.coerce.date().nullable(),
+}).strict();
+
+export type PatchFixListItem = z.infer<typeof patchFixListRowSchema>;
+
 function jobColumns(prefix = ''): string {
   return `
     ${prefix}proposal_id AS "proposalId",
@@ -284,7 +320,6 @@ export async function claimPatchFixJob(
        AND pp.approval_status = 'approved'
        AND pp.decided_by_user_id IS NOT NULL
        AND pp.stale_at IS NULL
-       AND pp.github_reference IS NULL
        AND pp.head_sha = pr.head_sha
        AND rr.status = 'awaiting_human'
        AND f.lifecycle_status = 'verified'
@@ -362,7 +397,6 @@ export async function completePatchFixJob(
          FROM evidence e
          WHERE e.evidence_kind = 'patch_reproof'
            AND e.patch_proposal_id = pfj.proposal_id
-           AND e.reproof_attempt = pfj.attempt
            AND e.reproof_outcome = $3
        )
        AND ($3 <> 'resolved' OR pp.github_reference IS NOT NULL)
@@ -416,4 +450,34 @@ export async function listRecoverablePatchFixProposalIds(
   return z.array(z.object({ proposalId: z.uuid() }).strict())
     .parse(result.rows)
     .map((row) => row.proposalId);
+}
+
+export async function listPatchFixes(
+  pool: Pick<Pool, 'query'>,
+  inputValue: unknown,
+): Promise<PatchFixListItem[]> {
+  const input = patchFixListInputSchema.parse(inputValue);
+  const result = await pool.query(
+    `SELECT pp.id AS "proposalId",
+            pp.finding_id AS "findingId",
+            pp.head_sha AS "headSha",
+            pp.patch_hash AS "patchHash",
+            pp.approval_status AS "approvalStatus",
+            pp.github_reference AS "githubReference",
+            pfj.status,
+            pfj.attempt,
+            pfj.failure_code AS "failureCode",
+            pfj.created_at AS "createdAt",
+            pfj.updated_at AS "updatedAt",
+            pfj.completed_at AS "completedAt"
+     FROM patch_fix_jobs pfj
+     JOIN patch_proposals pp ON pp.id = pfj.proposal_id
+     JOIN review_runs rr ON rr.id = pp.review_run_id
+     WHERE rr.repository_id = $1
+       AND rr.id = $2
+     ORDER BY pfj.created_at DESC, pp.id DESC
+     LIMIT 100`,
+    [input.repositoryId, input.reviewRunId],
+  );
+  return result.rows.map((row) => patchFixListRowSchema.parse(row));
 }

@@ -131,7 +131,10 @@ export type {
   PatchSuggestionPublicationTarget,
 } from './patch-proposal.js';
 
-export { recordPatchReproofResult } from './patch-reproof.js';
+export {
+  getLatestPatchReproofResult,
+  recordPatchReproofResult,
+} from './patch-reproof.js';
 export type {
   PatchReproofRecordOutcome,
   PatchReproofRecordResult,
@@ -144,6 +147,7 @@ export {
   decidePatchFixProposal,
   failPatchFixJob,
   getPatchFixJob,
+  listPatchFixes,
   listRecoverablePatchFixProposalIds,
   releasePatchFixJob,
   renewPatchFixJobLease,
@@ -151,7 +155,18 @@ export {
 export type {
   CreatedPatchFixProposal,
   DecidedPatchFixProposal,
+  PatchFixListItem,
 } from './patch-fix.js';
+
+export {
+  loadClaimedPatchFixTarget,
+  loadVerifiedPatchFixSource,
+} from './patch-fix-target.js';
+export type {
+  ClaimedPatchFixTarget,
+  PatchFixProofBinding,
+  VerifiedPatchFixSource,
+} from './patch-fix-target.js';
 
 export {
   consumeOAuthState,

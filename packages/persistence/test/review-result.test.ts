@@ -11,8 +11,8 @@ const input = {
   workerId: 'worker-1',
   baseSha,
   headSha,
-  verdict: 'FIX',
-  summary: 'One verified regression needs attention.',
+  verdict: 'SHIP',
+  summary: 'No blocking evidence was found.',
   findings: [{
     fingerprint: 'c'.repeat(64),
     category: 'correctness',
@@ -20,11 +20,11 @@ const input = {
     startLine: 4,
     endLine: 4,
     severity: 'high',
-    summary: 'The head revision fails the reproducer.',
-    lifecycleStatus: 'verified',
-    evidenceLevel: 'VERIFIED',
-    advisoryConfidence: 0.99,
-    claim: 'The head revision fails the reproducer.',
+    summary: 'The changed branch may return the wrong value.',
+    lifecycleStatus: 'unverified',
+    evidenceLevel: 'UNVERIFIED',
+    advisoryConfidence: 0.7,
+    claim: 'The changed branch may return the wrong value.',
     failureMechanism: 'The changed branch returns the wrong value.',
     suggestedProof: 'Run the focused reproducer on both revisions.',
   }],
@@ -89,7 +89,7 @@ describe('hosted review completion', () => {
       'COMMIT',
     ]);
     expect(query.mock.calls[2]?.[1]).toEqual([
-      runId, 'completed', 'FIX', input.summary, 'proving', 'worker-1',
+      runId, 'completed', 'SHIP', input.summary, 'proving', 'worker-1',
     ]);
     expect(query.mock.calls[2]?.[0]).toContain('worker_lease_owner = NULL');
     expect(query.mock.calls[1]?.[0]).toContain('rr.base_sha AS "baseSha"');
@@ -101,10 +101,64 @@ describe('hosted review completion', () => {
     const stored = JSON.parse(query.mock.calls[3]?.[1]?.[1] as string);
     expect(stored[0]).toMatchObject({
       fingerprint: 'c'.repeat(64),
-      evidenceLevel: 'VERIFIED',
+      evidenceLevel: 'UNVERIFIED',
       path: 'src/index.ts',
     });
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a verified fix run open for human approval', async () => {
+    const findingId = '2d437195-a9f0-4af9-aaf4-3cbda1c8f61f';
+    const verified = {
+      ...input,
+      verdict: 'FIX' as const,
+      summary: 'One verified regression needs attention.',
+      findings: [{
+        ...input.findings[0],
+        lifecycleStatus: 'verified' as const,
+        evidenceLevel: 'VERIFIED' as const,
+        evidence: [{
+          kind: 'counterfactual_proof' as const,
+          planDigest: 'd'.repeat(64),
+          commandDigest: 'e'.repeat(64),
+          baseSha,
+          headSha,
+          baseOutcome: 'passed' as const,
+          headOutcome: 'failed' as const,
+          baseExitCode: 0,
+          headExitCode: 1,
+          durationMs: 20,
+          sanitizedSummary: 'Base passed; head failed.',
+          artifactHashes: [],
+          recordedAt: '2026-09-11T10:00:00.000Z',
+        }],
+      }],
+    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [durableRun('proving')] })
+      .mockResolvedValueOnce({ rows: [{ id: runId }] })
+      .mockResolvedValueOnce({ rows: [{ id: findingId, fingerprint: 'c'.repeat(64) }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: eventId }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    };
+
+    await expect(completeHostedReviewRun(pool, verified)).resolves.toMatchObject({
+      created: true,
+    });
+    expect(query.mock.calls[2]?.[1]).toEqual([
+      runId, 'awaiting_human', 'FIX', verified.summary, 'proving', 'worker-1',
+    ]);
+    expect(query.mock.calls[4]?.[0]).toContain('INSERT INTO evidence');
+    expect(JSON.parse(query.mock.calls[4]?.[1]?.[0] as string)[0]).toMatchObject({
+      findingId,
+      planDigest: 'd'.repeat(64),
+      baseOutcome: 'passed',
+      headOutcome: 'failed',
+    });
   });
 
   it('returns the first event for an identical retry', async () => {

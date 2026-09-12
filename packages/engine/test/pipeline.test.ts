@@ -16,6 +16,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import {
+  digestProofCommand,
   hashWalkzConfig,
   runLocalReviewPipeline,
   type LocalReviewPipelineDependencies,
@@ -365,6 +366,11 @@ describe('runLocalReviewPipeline', () => {
           headExitCode: 1,
           sanitizedSummary:
             'test failed and referenced src/value.ts:1.',
+          commandDigest: digestProofCommand({
+            executable: 'node',
+            args: ['test.mjs'],
+            cwd: '.',
+          }),
         },
       ],
     });
