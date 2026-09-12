@@ -1,6 +1,6 @@
 export interface DashboardReview {
   id: string;
-  pullRequestId: string | null;
+  pullRequestNumber: number | null;
   baseSha: string;
   headSha: string;
   status: string;
@@ -168,7 +168,7 @@ function parseDashboardReview(input: unknown): DashboardReview | null {
   const value = input as Record<string, unknown>;
   if (
     typeof value.id !== 'string' ||
-    (typeof value.pullRequestId !== 'string' && value.pullRequestId !== null) ||
+    (typeof value.pullRequestNumber !== 'number' && value.pullRequestNumber !== null) ||
     typeof value.baseSha !== 'string' || typeof value.headSha !== 'string' ||
     typeof value.status !== 'string' ||
     (typeof value.verdict !== 'string' && value.verdict !== null) ||
@@ -176,12 +176,18 @@ function parseDashboardReview(input: unknown): DashboardReview | null {
     typeof value.createdAt !== 'string' ||
     (typeof value.completedAt !== 'string' && value.completedAt !== null)
   ) return null;
-  if (value.status.trim().length === 0 || (value.verdict !== null && !isDashboardVerdict(value.verdict))) {
+  if (
+    value.status.trim().length === 0 ||
+    (value.pullRequestNumber !== null && (
+      !Number.isInteger(value.pullRequestNumber) || value.pullRequestNumber < 1
+    )) ||
+    (value.verdict !== null && !isDashboardVerdict(value.verdict))
+  ) {
     return null;
   }
   return {
     id: value.id,
-    pullRequestId: value.pullRequestId,
+    pullRequestNumber: value.pullRequestNumber,
     baseSha: value.baseSha,
     headSha: value.headSha,
     status: value.status,

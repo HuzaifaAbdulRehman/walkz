@@ -7,6 +7,7 @@ import {
   type DashboardReview,
 } from './lib/reviews';
 import { manualReviewQueuedEvent } from './lib/manual-reviews';
+import { repositoryReviewsPath } from './lib/repository-api-paths';
 import { ReviewFindings } from './review-findings';
 
 const refreshIntervalMs = 15_000;
@@ -19,7 +20,13 @@ function verdictLabel(review: DashboardReview): string {
   return review.verdict ?? 'IN PROGRESS';
 }
 
-export function ReviewHistory({ initialReviews }: { initialReviews: DashboardReview[] }) {
+export function ReviewHistory({
+  initialReviews,
+  repositoryId,
+}: {
+  initialReviews: DashboardReview[];
+  repositoryId: string;
+}) {
   const [reviews, setReviews] = useState(initialReviews);
   const [refreshState, setRefreshState] = useState<'current' | 'updating' | 'unavailable'>('current');
 
@@ -40,7 +47,7 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
       controller = refreshController;
       setRefreshState('updating');
       try {
-        const response = await fetch('/api/reviews', {
+        const response = await fetch(repositoryReviewsPath(repositoryId), {
           cache: 'no-store',
           signal: refreshController.signal,
         });
@@ -73,7 +80,7 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
       controller?.abort();
       if (timeout !== undefined) clearTimeout(timeout);
     };
-  }, []);
+  }, [repositoryId]);
 
   return (
     <>
@@ -92,7 +99,9 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
             <article className="review-card" key={review.id}>
               <div className="review-card-header">
                 <div>
-                  <p className="repository">Pull request {review.pullRequestId ?? 'not linked'}</p>
+                  <p className="repository">
+                    Pull request {review.pullRequestNumber === null ? 'not linked' : `#${review.pullRequestNumber}`}
+                  </p>
                   <h3>{verdictLabel(review)}</h3>
                   <p className="detail">
                     {formatStatus(review.status)} / {review.headSha.slice(0, 7)} against {review.baseSha.slice(0, 7)}
@@ -103,7 +112,7 @@ export function ReviewHistory({ initialReviews }: { initialReviews: DashboardRev
                   {verdictLabel(review)}
                 </span>
               </div>
-              <ReviewFindings reviewRunId={review.id} />
+              <ReviewFindings repositoryId={repositoryId} reviewRunId={review.id} />
             </article>
           ))}
         </div>

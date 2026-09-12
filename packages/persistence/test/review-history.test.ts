@@ -18,5 +18,7 @@ describe('review history persistence', () => {
     expect(query.mock.calls[0]?.[0]).not.toContain('response');
     expect(query.mock.calls[0]?.[0]).toContain('verdict');
     expect(query.mock.calls[0]?.[0]).toContain('result_summary AS "resultSummary"');
+    expect(query.mock.calls[0]?.[0]).toContain('pr.number AS "pullRequestNumber"');
+    expect(query.mock.calls[0]?.[0]).toContain('LEFT JOIN pull_requests pr');
   });
 });

@@ -6,9 +6,11 @@ import {
   parseDashboardFindings,
   type DashboardFinding,
 } from './lib/reviews';
+import { reviewFindingsPath } from './lib/repository-api-paths';
 import { PatchFixControls } from './patch-fix-controls';
 
 interface ReviewFindingsProps {
+  repositoryId: string;
   reviewRunId: string;
 }
 
@@ -32,7 +34,7 @@ function evidenceLabel(level: DashboardFinding['evidenceLevel']): string {
   return 'Unverified';
 }
 
-export function ReviewFindings({ reviewRunId }: ReviewFindingsProps) {
+export function ReviewFindings({ repositoryId, reviewRunId }: ReviewFindingsProps) {
   const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState<FindingState>({ status: 'idle', findings: [] });
   const controller = useRef<AbortController | null>(null);
@@ -47,7 +49,7 @@ export function ReviewFindings({ reviewRunId }: ReviewFindingsProps) {
     setState((current) => ({ status: 'loading', findings: current.findings }));
     try {
       const response = await fetch(
-        `/api/reviews/${encodeURIComponent(reviewRunId)}/findings`,
+        reviewFindingsPath(repositoryId, reviewRunId),
         { cache: 'no-store', signal: controller.current.signal },
       );
       if (!response.ok) throw new Error('Finding details request failed.');
@@ -114,6 +116,7 @@ export function ReviewFindings({ reviewRunId }: ReviewFindingsProps) {
                     finding.path !== null && finding.startLine !== null ? (
                       <PatchFixControls
                         findingId={finding.id}
+                        repositoryId={repositoryId}
                         reviewRunId={reviewRunId}
                       />
                     ) : null}

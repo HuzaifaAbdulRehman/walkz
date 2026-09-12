@@ -26,6 +26,9 @@ describe('provider credential form', () => {
     }));
 
     expect(html).toContain('Connected');
+    expect(html).toContain('The saved key stays encrypted and is never displayed.');
+    expect(html).toContain('Enter a new key only if you want to replace it.');
+    expect(html).toContain('placeholder="Saved key is hidden"');
     expect(html).toContain('Replace key');
     expect(html).toContain('Remove key');
     expect(html).not.toContain('Confirm removal');

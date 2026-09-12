@@ -112,7 +112,10 @@ export default async function HomePage() {
         {reviewHistory.status === 'rejected' ? (
           <p className="empty-state">Review history is temporarily unavailable. Try again later.</p>
         ) : (
-          <ReviewHistory initialReviews={reviews} />
+          <ReviewHistory
+            initialReviews={reviews}
+            repositoryId={selectedRepository.selectedRepositoryId}
+          />
         )}
       </section>
       <section aria-labelledby="configuration-history">

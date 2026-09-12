@@ -88,7 +88,7 @@ describe('loadDashboardReviews', () => {
           reviews: [
             {
               id: 'run-1',
-              pullRequestId: '#12',
+              pullRequestNumber: 12,
               baseSha: 'a'.repeat(40),
               headSha: 'b'.repeat(40),
               status: 'completed',
@@ -118,7 +118,7 @@ describe('loadDashboardReviews', () => {
   it('rejects an invalid terminal result', async () => {
     const fetcher = async () => new Response(JSON.stringify({ reviews: [{
       id: 'run-1',
-      pullRequestId: null,
+      pullRequestNumber: null,
       baseSha: 'a'.repeat(40),
       headSha: 'b'.repeat(40),
       status: 'completed',

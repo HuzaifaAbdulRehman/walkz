@@ -8,8 +8,14 @@ import {
   type DashboardPatchFix,
   type TransientPatchCandidate,
 } from './lib/patch-fixes';
+import {
+  patchDecisionPath,
+  patchFixesPath,
+  patchProposalPath,
+} from './lib/repository-api-paths';
 
 interface PatchFixControlsProps {
+  repositoryId: string;
   reviewRunId: string;
   findingId: string;
 }
@@ -38,7 +44,7 @@ function statusMessage(fix: DashboardPatchFix): string {
   }
 }
 
-export function PatchFixControls({ reviewRunId, findingId }: PatchFixControlsProps) {
+export function PatchFixControls({ repositoryId, reviewRunId, findingId }: PatchFixControlsProps) {
   const [view, setView] = useState<ViewState>('loading');
   const [fix, setFix] = useState<DashboardPatchFix | null>(null);
   const [candidate, setCandidate] = useState<TransientPatchCandidate | null>(null);
@@ -46,7 +52,7 @@ export function PatchFixControls({ reviewRunId, findingId }: PatchFixControlsPro
 
   const load = async (signal?: AbortSignal) => {
     const response = await fetch(
-      `/api/reviews/${encodeURIComponent(reviewRunId)}/patch-fixes`,
+      patchFixesPath(repositoryId, reviewRunId),
       { cache: 'no-store', ...(signal === undefined ? {} : { signal }) },
     );
     if (!response.ok) throw new Error('Patch fix status request failed.');
@@ -66,7 +72,7 @@ export function PatchFixControls({ reviewRunId, findingId }: PatchFixControlsPro
       if (!current.signal.aborted) setView('failed');
     });
     return () => current.abort();
-  }, [reviewRunId, findingId]);
+  }, [repositoryId, reviewRunId, findingId]);
 
   useEffect(() => {
     if (fix === null || !activeStatuses.has(fix.status)) return;
@@ -93,14 +99,14 @@ export function PatchFixControls({ reviewRunId, findingId }: PatchFixControlsPro
       current.abort();
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [fix?.proposalId, fix?.status, findingId, reviewRunId]);
+  }, [fix?.proposalId, fix?.status, findingId, repositoryId, reviewRunId]);
 
   const generate = async () => {
     setView('generating');
     setCandidate(null);
     try {
       const response = await fetch(
-        `/api/reviews/${encodeURIComponent(reviewRunId)}/findings/${encodeURIComponent(findingId)}/patch-proposals`,
+        patchProposalPath(repositoryId, reviewRunId, findingId),
         { method: 'POST', cache: 'no-store' },
       );
       if (!response.ok) throw new Error('Patch generation request failed.');
@@ -118,7 +124,7 @@ export function PatchFixControls({ reviewRunId, findingId }: PatchFixControlsPro
     setView('deciding');
     try {
       const response = await fetch(
-        `/api/patch-proposals/${encodeURIComponent(candidate.proposalId)}/decision`,
+        patchDecisionPath(repositoryId, candidate.proposalId),
         {
           method: 'POST',
           cache: 'no-store',

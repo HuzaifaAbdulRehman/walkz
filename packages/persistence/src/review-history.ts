@@ -10,7 +10,7 @@ const historyQuerySchema = z
 
 export interface ReviewHistoryItem {
   id: string;
-  pullRequestId: string | null;
+  pullRequestNumber: number | null;
   baseSha: string;
   headSha: string;
   status: string;
@@ -27,18 +27,19 @@ export async function listReviewHistory(
   const query = historyQuerySchema.parse(input);
   const result = await pool.query<ReviewHistoryItem>(
     `
-      SELECT id,
-             pull_request_id AS "pullRequestId",
-             base_sha AS "baseSha",
-             head_sha AS "headSha",
-             status,
-             verdict,
-             result_summary AS "resultSummary",
-             created_at AS "createdAt",
-             completed_at AS "completedAt"
-      FROM review_runs
-      WHERE repository_id = $1
-      ORDER BY created_at DESC, id DESC
+      SELECT rr.id,
+             pr.number AS "pullRequestNumber",
+             rr.base_sha AS "baseSha",
+             rr.head_sha AS "headSha",
+             rr.status,
+             rr.verdict,
+             rr.result_summary AS "resultSummary",
+             rr.created_at AS "createdAt",
+             rr.completed_at AS "completedAt"
+      FROM review_runs rr
+      LEFT JOIN pull_requests pr ON pr.id = rr.pull_request_id
+      WHERE rr.repository_id = $1
+      ORDER BY rr.created_at DESC, rr.id DESC
       LIMIT $2
     `,
     [query.repositoryId, query.limit],

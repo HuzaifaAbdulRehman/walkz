@@ -129,8 +129,9 @@ export function ProviderCredentialForm({
       </div>
       <div className="setup-card credential-card">
         <p className="setup-copy">
-          Use a Groq API key for this repository. Walkz verifies it before saving an
-          encrypted copy. The key is never shown again.
+          {view.connected
+            ? 'Groq is connected for this repository. The saved key stays encrypted and is never displayed. Enter a new key only if you want to replace it.'
+            : 'Use a Groq API key for this repository. Walkz verifies it before saving an encrypted copy. The key is never shown again.'}
         </p>
         <form className="credential-form" onSubmit={saveCredential}>
           <label htmlFor="groq-api-key">Groq API key</label>
@@ -141,6 +142,7 @@ export function ProviderCredentialForm({
             autoComplete="new-password"
             spellCheck={false}
             maxLength={1_024}
+            placeholder={view.connected ? 'Saved key is hidden' : undefined}
             required
             value={apiKey}
             disabled={busy}
