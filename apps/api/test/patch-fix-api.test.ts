@@ -173,19 +173,20 @@ function setup(identity: object | null = { userId, repositoryIds: [repositoryId]
     decide: vi.fn(),
     list: vi.fn().mockResolvedValue([]),
   };
+  const loadHeadFile = vi.fn().mockResolvedValue({
+    currentHeadSha: headSha,
+    path: 'src/value.ts',
+    content: [
+      'export function value(input: string | undefined) {',
+      '  const fallback = "safe";',
+      '  return input;',
+      '}',
+      '',
+    ].join('\n'),
+  });
   const github = {
     forInstallation: vi.fn().mockResolvedValue({
-      loadHeadFile: vi.fn().mockResolvedValue({
-        currentHeadSha: headSha,
-        path: 'src/value.ts',
-        content: [
-          'export function value(input: string | undefined) {',
-          '  const fallback = "safe";',
-          '  return input;',
-          '}',
-          '',
-        ].join('\n'),
-      }),
+      loadHeadFile,
       publish: vi.fn(),
     }),
   };
@@ -198,7 +199,7 @@ function setup(identity: object | null = { userId, repositoryIds: [repositoryId]
     createProvider: () => provider(),
   });
   apps.push(app);
-  return { app, store, github };
+  return { app, store, github, loadHeadFile, selectedSource };
 }
 
 afterEach(async () => {
@@ -207,7 +208,7 @@ afterEach(async () => {
 
 describe('hosted patch fix API', () => {
   it('returns a transient candidate and stores only its hash binding', async () => {
-    const { app, store } = setup();
+    const { app, store, loadHeadFile, selectedSource } = setup();
 
     const response = await app.inject({
       method: 'POST',
@@ -224,6 +225,13 @@ describe('hosted patch fix API', () => {
     const stored = store.create.mock.calls[0]?.[0];
     expect(stored.proposal.patchHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(JSON.stringify(stored)).not.toContain('return input ?? fallback');
+    expect(loadHeadFile).toHaveBeenCalledWith({
+      owner: selectedSource.owner,
+      repository: selectedSource.repository,
+      pullRequestNumber: selectedSource.pullRequestNumber,
+      headSha,
+      path: 'src/value.ts',
+    });
   });
 
   it('authenticates before parsing an approval body', async () => {

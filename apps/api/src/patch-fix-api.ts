@@ -140,7 +140,13 @@ export function registerPatchFixRoutes(
             loadCredential: options.store.loadCredential,
             async loadHeadFile(input) {
               const service = await options.github.forInstallation(input.installationId);
-              return service.loadHeadFile(input);
+              return service.loadHeadFile({
+                owner: input.owner,
+                repository: input.repository,
+                pullRequestNumber: input.pullRequestNumber,
+                headSha: input.headSha,
+                path: input.path,
+              });
             },
             createProvider,
             createProposal: options.store.create,

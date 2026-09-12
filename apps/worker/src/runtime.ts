@@ -335,7 +335,13 @@ export function createHostedWorkerFromEnvironment(
               const service = await githubSuggestions.forInstallation(
                 target.installationId,
               );
-              return service.loadHeadFile(target);
+              return service.loadHeadFile({
+                owner: target.owner,
+                repository: target.repository,
+                pullRequestNumber: target.pullRequestNumber,
+                headSha: target.headSha,
+                path: target.path,
+              });
             },
             createProvider: (apiKey) => createGroqProvider({ apiKey }),
             createProposal: (proposal) =>
