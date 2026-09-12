@@ -112,6 +112,23 @@ function provider(patch: ModelPatchResponse): ProviderAdapter {
 }
 
 describe('bounded patch generation', () => {
+  it('sends only provider contract fields for patch generation', async () => {
+    const selectedProvider = provider(response());
+
+    await generatePatchCandidate(input, { provider: selectedProvider });
+
+    const requestPatch = vi.mocked(selectedProvider.requestStructuredPatch!);
+    const request = requestPatch.mock.calls[0]?.[0];
+    expect(request).toBeDefined();
+    expect(Object.keys(request ?? {}).sort()).toEqual([
+      'maxOutputTokens',
+      'model',
+      'promptVersion',
+      'systemPrompt',
+      'userPrompt',
+    ]);
+  });
+
   it('binds a minimal replacement to verified evidence and exact source', async () => {
     const result = await generatePatchCandidate(input, {
       provider: provider(response()),

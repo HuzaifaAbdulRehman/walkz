@@ -186,9 +186,13 @@ export async function reviewWithProvider(
 
   let providerResult: StructuredReviewResult;
   try {
-    providerResult = await provider.requestStructuredReview(prompt, {
-      signal,
-    });
+    providerResult = await provider.requestStructuredReview({
+      model: prompt.model,
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+      maxOutputTokens: prompt.maxOutputTokens,
+      promptVersion: prompt.promptVersion,
+    }, { signal });
   } catch (error) {
     const cancelled = isCancelled(error, signal);
     return {

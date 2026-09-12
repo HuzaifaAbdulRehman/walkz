@@ -268,6 +268,32 @@ function configWithCommand(): RepositoryConfig {
 }
 
 describe('runLocalReviewPipeline', () => {
+  it('sends only provider contract fields for model review', async () => {
+    const selectedProvider = provider({ findings: [] });
+    const originalRequest = selectedProvider.requestStructuredReview;
+    let requestKeys: string[] = [];
+    selectedProvider.requestStructuredReview = async (prompt, options) => {
+      requestKeys = Object.keys(prompt).sort();
+      return originalRequest(prompt, options);
+    };
+
+    await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: selectedProvider,
+      dependencies: dependencies(context(), checks()),
+      clock: () => NOW,
+    });
+
+    expect(requestKeys).toEqual([
+      'maxOutputTokens',
+      'model',
+      'promptVersion',
+      'systemPrompt',
+      'userPrompt',
+    ]);
+  });
+
   it('runs context and checks before requesting a model review', async () => {
     const events: string[] = [];
     const result = await runLocalReviewPipeline({

@@ -432,9 +432,13 @@ export async function generatePatchCandidate(
 
   let rawResult;
   try {
-    rawResult = await requestPatch.call(options.provider, prompt, {
-      signal: options.signal,
-    });
+    rawResult = await requestPatch.call(options.provider, {
+      model: prompt.model,
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+      maxOutputTokens: prompt.maxOutputTokens,
+      promptVersion: prompt.promptVersion,
+    }, { signal: options.signal });
   } catch (error) {
     const code = providerFailureCode(error, options.signal);
     throw new PatchGenerationError(
