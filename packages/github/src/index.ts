@@ -44,6 +44,12 @@ export type {
   OctokitRequestClient,
 } from './octokit-checks.js';
 
+export { parsePullRequestCommentCommand } from './comment-command.js';
+export type {
+  PullRequestCommentCommand,
+  PullRequestCommentCommandName,
+} from './comment-command.js';
+
 export {
   reviewTriggerPolicySchema,
   reviewTriggerSchema,

@@ -253,3 +253,24 @@ The local worker writes temporary checkouts under one dedicated volume. Each pro
 container sees only its checkout subdirectory, read-only, and never receives the Docker
 socket, GitHub token, database credentials, or network access. A production deployment
 should move this executor behind a separate, credential-free service.
+
+## GitHub comment commands: check current repository access
+
+We checked GitHub's official documentation on 12 September 2026.
+
+- The [`issue_comment` webhook](https://docs.github.com/en/webhooks/webhook-events-and-payloads#issue_comment)
+  requires Issues read permission and covers comments on both issues and pull
+  requests. Walkz must also check that the payload belongs to a pull request.
+- [Creating a comment](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment)
+  accepts either Issues write or Pull requests write permission. The latter is
+  already required for approved suggestions, so command replies need no broader
+  repository permission.
+- [Repository permission lookup](https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user)
+  works with an installation token and Metadata read permission. Walkz will use
+  the current calculated permission instead of trusting `author_association` from
+  the comment payload.
+
+The command boundary accepts only an exact `@walkz-review review` or
+`@walkz-review propose fix` comment from a human user. It returns bounded identity
+and repository metadata and discards the raw body. Durable intake, authorization,
+and idempotent replies remain separate steps.
