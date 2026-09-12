@@ -4,7 +4,12 @@ import { createDefaultWalkzConfig } from '@walkz/contracts';
 import { Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { acceptGitHubWebhook } from '../src/index.js';
+import {
+  acceptGitHubWebhook,
+  claimReviewCommentCommand,
+  completeGitHubCommentCommand,
+  renewGitHubCommentCommandLease,
+} from '../src/index.js';
 
 const databaseUrl = process.env.WALKZ_POSTGRES_TEST_URL;
 const integration = databaseUrl === undefined ? it.skip : it;
@@ -106,6 +111,45 @@ describe('PostgreSQL GitHub comment command intake', () => {
         [first.commandId],
       );
       expect(outbox.rows).toEqual([{ payload: { commandId: first.commandId } }]);
+
+      const lease = {
+        commandId: first.commandId,
+        workerId: 'integration-worker',
+        leaseMs: 60_000,
+      };
+      await expect(claimReviewCommentCommand(pool, lease)).resolves.toMatchObject({
+        commandId: first.commandId,
+        repositoryId,
+        installationId: installationGitHubId,
+        repositoryGitHubId,
+        command: 'review',
+        attempt: 1,
+      });
+      await expect(renewGitHubCommentCommandLease(pool, lease)).resolves.toBe(true);
+      await expect(completeGitHubCommentCommand(pool, {
+        commandId: first.commandId,
+        workerId: lease.workerId,
+        status: 'denied',
+        replyUrl: 'https://github.com/owner/repo/pull/28#issuecomment-1',
+        reviewRunId: null,
+      })).resolves.toBe(true);
+      const completed = await pool.query(
+        `SELECT status, attempt, lease_owner AS "leaseOwner",
+                lease_expires_at AS "leaseExpiresAt", reply_url AS "replyUrl"
+         FROM github_comment_commands WHERE id = $1`,
+        [first.commandId],
+      );
+      expect(completed.rows).toEqual([{
+        status: 'denied',
+        attempt: 1,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        replyUrl: 'https://github.com/owner/repo/pull/28#issuecomment-1',
+      }]);
+      await expect(pool.query(
+        'UPDATE github_comment_commands SET reply_url = $2 WHERE id = $1',
+        [first.commandId, 'https://github.com/owner/repo/pull/28#issuecomment-2'],
+      )).rejects.toThrow('Terminal comment commands cannot be changed.');
     } finally {
       await pool.query(
         `DELETE FROM outbox_events

@@ -17,9 +17,8 @@ describe('GitHub comment command migration', () => {
     expect(migration).not.toMatch(/comment_body|raw_body|payload\s+jsonb/i);
   });
 
-  it('is forward-only and bounds schema locking', async () => {
-    const module = await import('../../../migrations/013_github_comment_commands.js');
-    expect(module.down).toBe(false);
+  it('is forward-only and bounds schema locking', () => {
+    expect(migration).toContain('export const down = false');
     expect(migration).toContain('SET lock_timeout');
     expect(migration).toContain('CREATE UNIQUE INDEX CONCURRENTLY');
   });

@@ -21,6 +21,22 @@ export {
   recoverPatchFixes,
 } from './patch-fix-queue.js';
 export type { PatchFixJobHandler, PatchFixQueue } from './patch-fix-queue.js';
+export {
+  commentCommandQueueName,
+  createCommentCommandQueue,
+  createCommentCommandWorker,
+  enqueueCommentCommand,
+  recoverCommentCommands,
+} from './comment-command-queue.js';
+export type {
+  CommentCommandJobHandler,
+  CommentCommandQueue,
+} from './comment-command-queue.js';
+export { createGitHubCommentCommandJobHandler } from './github-comment-command-handler.js';
+export type {
+  GitHubCommentCommandHandlerOptions,
+  GitHubCommentCommandStore,
+} from './github-comment-command-handler.js';
 export { createHostedPatchFixJobHandler } from './hosted-patch-fix-handler.js';
 export type {
   HostedPatchFixHandlerOptions,

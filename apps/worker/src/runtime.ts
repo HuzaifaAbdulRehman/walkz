@@ -4,36 +4,49 @@ import { isAbsolute } from 'node:path';
 
 import type { ConnectionOptions } from 'bullmq';
 import type { DockerWorkspaceVolume } from '@walkz/sandbox';
+import { WALKZ_REVIEW_PROMPT_VERSION } from '@walkz/engine';
 import {
+  createInstallationGitHubCommentCommandClientFactory,
   createGitHubInstallationApp,
+  createInstallationPullRequestReaderFactory,
   createInstallationReviewCheckPublisherFactory,
   createInstallationGitHubSuggestionServiceFactory,
 } from '@walkz/github';
 import {
+  claimReviewCommentCommand,
   claimPatchFixJob,
   claimHostedReviewRun,
+  completeGitHubCommentCommand,
   completePatchFixJob,
   completeHostedReviewRun,
   createCredentialVault,
   createDatabasePool,
   createOutboxEventStore,
+  failGitHubCommentCommand,
   failPatchFixJob,
   getLatestPatchReproofResult,
   listRecoverablePatchFixProposalIds,
+  listRecoverableReviewCommentCommandIds,
   listRecoverableHostedReviewRunIds,
   loadClaimedPatchFixTarget,
   loadProviderCredential,
   preparePatchSuggestionPublication,
+  queueManualReview,
   recordPatchReproofResult,
   recordPatchSuggestionPublication,
+  releaseGitHubCommentCommand,
   releasePatchFixJob,
   releasePatchSuggestionPublication,
+  renewGitHubCommentCommandLease,
   renewPatchFixJobLease,
   renewHostedReviewRunLease,
 } from '@walkz/persistence';
 import { z } from 'zod';
 
 import {
+  createCommentCommandQueue,
+  createCommentCommandWorker,
+  createGitHubCommentCommandJobHandler,
   createGitHubCheckOutboxHandler,
   createHostedOutboxHandler,
   createHostedReviewJobHandler,
@@ -45,6 +58,7 @@ import {
   createReviewQueue,
   createReviewWorker,
   recoverOutboxEvents,
+  recoverCommentCommands,
   recoverReviewRuns,
   recoverPatchFixes,
   type HostedReviewStore,
@@ -54,7 +68,10 @@ const base64Schema = z.string().min(1).max(100_000).regex(/^[A-Za-z0-9+/]+={0,2}
 const environmentSchema = z.object({
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
-  GITHUB_APP_ID: z.string().trim().min(1).max(128),
+  GITHUB_APP_ID: z.string().regex(/^[1-9][0-9]{0,15}$/).refine(
+    (value) => BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER),
+    'GitHub App ID must be a safe JavaScript integer.',
+  ),
   GITHUB_PRIVATE_KEY_BASE64: base64Schema,
   WALKZ_CREDENTIAL_ACTIVE_KEY_ID: z.string().trim().min(1).max(128),
   WALKZ_CREDENTIAL_KEYS_JSON: z.string().min(1).max(100_000),
@@ -63,6 +80,8 @@ const environmentSchema = z.object({
     .default(30_000),
   WALKZ_REVIEW_LEASE_MS: z.coerce.number().int().min(10_000)
     .max(60 * 60 * 1_000).default(300_000),
+  WALKZ_COMMENT_COMMAND_LEASE_MS: z.coerce.number().int().min(10_000)
+    .max(60 * 60 * 1_000).default(60_000),
   WALKZ_PATCH_FIX_LEASE_MS: z.coerce.number().int().min(10_000)
     .max(60 * 60 * 1_000).default(600_000),
   WALKZ_PROOF_IMAGE: z.string().trim().max(512)
@@ -99,6 +118,7 @@ export interface HostedWorkerEnvironment {
   workerId: string;
   outboxLeaseMs: number;
   reviewLeaseMs: number;
+  commentCommandLeaseMs: number;
   patchFixLeaseMs: number;
   proofImage: string;
   workspaceVolume?: DockerWorkspaceVolume;
@@ -185,6 +205,7 @@ export function parseHostedWorkerEnvironment(
       `${hostname()}-${process.pid}-${randomUUID()}`.slice(0, 128),
     outboxLeaseMs: environment.WALKZ_OUTBOX_LEASE_MS,
     reviewLeaseMs: environment.WALKZ_REVIEW_LEASE_MS,
+    commentCommandLeaseMs: environment.WALKZ_COMMENT_COMMAND_LEASE_MS,
     patchFixLeaseMs: environment.WALKZ_PATCH_FIX_LEASE_MS,
     proofImage: environment.WALKZ_PROOF_IMAGE,
     ...(environment.WALKZ_PROOF_WORKSPACE_ROOT === undefined ||
@@ -226,6 +247,7 @@ export function createHostedWorkerFromEnvironment(
     complete: (result) => completeHostedReviewRun(pool, result),
   };
   const outboxQueue = createOutboxQueue(config.redis);
+  const commentCommandQueue = createCommentCommandQueue(config.redis);
   const patchFixQueue = createPatchFixQueue(config.redis);
   const reviewQueue = createReviewQueue(config.redis);
   const reviewHandler = createHostedReviewJobHandler({
@@ -266,10 +288,29 @@ export function createHostedWorkerFromEnvironment(
       ? {}
       : { workspaceVolume: config.workspaceVolume }),
   });
+  const commentCommandHandler = createGitHubCommentCommandJobHandler({
+    store: {
+      claim: (lease) => claimReviewCommentCommand(pool, lease),
+      renew: (lease) => renewGitHubCommentCommandLease(pool, lease),
+      queueReview: (review) => queueManualReview(pool, review),
+      complete: (completion) => completeGitHubCommentCommand(pool, completion),
+      release: (lease) => releaseGitHubCommentCommand(pool, lease),
+      fail: (failure) => failGitHubCommentCommand(pool, failure),
+    },
+    comments: createInstallationGitHubCommentCommandClientFactory(
+      githubApp,
+      Number(config.githubAppId),
+    ),
+    pullRequests: createInstallationPullRequestReaderFactory(githubApp),
+    workerId: config.workerId,
+    leaseMs: config.commentCommandLeaseMs,
+    promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
+  });
   const outboxHandler = createHostedOutboxHandler({
     checks: createGitHubCheckOutboxHandler(
       createInstallationReviewCheckPublisherFactory(githubApp),
     ),
+    commentCommands: commentCommandQueue,
     patchFixes: patchFixQueue,
     reviews: reviewQueue,
   });
@@ -280,6 +321,10 @@ export function createHostedWorkerFromEnvironment(
     { workerId: config.workerId, leaseMs: config.outboxLeaseMs },
   );
   const reviewWorker = createReviewWorker(config.redis, reviewHandler);
+  const commentCommandWorker = createCommentCommandWorker(
+    config.redis,
+    commentCommandHandler,
+  );
   const patchFixWorker = createPatchFixWorker(config.redis, patchFixHandler);
   const reportBackgroundError = (): void => {
     try {
@@ -288,6 +333,7 @@ export function createHostedWorkerFromEnvironment(
   };
   outboxWorker.on('error', reportBackgroundError);
   reviewWorker.on('error', reportBackgroundError);
+  commentCommandWorker.on('error', reportBackgroundError);
   patchFixWorker.on('error', reportBackgroundError);
 
   let started = false;
@@ -297,6 +343,10 @@ export function createHostedWorkerFromEnvironment(
 
   const recover = async (): Promise<void> => {
     await recoverOutboxEvents(outboxQueue, outboxStore, config.recoveryBatch);
+    await recoverCommentCommands(commentCommandQueue, {
+      listRecoverableReviewCommentCommandIds: (limit) =>
+        listRecoverableReviewCommentCommandIds(pool, limit),
+    }, config.recoveryBatch);
     await recoverReviewRuns(reviewQueue, {
       listRecoverableReviewRunIds: (limit) =>
         listRecoverableHostedReviewRunIds(pool, limit),
@@ -324,9 +374,11 @@ export function createHostedWorkerFromEnvironment(
       started = true;
       await Promise.all([
         outboxQueue.waitUntilReady(),
+        commentCommandQueue.waitUntilReady(),
         patchFixQueue.waitUntilReady(),
         reviewQueue.waitUntilReady(),
         outboxWorker.waitUntilReady(),
+        commentCommandWorker.waitUntilReady(),
         reviewWorker.waitUntilReady(),
         patchFixWorker.waitUntilReady(),
       ]);
@@ -340,11 +392,13 @@ export function createHostedWorkerFromEnvironment(
       await recovery;
       const results = await Promise.allSettled([
         outboxWorker.close(),
+        commentCommandWorker.close(),
         reviewWorker.close(),
         patchFixWorker.close(),
       ]);
       const queueResults = await Promise.allSettled([
         outboxQueue.close(),
+        commentCommandQueue.close(),
         patchFixQueue.close(),
         reviewQueue.close(),
         pool.end(),

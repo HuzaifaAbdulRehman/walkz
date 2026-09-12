@@ -40,6 +40,7 @@ describe('hosted worker runtime configuration', () => {
       },
       outboxLeaseMs: 30_000,
       reviewLeaseMs: 300_000,
+      commentCommandLeaseMs: 60_000,
       recoveryIntervalMs: 15_000,
       recoveryBatch: 100,
       redis: {

@@ -89,6 +89,16 @@ export type {
   GitHubWebhookIntakeResult,
 } from './github-review-intake.js';
 
+export {
+  claimReviewCommentCommand,
+  completeGitHubCommentCommand,
+  failGitHubCommentCommand,
+  listRecoverableReviewCommentCommandIds,
+  releaseGitHubCommentCommand,
+  renewGitHubCommentCommandLease,
+} from './github-comment-command.js';
+export type { ClaimedGitHubCommentCommand } from './github-comment-command.js';
+
 export { purgeExpiredAuditEvents, recordAuditEvent } from './audit.js';
 
 export {

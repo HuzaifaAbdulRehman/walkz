@@ -1,10 +1,15 @@
 import {
+  githubCommentCommandQueuedOutboxEventSchema,
   patchFixQueuedOutboxEventSchema,
   reviewRunQueuedOutboxEventSchema,
   type ClaimedOutboxEvent,
 } from '@walkz/persistence';
 
 import type { OutboxEventHandler } from './index.js';
+import {
+  enqueueCommentCommand,
+  type CommentCommandQueue,
+} from './comment-command-queue.js';
 import { enqueuePatchFix, type PatchFixQueue } from './patch-fix-queue.js';
 import { enqueueReviewRun, type ReviewQueue } from './review-queue.js';
 
@@ -17,6 +22,7 @@ export interface CheckOutboxHandler {
 
 export function createHostedOutboxHandler(options: {
   checks: CheckOutboxHandler;
+  commentCommands: CommentCommandQueue;
   patchFixes: PatchFixQueue;
   reviews: ReviewQueue;
 }): OutboxEventHandler {
@@ -41,6 +47,18 @@ export function createHostedOutboxHandler(options: {
           payload: event.payload,
         });
         await enqueuePatchFix(options.patchFixes, queued.payload.proposalId);
+        return;
+      }
+      if (event.eventType === 'github_comment_command.queued') {
+        const queued = githubCommentCommandQueuedOutboxEventSchema.parse({
+          aggregateId: event.aggregateId,
+          eventType: event.eventType,
+          payload: event.payload,
+        });
+        await enqueueCommentCommand(
+          options.commentCommands,
+          queued.payload.commandId,
+        );
         return;
       }
       if (

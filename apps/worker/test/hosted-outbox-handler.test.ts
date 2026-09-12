@@ -11,6 +11,7 @@ describe('hosted outbox routing', () => {
     const checks = { handle: vi.fn() };
     const handler = createHostedOutboxHandler({
       checks,
+      commentCommands: { add: vi.fn() },
       patchFixes: { add: vi.fn() },
       reviews: { add },
     });
@@ -35,6 +36,7 @@ describe('hosted outbox routing', () => {
     const checks = { handle: vi.fn().mockResolvedValue(undefined) };
     const handler = createHostedOutboxHandler({
       checks,
+      commentCommands: { add: vi.fn() },
       patchFixes: { add: vi.fn() },
       reviews: { add: vi.fn() },
     });
@@ -54,7 +56,13 @@ describe('hosted outbox routing', () => {
     const checks = { handle: vi.fn() };
     const reviews = { add: vi.fn() };
     const patchFixes = { add: vi.fn() };
-    const handler = createHostedOutboxHandler({ checks, patchFixes, reviews });
+    const commentCommands = { add: vi.fn() };
+    const handler = createHostedOutboxHandler({
+      checks,
+      commentCommands,
+      patchFixes,
+      reviews,
+    });
     const event = {
       id: '08d0dd85-734e-4f74-bcfc-3436ec7b4abd',
       aggregateId: reviewRunId,
@@ -66,6 +74,7 @@ describe('hosted outbox routing', () => {
       'Unsupported outbox event type.',
     );
     expect(checks.handle).not.toHaveBeenCalled();
+    expect(commentCommands.add).not.toHaveBeenCalled();
     expect(patchFixes.add).not.toHaveBeenCalled();
     expect(reviews.add).not.toHaveBeenCalled();
   });
@@ -75,6 +84,7 @@ describe('hosted outbox routing', () => {
     const checks = { handle: vi.fn() };
     const handler = createHostedOutboxHandler({
       checks,
+      commentCommands: { add: vi.fn() },
       patchFixes: { add },
       reviews: { add: vi.fn() },
     });
@@ -93,5 +103,31 @@ describe('hosted outbox routing', () => {
       expect.objectContaining({ jobId: proposalId }),
     );
     expect(checks.handle).not.toHaveBeenCalled();
+  });
+
+  it('enqueues comment commands using only their durable ID', async () => {
+    const add = vi.fn().mockResolvedValue(undefined);
+    const checks = { handle: vi.fn() };
+    const commandId = '9058b3c9-3243-43b3-b0d8-dd692ece130f';
+    const handler = createHostedOutboxHandler({
+      checks,
+      commentCommands: { add },
+      patchFixes: { add: vi.fn() },
+      reviews: { add: vi.fn() },
+    });
+    const event = {
+      id: '08d0dd85-734e-4f74-bcfc-3436ec7b4abd',
+      aggregateId: commandId,
+      eventType: 'github_comment_command.queued',
+      payload: { commandId },
+    };
+
+    await handler.handle(event, { idempotencyKey: event.id });
+
+    expect(add).toHaveBeenCalledWith(
+      'comment-command',
+      { commandId },
+      expect.objectContaining({ jobId: commandId }),
+    );
   });
 });
