@@ -295,10 +295,37 @@ export async function decidePatchFixProposal(
     if (job.status === 'rejected') {
       throw new Error('Approved proposal has a rejected fix job.');
     }
-    if (job.status === 'failed') {
-      return { ...decision, outcome: 'conflict', job, outboxEventId: null };
-    }
     let queued = job;
+    if (job.status === 'failed') {
+      if (
+        decision.outcome !== 'unchanged' ||
+        decision.proposal.githubReference === null ||
+        job.attempt >= 5
+      ) {
+        return { ...decision, outcome: 'conflict', job, outboxEventId: null };
+      }
+      const updated = await client.query(
+        `UPDATE patch_fix_jobs
+         SET status = 'queued',
+             failure_code = NULL,
+             lease_owner = NULL,
+             lease_expires_at = NULL,
+             updated_at = now(),
+             completed_at = NULL
+         WHERE proposal_id = $1
+           AND status = 'failed'
+           AND attempt < 5
+         RETURNING ${jobColumns()}`,
+        [job.proposalId],
+      );
+      const row = updated.rows[0];
+      if (row === undefined) {
+        throw new Error('Patch fix job changed while it was retried.');
+      }
+      queued = parseJob(row);
+    } else if (job.status !== 'awaiting_approval') {
+      return { ...decision, job, outboxEventId: null };
+    }
     if (job.status === 'awaiting_approval') {
       const updated = await client.query(
         `UPDATE patch_fix_jobs

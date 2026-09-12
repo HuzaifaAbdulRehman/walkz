@@ -96,6 +96,7 @@ describe('transactional outbox', () => {
     const payload = JSON.parse(query.mock.calls[0]?.[1]?.[2] as string);
     expect(payload).toEqual({ proposalId });
     expect(query.mock.calls[0]?.[0]).toContain('ON CONFLICT');
+    expect(query.mock.calls[0]?.[0]).toContain('published_at = NULL');
   });
 
   it('queues a comment command using its identifier only', async () => {

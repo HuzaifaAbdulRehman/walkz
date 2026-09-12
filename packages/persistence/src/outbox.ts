@@ -240,7 +240,9 @@ export async function createPatchFixQueuedOutboxEvent(
       VALUES ($1, $2, $3::jsonb)
       ON CONFLICT (aggregate_id, event_type)
         WHERE event_type = 'patch_fix.queued'
-        DO UPDATE SET aggregate_id = EXCLUDED.aggregate_id
+        DO UPDATE SET payload = EXCLUDED.payload,
+                      published_at = NULL,
+                      created_at = now()
       RETURNING id
     `,
     [event.aggregateId, event.eventType, JSON.stringify(event.payload)],

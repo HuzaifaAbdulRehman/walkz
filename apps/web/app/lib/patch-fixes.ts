@@ -95,10 +95,14 @@ export function parsePatchProposalResponse(input: unknown): {
   const candidate = value.candidate as Record<string, unknown> | undefined;
   const proposal = value.proposal as Record<string, unknown> | undefined;
   const job = value.job as Record<string, unknown> | undefined;
+  const isFreshProposal = proposal?.approvalStatus === 'pending' &&
+    job?.status === 'awaiting_approval';
+  const isApprovedRetry = proposal?.approvalStatus === 'approved' &&
+    job?.status === 'failed';
   if (
     candidate === undefined || proposal === undefined || job === undefined ||
     typeof proposal.id !== 'string' || !uuidPattern.test(proposal.id) ||
-    proposal.approvalStatus !== 'pending' ||
+    (!isFreshProposal && !isApprovedRetry) ||
     candidate.schemaVersion !== 1 ||
     typeof candidate.reviewRunId !== 'string' || !uuidPattern.test(candidate.reviewRunId) ||
     typeof candidate.findingId !== 'string' || !uuidPattern.test(candidate.findingId) ||
@@ -112,8 +116,7 @@ export function parsePatchProposalResponse(input: unknown): {
     typeof candidate.endLine !== 'number' || !Number.isInteger(candidate.endLine) ||
     typeof candidate.replacement !== 'string' ||
     candidate.approvalRequired !== true ||
-    candidate.startLine < 1 || candidate.endLine < candidate.startLine ||
-    job.status !== 'awaiting_approval'
+    candidate.startLine < 1 || candidate.endLine < candidate.startLine
   ) {
     throw new Error('Patch proposal response was invalid.');
   }

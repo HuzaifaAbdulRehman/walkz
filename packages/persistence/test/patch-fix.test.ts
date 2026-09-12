@@ -257,6 +257,53 @@ describe('hosted patch fix persistence', () => {
       String(sql).includes('INSERT INTO outbox_events'))).toBe(false);
   });
 
+  it('retries an approved failed job after its exact suggestion is published', async () => {
+    const reference = 'https://github.com/octocat/walkz/pull/7#discussion_r321';
+    const failedAt = new Date('2026-09-11T12:02:00.000Z');
+    const approved = proposalRow({
+      approvalStatus: 'approved',
+      githubReferenceKind: 'review_comment',
+      githubReferenceValue: reference,
+      decidedByUserId: actorUserId,
+      decidedAt: createdAt,
+      currentHeadSha: headSha,
+      runStatus: 'awaiting_human',
+      findingLifecycleStatus: 'verified',
+      evidenceLevel: 'VERIFIED',
+    });
+    const failed = jobRow({
+      status: 'failed',
+      attempt: 1,
+      failureCode: 'candidate_changed',
+      updatedAt: failedAt,
+      completedAt: failedAt,
+    });
+    const retried = jobRow({ status: 'queued', attempt: 1, updatedAt: failedAt });
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [approved] })
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-id' }] })
+      .mockResolvedValueOnce({ rows: [failed] })
+      .mockResolvedValueOnce({ rows: [retried] })
+      .mockResolvedValueOnce({ rows: [{ id: 'outbox-id' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(decidePatchFixProposal(transactionalPool(query), {
+      repositoryId,
+      actorUserId,
+      proposalId,
+      expectedPatchHash: patchHash,
+      expectedHeadSha: headSha,
+      decision: 'approved',
+    })).resolves.toMatchObject({
+      outcome: 'unchanged',
+      job: { status: 'queued', attempt: 1, failureCode: null },
+      outboxEventId: 'outbox-id',
+    });
+    expect(String(query.mock.calls[4]?.[0])).toContain("status = 'failed'");
+    expect(String(query.mock.calls[5]?.[0])).toContain('published_at = NULL');
+  });
+
   it('claims only an approved current proposal for reproof', async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [jobRow({ status: 'reproving', attempt: 1 })],

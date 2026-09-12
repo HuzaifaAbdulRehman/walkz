@@ -136,6 +136,12 @@ export function PatchFixControls({ repositoryId, reviewRunId, findingId }: Patch
     }
   };
 
+  const isApprovedRetry = candidate !== null && fix?.approvalStatus === 'approved';
+  const canResumeApprovedFix = candidate === null && fix !== null &&
+    fix.githubReference !== null &&
+    (fix.status === 'awaiting_approval' ||
+      (fix.status === 'failed' && fix.approvalStatus === 'approved'));
+
   const resumeApproval = async () => {
     if (fix === null || fix.githubReference === null) return;
     setView('deciding');
@@ -186,34 +192,43 @@ export function PatchFixControls({ repositoryId, reviewRunId, findingId }: Patch
               onClick={() => void decide('approved')}
               type="button"
             >
-              {view === 'deciding' ? 'Saving...' : 'Approve and re-prove'}
+              {view === 'deciding'
+                ? 'Saving...'
+                : isApprovedRetry
+                  ? 'Publish and retry re-proof'
+                  : 'Approve and re-prove'}
             </button>
-            <button
-              className="secondary-action"
-              disabled={view === 'deciding'}
-              onClick={() => void decide('rejected')}
-              type="button"
-            >
-              Reject
-            </button>
+            {isApprovedRetry ? null : (
+              <button
+                className="secondary-action"
+                disabled={view === 'deciding'}
+                onClick={() => void decide('rejected')}
+                type="button"
+              >
+                Reject
+              </button>
+            )}
           </div>
         </div>
       )}
-      {candidate === null && fix?.status === 'awaiting_approval' &&
-        fix.githubReference !== null ? (
+      {canResumeApprovedFix ? (
           <button
             className="primary-action"
             disabled={view === 'deciding'}
             onClick={() => void resumeApproval()}
             type="button"
           >
-            {view === 'deciding' ? 'Approving...' : 'Resume approval and re-prove'}
+            {view === 'deciding'
+              ? 'Queuing...'
+              : fix?.status === 'failed'
+                ? 'Retry exact suggestion'
+                : 'Resume approval and re-prove'}
           </button>
         ) : null}
       {candidate !== null || (fix !== null && activeStatuses.has(fix.status)) ||
         fix?.status === 'resolved' || fix?.status === 'unresolved' ||
         fix?.status === 'inconclusive' || fix?.status === 'rejected' ||
-        (fix?.status === 'awaiting_approval' && fix.githubReference !== null) ? null : (
+        canResumeApprovedFix ? null : (
           <button
             className="secondary-action"
             disabled={view === 'generating' || view === 'loading'}

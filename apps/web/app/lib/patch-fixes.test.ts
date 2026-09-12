@@ -67,4 +67,44 @@ describe('patch fix dashboard boundary', () => {
     expect(result.candidate.replacement).toBe('return safe;');
     expect(result.fix).not.toHaveProperty('replacement');
   });
+
+  it('restores an approved failed proposal from the same regenerated candidate', () => {
+    const result = parsePatchProposalResponse({
+      candidate: {
+        schemaVersion: 1,
+        reviewRunId,
+        findingId,
+        baseSha,
+        headSha,
+        deliveryMode: 'suggestion',
+        patchHash,
+        originalHash,
+        path: 'src/value.ts',
+        startLine: 3,
+        endLine: 3,
+        replacement: 'return safe;',
+        approvalRequired: true,
+      },
+      proposal: {
+        id: proposalId,
+        approvalStatus: 'approved',
+        githubReference: null,
+      },
+      job: {
+        status: 'failed',
+        attempt: 1,
+        failureCode: 'candidate_changed',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        completedAt: timestamp,
+      },
+    });
+
+    expect(result.fix).toMatchObject({
+      approvalStatus: 'approved',
+      status: 'failed',
+      failureCode: 'candidate_changed',
+    });
+    expect(result.candidate.patchHash).toBe(patchHash);
+  });
 });

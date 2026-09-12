@@ -14,6 +14,7 @@ import {
   completePatchFixJob,
   createPatchFixProposalForCommentCommand,
   decidePatchFixProposal,
+  failPatchFixJob,
   loadClaimedPatchFixTarget,
   releasePatchFixJob,
 } from '../src/index.js';
@@ -221,7 +222,7 @@ describe('PostgreSQL hosted patch fix jobs', () => {
       expect(duplicate).toMatchObject({
         outcome: 'unchanged',
         job: { status: 'queued' },
-        outboxEventId: approved.outboxEventId,
+        outboxEventId: null,
       });
 
       await expect(claimPatchFixJob(pool, {
@@ -267,12 +268,33 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         workerId: 'worker-1',
       })).resolves.toBe(true);
 
-      const outbox = await pool.query(
-        `SELECT payload FROM outbox_events
+      await expect(claimPatchFixJob(pool, {
+        proposalId,
+        workerId: 'worker-2',
+        leaseMs: 60_000,
+      })).resolves.toMatchObject({ status: 'reproving', attempt: 2 });
+      await expect(failPatchFixJob(pool, {
+        proposalId,
+        workerId: 'worker-2',
+        failureCode: 'candidate_changed',
+      })).resolves.toMatchObject({ status: 'failed', attempt: 2 });
+      await pool.query(
+        `UPDATE outbox_events SET published_at = now()
          WHERE aggregate_id = $1 AND event_type = 'patch_fix.queued'`,
         [proposalId],
       );
-      expect(outbox.rows).toEqual([{ payload: { proposalId } }]);
+      await expect(decidePatchFixProposal(pool, decisionInput)).resolves.toMatchObject({
+        outcome: 'unchanged',
+        job: { status: 'queued', attempt: 2, failureCode: null },
+        outboxEventId: approved.outboxEventId,
+      });
+
+      const outbox = await pool.query(
+        `SELECT payload, published_at AS "publishedAt" FROM outbox_events
+         WHERE aggregate_id = $1 AND event_type = 'patch_fix.queued'`,
+        [proposalId],
+      );
+      expect(outbox.rows).toEqual([{ payload: { proposalId }, publishedAt: null }]);
     } finally {
       await pool.query('DELETE FROM github_comment_commands WHERE id = $1', [commandId]);
       await pool.query('DELETE FROM webhook_deliveries WHERE id = $1', [deliveryId]);
