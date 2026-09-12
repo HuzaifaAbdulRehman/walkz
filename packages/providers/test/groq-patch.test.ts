@@ -43,6 +43,8 @@ describe('Groq structured patch generation', () => {
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
       const body = JSON.parse(String(init?.body)) as {
         tools?: unknown;
+        seed: number;
+        temperature: number;
         response_format: {
           json_schema: {
             strict: boolean;
@@ -55,6 +57,9 @@ describe('Groq structured patch generation', () => {
         };
       };
       expect(body).not.toHaveProperty('tools');
+      expect(body.seed).toBeTypeOf('number');
+      expect(body.seed).toBeGreaterThanOrEqual(0);
+      expect(body.temperature).toBe(0);
       expect(body.response_format.json_schema).toMatchObject({
         strict: true,
         name: 'walkz_patch_v1',
@@ -95,6 +100,21 @@ describe('Groq structured patch generation', () => {
       code: 'invalid_response',
       retryable: false,
     });
+  });
+
+  it('reuses the same sampling seed for the same patch request', async () => {
+    const seeds: number[] = [];
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { seed: number };
+      seeds.push(body.seed);
+      return completion();
+    });
+
+    await requestStructuredPatch(request, { apiKey, fetch: fetchMock });
+    await requestStructuredPatch(request, { apiKey, fetch: fetchMock });
+
+    expect(seeds).toHaveLength(2);
+    expect(seeds[0]).toBe(seeds[1]);
   });
 
   it('uses the bounded retry policy for transient failures', async () => {

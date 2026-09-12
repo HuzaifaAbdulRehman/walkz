@@ -13,6 +13,7 @@ import {
   parseModelPatchResponse,
   parseModelReviewResponse,
 } from '@walkz/contracts';
+import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 
@@ -432,6 +433,16 @@ function createRequestBody(request: StructuredReviewRequest): string {
 }
 
 function createPatchRequestBody(request: StructuredPatchRequest): string {
+  const seed = createHash('sha256')
+    .update(request.promptVersion, 'utf8')
+    .update('\0', 'utf8')
+    .update(request.model, 'utf8')
+    .update('\0', 'utf8')
+    .update(request.systemPrompt, 'utf8')
+    .update('\0', 'utf8')
+    .update(request.userPrompt, 'utf8')
+    .digest()
+    .readUInt32BE(0) & 0x7fff_ffff;
   return JSON.stringify({
     model: request.model,
     messages: [
@@ -440,6 +451,8 @@ function createPatchRequestBody(request: StructuredPatchRequest): string {
     ],
     stream: false,
     n: 1,
+    seed,
+    temperature: 0,
     max_completion_tokens: request.maxOutputTokens,
     response_format: {
       type: 'json_schema',

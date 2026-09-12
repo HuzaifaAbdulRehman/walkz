@@ -34,6 +34,7 @@ ENV NODE_ENV=production
 
 COPY --from=dependencies /workspace/node_modules ./node_modules
 COPY --from=build /workspace/package.json /workspace/package-lock.json ./
+COPY --from=build /workspace/tsconfig.base.json ./
 COPY --from=build /workspace/apps ./apps
 COPY --from=build /workspace/packages ./packages
 
@@ -54,7 +55,9 @@ CMD ["node", "../../node_modules/next/dist/bin/next", "start"]
 FROM runtime AS worker
 
 USER root
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates docker-cli \
+    && mkdir -p /var/lib/walkz/proof \
+    && chown -R 1000:1000 /var/lib/walkz
 USER 1000:1000
 
 WORKDIR /workspace/apps/worker

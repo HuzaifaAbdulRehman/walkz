@@ -71,14 +71,21 @@ services:
     environment:
       DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD}@postgres:5432/walkz
       REDIS_URL: redis://redis:6379/0
+      WALKZ_DOCKER_WORKSPACE_VOLUME: walkz-proof-workspaces
+      WALKZ_PROOF_WORKSPACE_ROOT: /var/lib/walkz/proof
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     init: true
+    group_add:
+      - "0"
     restart: unless-stopped
     stop_grace_period: 30s
+    volumes:
+      - walkz-proof-workspaces:/var/lib/walkz/proof
+      - /var/run/docker.sock:/var/run/docker.sock
 
   web:
     build:
@@ -103,3 +110,5 @@ services:
 
 volumes:
   walkz-postgres-data:
+  walkz-proof-workspaces:
+    name: walkz-proof-workspaces

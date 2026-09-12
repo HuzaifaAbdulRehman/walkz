@@ -219,3 +219,37 @@ deterministic marker. A retry scans a bounded comment history for the exact body
 commit, location, and marker. Conflicting reuse fails closed. If the head moves during
 a new publish, Walkz deletes only the comment it just created. An expired lease lets a
 new request recover after the process dies.
+
+## Groq patch replay: reduce sampling drift
+
+We checked Groq's official [API reference](https://console.groq.com/docs/api-reference)
+and [prompting guide](https://console.groq.com/docs/prompting) on 12 September 2026.
+
+- The chat completion endpoint accepts an integer seed. Groq describes repeated output
+  as best effort, not guaranteed, and recommends checking the backend fingerprint when
+  reproducibility matters.
+- Lower temperature makes sampling more deterministic. Groq recommends combining a
+  seed with a temperature between 0 and 0.3 when consistent output is useful.
+
+Walkz now derives a stable, non-secret seed from the complete patch request and uses a
+temperature of zero. This makes the approval-time replay more likely to match the text
+the user reviewed. The patch hash remains the authority: if replay returns different
+text, Walkz refuses to publish it.
+
+## Docker Compose proof workspaces
+
+We checked Docker's official [volume guide](https://docs.docker.com/engine/storage/volumes/)
+and [`docker run` reference](https://docs.docker.com/reference/cli/docker/container/run)
+on 12 September 2026.
+
+- A named volume can be shared by the worker and a child proof container. The
+  `volume-subpath` option limits the child mount to an existing directory inside that
+  volume, and `readonly` prevents writes to the checkout.
+- Docker warns that access to its API socket grants control of the daemon. Mounting the
+  socket into the worker is suitable for this local Compose stack, not a production
+  trust boundary.
+
+The local worker writes temporary checkouts under one dedicated volume. Each proof
+container sees only its checkout subdirectory, read-only, and never receives the Docker
+socket, GitHub token, database credentials, or network access. A production deployment
+should move this executor behind a separate, credential-free service.
