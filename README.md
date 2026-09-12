@@ -100,6 +100,13 @@ commands without a shell, validates findings against changed lines, and reports
 incomplete coverage. Provider-backed review sends bounded context to Groq only
 after the repository checks run.
 
+### Approved fix on GitHub
+
+After approval and successful reproof, Walkz publishes the exact replacement as
+a native GitHub suggestion. The developer still decides whether to apply it.
+
+![Walkz publishing an approved GitHub suggestion](docs/walkz-approved-fix.png)
+
 ## What is implemented
 
 - Local CLI review with deterministic checks, mock and Groq providers, changed-line validation, and `SHIP`, `FIX`, `HUMAN`, `INCONCLUSIVE`, and `ERROR` verdicts.
