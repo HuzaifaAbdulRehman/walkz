@@ -51,6 +51,17 @@ export type {
 } from './comment-command.js';
 
 export {
+  createGitHubCommentCommandClient,
+  createInstallationGitHubCommentCommandClientFactory,
+  GitHubCommandReplyConflictError,
+} from './comment-command-client.js';
+export type {
+  GitHubCommentCommandClient,
+  InstallationGitHubCommentCommandClientFactory,
+  PublishedCommandReply,
+} from './comment-command-client.js';
+
+export {
   reviewTriggerPolicySchema,
   reviewTriggerSchema,
   shouldStartReview,
