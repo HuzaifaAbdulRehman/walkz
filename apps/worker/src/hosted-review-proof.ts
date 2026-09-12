@@ -37,6 +37,7 @@ export interface HostedReviewProofContext {
   proofImage: string;
   repositoryRoot: string;
   config: RepositoryConfig;
+  githubToken?: string;
   signal?: AbortSignal;
   workspaceVolume?: DockerWorkspaceVolume;
 }
@@ -205,6 +206,9 @@ export async function proveHostedFindings(
           gitTimeoutMs: 60_000,
         },
         ...(context.signal === undefined ? {} : { signal: context.signal }),
+        ...(context.githubToken === undefined ? {} : {
+          githubToken: context.githubToken,
+        }),
         ...(context.workspaceVolume === undefined
           ? {}
           : {

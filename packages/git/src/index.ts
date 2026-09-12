@@ -29,6 +29,7 @@ export type { CollectUnifiedDiffOptions } from './diff.js';
 export type { LoadRepositoryGuidanceOptions } from './guidance.js';
 export type {
   ProofWorkspace,
+  ProofGitRunner,
   ProofWorkspaceLimits,
   ProofWorkspacePair,
   WithProofWorkspacesOptions,

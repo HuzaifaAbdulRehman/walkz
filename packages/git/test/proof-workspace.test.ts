@@ -15,6 +15,7 @@ import {
   assertProofWorkspacePaths,
   withProofWorkspaces,
 } from '../src/index.js';
+import { runGitBuffer } from '../src/process.js';
 import { GitFixture } from './git-fixture.js';
 
 const repositories: GitFixture[] = [];
@@ -124,6 +125,34 @@ describe('withProofWorkspaces', () => {
     await expect(readFile(join(repository.root, 'src', 'value.txt'), 'utf8'))
       .resolves.toBe('dirty\n');
     await expect(readdir(temp)).resolves.toEqual([]);
+  });
+
+  it('authenticates every object read for a partial hosted clone', async () => {
+    const repository = await fixture();
+    await repository.write('src/value.txt', 'base\n');
+    const baseSha = await repository.commitAll('base');
+    await repository.write('src/value.txt', 'head\n');
+    const headSha = await repository.commitAll('head');
+    const temp = await temporaryRoot();
+    const observedTokens: Array<string | undefined> = [];
+
+    await withProofWorkspaces({
+      repositoryRoot: repository.root,
+      baseSha,
+      headSha,
+      limits,
+      temporaryRoot: temp,
+      githubToken: 'installation-token',
+      runGit: async (root, args, options) => {
+        observedTokens.push(options?.githubToken);
+        return runGitBuffer(root, args, options);
+      },
+    }, async () => undefined);
+
+    expect(observedTokens.length).toBeGreaterThan(0);
+    expect(observedTokens).toEqual(
+      Array.from({ length: observedTokens.length }, () => 'installation-token'),
+    );
   });
 
   it('cleans both workspaces when the operation fails', async () => {

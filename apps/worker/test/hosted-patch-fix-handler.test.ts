@@ -318,6 +318,7 @@ describe('hosted approved patch fix worker', () => {
         regressionPlans: [expect.objectContaining({ command: regressionCommand })],
       }),
       expect.objectContaining({
+        githubToken: 'github',
         temporaryRoot: workspaceVolume.root,
         docker: { workspaceVolume },
       }),

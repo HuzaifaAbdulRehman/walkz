@@ -22,6 +22,7 @@ import {
   GitCommandError,
   GitOutputLimitError,
   runGitBuffer,
+  type RunGitOptions,
 } from './process.js';
 import { assertCommitSha } from './validation.js';
 
@@ -65,7 +66,15 @@ export interface WithProofWorkspacesOptions {
   limits: ProofWorkspaceLimits;
   signal?: AbortSignal | undefined;
   temporaryRoot?: string | undefined;
+  githubToken?: string | undefined;
+  runGit?: ProofGitRunner | undefined;
 }
+
+export type ProofGitRunner = (
+  repositoryRoot: string,
+  args: readonly string[],
+  options?: RunGitOptions,
+) => Promise<Buffer>;
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted === true) {
@@ -242,18 +251,21 @@ async function listTree(
   sha: string,
   limits: ProofWorkspaceLimits,
   signal?: AbortSignal,
+  githubToken?: string,
+  runGit: ProofGitRunner = runGitBuffer,
 ): Promise<TreeBlob[]> {
   const maxTreeBytes = Math.min(
     32 * 1_024 * 1_024,
     limits.maxFiles * (MAX_PATH_BYTES + 128) + 1,
   );
   try {
-    const output = await runGitBuffer(
+    const output = await runGit(
       repositoryRoot,
       ['ls-tree', '-rlz', '--full-tree', sha],
       {
         maxOutputBytes: maxTreeBytes,
         signal,
+        githubToken,
         ...(limits.gitTimeoutMs !== undefined && {
           timeoutMs: limits.gitTimeoutMs,
         }),
@@ -273,6 +285,8 @@ async function readBlobs(
   blobs: readonly TreeBlob[],
   limits: ProofWorkspaceLimits,
   signal?: AbortSignal,
+  githubToken?: string,
+  runGit: ProofGitRunner = runGitBuffer,
 ): Promise<ReadonlyMap<string, Buffer>> {
   if (blobs.length === 0) {
     return new Map();
@@ -283,13 +297,14 @@ async function readBlobs(
   );
   const headerAllowance = blobs.length * 128;
   try {
-    const output = await runGitBuffer(
+    const output = await runGit(
       repositoryRoot,
       ['cat-file', '--batch'],
       {
         input,
         maxOutputBytes: limits.maxBytes + headerAllowance,
         signal,
+        githubToken,
         ...(limits.gitTimeoutMs !== undefined && {
           timeoutMs: limits.gitTimeoutMs,
         }),
@@ -324,10 +339,26 @@ async function materializeRevision(
   sha: string,
   limits: ProofWorkspaceLimits,
   signal?: AbortSignal,
+  githubToken?: string,
+  runGit: ProofGitRunner = runGitBuffer,
 ): Promise<ProofWorkspace> {
   throwIfAborted(signal);
-  const blobs = await listTree(repositoryRoot, sha, limits, signal);
-  const contents = await readBlobs(repositoryRoot, blobs, limits, signal);
+  const blobs = await listTree(
+    repositoryRoot,
+    sha,
+    limits,
+    signal,
+    githubToken,
+    runGit,
+  );
+  const contents = await readBlobs(
+    repositoryRoot,
+    blobs,
+    limits,
+    signal,
+    githubToken,
+    runGit,
+  );
   let totalBytes = 0;
   for (const blob of blobs) {
     throwIfAborted(signal);
@@ -405,6 +436,8 @@ export async function withProofWorkspaces<T>(
       options.baseSha,
       options.limits,
       options.signal,
+      options.githubToken,
+      options.runGit,
     );
     const head = await materializeRevision(
       options.repositoryRoot,
@@ -413,6 +446,8 @@ export async function withProofWorkspaces<T>(
       options.headSha,
       options.limits,
       options.signal,
+      options.githubToken,
+      options.runGit,
     );
     const result = await operation({ rootPath: proofRoot, base, head });
     throwIfAborted(options.signal);

@@ -361,6 +361,7 @@ export function createHostedReviewJobHandler(
             proofImage: worker.proofImage,
             repositoryRoot,
             config: run.config,
+            githubToken: installation.token,
             signal: controller.signal,
             ...(input.workspaceVolume === undefined
               ? {}

@@ -413,6 +413,7 @@ export function createHostedPatchFixJobHandler(
             repositoryRoot,
             authorization: binding.authorization,
             budget: createPatchReproofBudget(binding),
+            githubToken: installation.token,
             workspaceLimits: {
               maxFiles: 20_000,
               maxBytes: 256 * 1_024 * 1_024,

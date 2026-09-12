@@ -55,6 +55,7 @@ export interface RunApprovedPatchReproofOptions {
   workspaceLimits: ProofWorkspaceLimits;
   temporaryRoot?: string;
   signal?: AbortSignal;
+  githubToken?: string;
   docker?: Omit<ExecuteDockerProofOptions, 'signal'>;
   now?: () => Date;
 }
@@ -280,6 +281,9 @@ export async function runApprovedPatchReproof(
       limits: options.workspaceLimits,
       ...(options.temporaryRoot === undefined ? {} : { temporaryRoot: options.temporaryRoot }),
       signal: deadlineSignal.signal,
+      ...(options.githubToken === undefined ? {} : {
+        githubToken: options.githubToken,
+      }),
     }, async ({ head }) => {
       await applyApprovedPatch(head, proposal, candidate);
       const executionSignal = createTimedSignal(

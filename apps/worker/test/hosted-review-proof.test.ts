@@ -134,6 +134,7 @@ const context = {
   proofImage,
   repositoryRoot,
   config,
+  githubToken: 'installation-token',
   workspaceVolume,
 };
 
@@ -205,6 +206,7 @@ describe('hosted review proof', () => {
         }),
       ]));
       expect(options.docker).toEqual({ workspaceVolume });
+      expect(options.githubToken).toBe('installation-token');
       expect(options.temporaryRoot).toBe(workspaceVolume.root);
       const execution = {
         base: proofExecution(plan, 'base', 'passed'),

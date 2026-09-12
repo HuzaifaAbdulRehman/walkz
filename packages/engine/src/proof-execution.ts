@@ -28,6 +28,7 @@ export interface RunProofPlanInContainersOptions {
   workspaceLimits: ProofWorkspaceLimits;
   temporaryRoot?: string;
   signal?: AbortSignal;
+  githubToken?: string;
   docker?: Omit<ExecuteDockerProofOptions, 'signal'>;
 }
 
@@ -57,6 +58,9 @@ export async function runProofPlanInContainers(
         temporaryRoot: options.temporaryRoot,
       }),
       ...(options.signal !== undefined && { signal: options.signal }),
+      ...(options.githubToken !== undefined && {
+        githubToken: options.githubToken,
+      }),
     },
     async (workspaces) =>
       executeProofPair(
