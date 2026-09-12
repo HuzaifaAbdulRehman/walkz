@@ -2,9 +2,9 @@ import type { FastifyInstance } from 'fastify';
 
 import type { ProviderAdapter } from '@walkz/contracts';
 import {
-  bindPatchProofToRepositoryCommand,
-  generatePatchCandidate,
   PatchGenerationError,
+  PatchProposalPreparationError,
+  prepareVerifiedPatchProposal,
 } from '@walkz/engine';
 import type { InstallationGitHubSuggestionServiceFactory } from '@walkz/github';
 import { SuggestionPublicationError } from '@walkz/github';
@@ -132,81 +132,30 @@ export function registerPatchFixRoutes(
       if (source === null) {
         return reply.code(404).send({ error: 'verified_finding_not_found' });
       }
-      let binding;
       try {
-        binding = bindPatchProofToRepositoryCommand({
-          reviewRunId: source.reviewRunId,
-          findingFingerprint: source.finding.fingerprint,
-          baseSha: source.baseSha,
-          headSha: source.headSha,
-          commandDigest: source.proof.commandDigest,
-          containerImage: options.proofImage,
-          config: source.config,
-        });
-      } catch {
-        return reply.code(409).send({ error: 'proof_binding_invalid' });
-      }
-      if (binding.planDigest !== source.proof.planDigest) {
-        return reply.code(409).send({ error: 'proof_binding_invalid' });
-      }
-      const credential = await options.store.loadCredential({
-        repositoryId: source.repositoryId,
-        provider: source.provider,
-      });
-      if (credential === null) {
-        return reply.code(409).send({ error: 'provider_credential_required' });
-      }
-      try {
-        const service = await options.github.forInstallation(source.installationId);
-        const headFile = await service.loadHeadFile({
-          owner: source.owner,
-          repository: source.repository,
-          pullRequestNumber: source.pullRequestNumber,
-          headSha: source.headSha,
-          path: source.finding.file,
-        });
-        const generated = await generatePatchCandidate({
-          reviewRunId: source.reviewRunId,
-          findingId: source.findingId,
-          baseSha: source.baseSha,
-          headSha: source.headSha,
-          currentHeadSha: headFile.currentHeadSha,
-          deliveryMode: 'suggestion',
-          model: source.model,
-          maxModelTokens: source.config.tokenBudget,
-          finding: {
-            path: source.finding.file,
-            startLine: source.finding.line,
-            endLine: source.finding.endLine ?? source.finding.line,
-            lifecycleStatus: 'verified',
-            evidenceLevel: 'VERIFIED',
-            claim: source.finding.claim,
-            failureMechanism: source.finding.failureMechanism,
+        const prepared = await prepareVerifiedPatchProposal(
+          source,
+          options.proofImage,
+          {
+            loadCredential: options.store.loadCredential,
+            async loadHeadFile(input) {
+              const service = await options.github.forInstallation(input.installationId);
+              return service.loadHeadFile(input);
+            },
+            createProvider,
+            createProposal: options.store.create,
           },
-          headFile: { path: headFile.path, content: headFile.content },
-        }, { provider: createProvider(credential) });
-        const created = await options.store.create({
-          proposal: {
-            reviewRunId: source.reviewRunId,
-            findingId: source.findingId,
-            baseSha: source.baseSha,
-            headSha: source.headSha,
-            patchHash: generated.candidate.patchHash,
-            deliveryMode: 'suggestion',
-          },
-          provider: generated.provider,
-          model: generated.model,
-          promptVersion: generated.promptVersion,
-          proofPlanDigest: binding.planDigest,
-          proofCommandDigest: binding.plan.commandDigest,
-        });
-        return reply.code(created.created ? 201 : 200).send({
-          candidate: generated.candidate,
-          proposal: created.proposal,
-          job: created.job,
-          created: created.created,
+        );
+        return reply.code(prepared.created ? 201 : 200).send({
+          candidate: prepared.generated.candidate,
+          proposal: prepared.proposal,
+          job: prepared.job,
+          created: prepared.created,
         });
       } catch (error) {
+        if (error instanceof PatchProposalPreparationError) {
+          return reply.code(409).send({ error: error.code });
+        }
         if (error instanceof PatchGenerationError) {
           const status = error.code === 'stale_head' ? 409 :
             error.code === 'invalid_input' || error.code === 'invalid_response'

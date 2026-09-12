@@ -76,6 +76,16 @@ export {
   verifyPatchCandidateIntegrity,
   WALKZ_PATCH_PROMPT_VERSION,
 } from './patch-generation.js';
+export {
+  PatchProposalPreparationError,
+  prepareVerifiedPatchProposal,
+} from './patch-proposal-service.js';
+export type {
+  PatchProposalPreparationFailureCode,
+  PreparePatchProposalDependencies,
+  PreparedPatchProposal,
+  VerifiedPatchProposalSource,
+} from './patch-proposal-service.js';
 export type {
   BuiltPatchPrompt,
   GeneratedPatchCandidate,

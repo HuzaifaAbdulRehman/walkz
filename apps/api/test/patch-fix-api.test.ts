@@ -238,4 +238,36 @@ describe('hosted patch fix API', () => {
     expect(response.statusCode).toBe(401);
     expect(store.decide).not.toHaveBeenCalled();
   });
+
+  it('fails closed when the verified proof binding changes', async () => {
+    const { app, store, github } = setup();
+    const changed = source();
+    changed.proof.planDigest = 'f'.repeat(64);
+    store.loadSource.mockResolvedValue(changed);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/repositories/${repositoryId}/reviews/${reviewRunId}/findings/${findingId}/patch-proposals`,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'proof_binding_invalid' });
+    expect(github.forInstallation).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('requires the repository provider credential before loading the head file', async () => {
+    const { app, store, github } = setup();
+    store.loadCredential.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/repositories/${repositoryId}/reviews/${reviewRunId}/findings/${findingId}/patch-proposals`,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'provider_credential_required' });
+    expect(github.forInstallation).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+  });
 });
