@@ -64,6 +64,57 @@ describe('GitHub webhook boundary', () => {
     ).toThrow('secret is required');
   });
 
+  it('passes an exact pull request comment command to durable intake', async () => {
+    const { app, intake } = createApi('ignored');
+    intake.accept.mockResolvedValueOnce({
+      status: 'command_queued',
+      commandId: '0d6a37bd-ded7-4d24-ae90-ce10c016f974',
+      outboxEventId: '21f369f4-a92f-46df-b0f5-5719d382436e',
+    });
+    const commandPayload = {
+      action: 'created',
+      installation: { id: 1234 },
+      repository: { id: 5678, name: 'walkz', owner: { login: 'owner' } },
+      issue: { number: 28, pull_request: { url: 'https://api.github.test/pulls/28' } },
+      comment: {
+        id: 9012,
+        body: '@walkz-review review',
+        user: { id: 3456, login: 'maintainer', type: 'User' },
+      },
+      sender: { id: 3456, login: 'maintainer', type: 'User' },
+    };
+    const payload = JSON.stringify(commandPayload);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: {
+        'content-type': 'application/json',
+        'x-github-delivery': 'delivery-command',
+        'x-github-event': 'issue_comment',
+        'x-hub-signature-256': signature(payload),
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ accepted: true, queued: true });
+    expect(intake.accept).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryId: 'delivery-command',
+      eventName: 'issue_comment',
+      review: null,
+      command: expect.objectContaining({
+        command: 'review',
+        commentId: '9012',
+        commenterLogin: 'maintainer',
+        pullRequestNumber: 28,
+      }),
+    }));
+    const accepted = intake.accept.mock.calls[0]?.[0];
+    expect(accepted).not.toHaveProperty('body');
+    expect(JSON.stringify(accepted)).not.toContain('@walkz-review review');
+  });
+
   it('passes a verified pull request to one atomic intake', async () => {
     const { app, intake } = createApi();
     const payload = JSON.stringify(pullRequestPayload);
@@ -87,6 +138,7 @@ describe('GitHub webhook boundary', () => {
       eventName: 'pull_request',
       payloadHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       promptVersion: 'walkz-review-v1',
+      command: null,
       review: {
         trigger: 'ready_for_review',
         installationId: '1234',

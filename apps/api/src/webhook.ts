@@ -1,7 +1,10 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import Fastify, { type FastifyInstance } from 'fastify';
-import { parsePullRequestReviewTrigger } from '@walkz/github';
+import {
+  parsePullRequestCommentCommand,
+  parsePullRequestReviewTrigger,
+} from '@walkz/github';
 import {
   acceptGitHubWebhook,
   type GitHubWebhookIntakeInput,
@@ -83,9 +86,16 @@ export function registerGitHubWebhookRoutes(
       }
 
       let review: ReturnType<typeof parsePullRequestReviewTrigger> = null;
+      let command: ReturnType<typeof parsePullRequestCommentCommand> = null;
       if (eventName === 'pull_request') {
         try {
           review = parsePullRequestReviewTrigger(parsedPayload);
+        } catch {
+          return reply.code(400).send({ error: 'invalid_payload' });
+        }
+      } else if (eventName === 'issue_comment') {
+        try {
+          command = parsePullRequestCommentCommand(parsedPayload);
         } catch {
           return reply.code(400).send({ error: 'invalid_payload' });
         }
@@ -97,10 +107,11 @@ export function registerGitHubWebhookRoutes(
         payloadHash: createHash('sha256').update(payload).digest('hex'),
         promptVersion: options.promptVersion,
         review,
+        command,
       });
       return reply.code(202).send({
         accepted: outcome.status !== 'duplicate',
-        queued: outcome.status === 'queued',
+        queued: outcome.status === 'queued' || outcome.status === 'command_queued',
       });
     });
   });

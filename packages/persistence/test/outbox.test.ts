@@ -4,6 +4,7 @@ import {
   claimOutboxEvent,
   createGitHubCheckCompletedOutboxEvent,
   createGitHubCheckQueuedOutboxEvent,
+  createGitHubCommentCommandQueuedOutboxEvent,
   createOutboxEventStore,
   createPatchFixQueuedOutboxEvent,
   createReviewRunQueuedOutboxEvent,
@@ -94,6 +95,21 @@ describe('transactional outbox', () => {
     })).resolves.toBe('event-id');
     const payload = JSON.parse(query.mock.calls[0]?.[1]?.[2] as string);
     expect(payload).toEqual({ proposalId });
+    expect(query.mock.calls[0]?.[0]).toContain('ON CONFLICT');
+  });
+
+  it('queues a comment command using its identifier only', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 'event-id' }] });
+    const commandId = '0d6a37bd-ded7-4d24-ae90-ce10c016f974';
+
+    await expect(createGitHubCommentCommandQueuedOutboxEvent({ query }, {
+      aggregateId: commandId,
+      eventType: 'github_comment_command.queued',
+      payload: { commandId },
+    })).resolves.toBe('event-id');
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[2] as string)).toEqual({
+      commandId,
+    });
     expect(query.mock.calls[0]?.[0]).toContain('ON CONFLICT');
   });
 

@@ -13,6 +13,8 @@ const ids = {
   reviewEvent: '4b79fc1b-1c89-4431-9d76-02ca23296ccd',
   checkEvent: 'b9d56748-0990-4d4a-a9ba-5860a50490c1',
   oldRun: '376618a1-a8ed-4ee7-8688-b7bb39f16fcb',
+  command: '0d6a37bd-ded7-4d24-ae90-ce10c016f974',
+  commandEvent: '21f369f4-a92f-46df-b0f5-5719d382436e',
 };
 
 const request = {
@@ -103,6 +105,67 @@ describe('GitHub webhook review intake', () => {
       status: 'duplicate',
     });
     expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it('commits parsed command metadata and its outbox event together', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: ids.delivery }] })
+      .mockResolvedValueOnce({ rows: [context('manual')] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: ids.command }] })
+      .mockResolvedValueOnce({ rows: [{ id: ids.commandEvent }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const command = {
+      command: 'review' as const,
+      installationId: '1234',
+      repositoryId: '5678',
+      repositoryOwner: 'HuzaifaAbdulRehman',
+      repositoryName: 'walkz',
+      pullRequestNumber: 28,
+      commentId: '9012',
+      commenterId: '3456',
+      commenterLogin: 'maintainer',
+    };
+
+    await expect(acceptGitHubWebhook(poolWith(query), {
+      ...request,
+      eventName: 'issue_comment',
+      review: null,
+      command,
+    })).resolves.toEqual({
+      status: 'command_queued',
+      commandId: ids.command,
+      outboxEventId: ids.commandEvent,
+    });
+    expect(query.mock.calls.map(([sql]) => String(sql).trim())).toEqual([
+      'BEGIN',
+      expect.stringContaining('INSERT INTO webhook_deliveries'),
+      expect.stringContaining('JOIN LATERAL'),
+      expect.stringContaining('UPDATE webhook_deliveries'),
+      expect.stringContaining('UPDATE repositories'),
+      expect.stringContaining('INSERT INTO github_comment_commands'),
+      expect.stringContaining('INSERT INTO outbox_events'),
+      'COMMIT',
+    ]);
+    const commandInsert = query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO github_comment_commands'));
+    expect(commandInsert?.[1]).toEqual([
+      ids.delivery,
+      ids.repository,
+      command.commentId,
+      command.commenterId,
+      command.commenterLogin,
+      command.pullRequestNumber,
+      command.command,
+    ]);
+    const outboxInsert = query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO outbox_events'));
+    expect(JSON.parse(outboxInsert?.[1]?.[2] as string)).toEqual({
+      commandId: ids.command,
+    });
   });
 
   it('records disabled triggers without creating a review run', async () => {

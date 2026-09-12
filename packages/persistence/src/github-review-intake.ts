@@ -3,7 +3,10 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 
 import { queueGitHubReviewRun } from './github-review-run.js';
-import { withTransaction } from './outbox.js';
+import {
+  createGitHubCommentCommandQueuedOutboxEvent,
+  withTransaction,
+} from './outbox.js';
 import { insertWebhookDelivery } from './webhook-delivery.js';
 
 const githubIdSchema = z.string().regex(/^[1-9][0-9]{0,18}$/).refine(
@@ -30,6 +33,18 @@ const webhookReviewSchema = z
     path: ['headSha'],
   });
 
+const webhookCommandSchema = z.object({
+  command: z.enum(['review', 'propose_fix']),
+  installationId: githubIdSchema,
+  repositoryId: githubIdSchema,
+  repositoryOwner: z.string().trim().min(1).max(100),
+  repositoryName: z.string().trim().min(1).max(100),
+  pullRequestNumber: z.number().int().positive(),
+  commentId: githubIdSchema,
+  commenterId: githubIdSchema,
+  commenterLogin: z.string().trim().min(1).max(100),
+}).strict();
+
 const webhookIntakeSchema = z
   .object({
     deliveryId: z.string().trim().min(1).max(255),
@@ -37,11 +52,20 @@ const webhookIntakeSchema = z
     payloadHash: z.string().regex(/^[a-f0-9]{64}$/i),
     promptVersion: z.string().trim().min(1).max(128),
     review: webhookReviewSchema.nullable(),
+    command: webhookCommandSchema.nullable().default(null),
   })
   .strict()
   .refine((input) => input.review === null || input.eventName === 'pull_request', {
     message: 'Pull request review data requires a pull_request event.',
     path: ['eventName'],
+  })
+  .refine((input) => input.command === null || input.eventName === 'issue_comment', {
+    message: 'Comment command data requires an issue_comment event.',
+    path: ['eventName'],
+  })
+  .refine((input) => input.review === null || input.command === null, {
+    message: 'A webhook delivery cannot contain review and command work.',
+    path: ['command'],
   });
 
 export type GitHubWebhookIntakeInput = z.infer<typeof webhookIntakeSchema>;
@@ -57,6 +81,11 @@ interface RepositoryReviewContext {
 export type GitHubWebhookIntakeResult =
   | { status: 'duplicate' }
   | { status: 'ignored'; reason: 'event_not_reviewable' | 'repository_not_configured' | 'trigger_disabled' }
+  | {
+      status: 'command_queued';
+      commandId: string;
+      outboxEventId: string;
+    }
   | {
       status: 'queued';
       reviewRunId: string;
@@ -127,14 +156,15 @@ export async function acceptGitHubWebhook(
   return withTransaction(pool, async (client) => {
     const storedDeliveryId = await insertWebhookDelivery(client, request);
     if (storedDeliveryId === null) return { status: 'duplicate' };
-    if (request.review === null) {
+    const target = request.review ?? request.command;
+    if (target === null) {
       return { status: 'ignored', reason: 'event_not_reviewable' };
     }
 
     const context = await loadRepositoryContext(
       client,
-      request.review.installationId,
-      request.review.repositoryId,
+      target.installationId,
+      target.repositoryId,
     );
     if (context === null) {
       return { status: 'ignored', reason: 'repository_not_configured' };
@@ -143,9 +173,44 @@ export async function acceptGitHubWebhook(
       client,
       storedDeliveryId,
       context,
-      request.review.repositoryOwner,
-      request.review.repositoryName,
+      target.repositoryOwner,
+      target.repositoryName,
     );
+
+    if (request.command !== null) {
+      const inserted = await client.query<{ id: string }>(
+        `
+          INSERT INTO github_comment_commands (
+            webhook_delivery_id, repository_id, github_comment_id,
+            commenter_github_id, commenter_login, pull_request_number, command
+          )
+          VALUES ($1, $2, $3::bigint, $4::bigint, $5, $6, $7)
+          RETURNING id
+        `,
+        [
+          storedDeliveryId,
+          context.repositoryId,
+          request.command.commentId,
+          request.command.commenterId,
+          request.command.commenterLogin,
+          request.command.pullRequestNumber,
+          request.command.command,
+        ],
+      );
+      const commandId = inserted.rows[0]?.id;
+      if (commandId === undefined) {
+        throw new Error('GitHub comment command insert did not return an ID.');
+      }
+      const outboxEventId = await createGitHubCommentCommandQueuedOutboxEvent(client, {
+        aggregateId: commandId,
+        eventType: 'github_comment_command.queued',
+        payload: { commandId },
+      });
+      return { status: 'command_queued', commandId, outboxEventId };
+    }
+    if (request.review === null) {
+      throw new Error('Webhook intake lost its validated review target.');
+    }
 
     const config = parseWalkzConfig(context.config);
     if (!triggerEnabled(config.triggerPolicy, request.review.trigger)) {
