@@ -20,6 +20,9 @@ import {
   listReviewHistory,
   loadProviderCredential,
   loadVerifiedPatchFixSource,
+  preparePatchSuggestionPublication,
+  recordPatchSuggestionPublication,
+  releasePatchSuggestionPublication,
   storeOAuthState,
 } from '@walkz/persistence';
 import { classifyProviderError, validateProviderAccess } from '@walkz/providers';
@@ -28,6 +31,7 @@ import { z } from 'zod';
 import { createHostedApi } from './hosted-api.js';
 import { createPersistentInstallationRepositoryStore } from './installation-store.js';
 import { createPersistentManualReviewStarter } from './manual-review-api.js';
+import { createPatchSuggestionPublisher } from './patch-suggestion-api.js';
 import { createPersistentProviderCredentialStore } from './provider-credential-api.js';
 import { createApiSessionAuthenticator } from './session-auth.js';
 import { createPersistentGitHubWebhookIntake } from './webhook.js';
@@ -133,6 +137,7 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
     pool,
     config.credentialVault,
   );
+  const githubSuggestions = createInstallationGitHubSuggestionServiceFactory(githubApp);
   const app = createHostedApi({
     githubAuth: {
       stateSigner: createOAuthStateSigner(config.oauthStateSecret),
@@ -199,8 +204,16 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
         decide: (decision) => decidePatchFixProposal(pool, decision),
         list: (query) => listPatchFixes(pool, query),
       },
-      github: createInstallationGitHubSuggestionServiceFactory(githubApp),
+      github: githubSuggestions,
       proofImage: config.proofImage,
+    },
+    patchSuggestions: {
+      authenticator,
+      publisher: createPatchSuggestionPublisher({
+        prepare: (publication) => preparePatchSuggestionPublication(pool, publication),
+        record: (publication) => recordPatchSuggestionPublication(pool, publication),
+        release: (publication) => releasePatchSuggestionPublication(pool, publication),
+      }, githubSuggestions),
     },
     repositories: {
       authenticator,

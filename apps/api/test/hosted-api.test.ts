@@ -46,6 +46,10 @@ describe('hosted API composition', () => {
         github: { forInstallation: vi.fn() },
         proofImage: `node@sha256:${'a'.repeat(64)}`,
       },
+      patchSuggestions: {
+        authenticator,
+        publisher: { publish: vi.fn() },
+      },
       repositories: {
         authenticator,
         configHistory: { list: vi.fn() },
@@ -78,6 +82,7 @@ describe('hosted API composition', () => {
       reviews,
       findings,
       credentialStatus,
+      patchDecision,
       patchSuggestion,
       callback,
     ] = await Promise.all([
@@ -106,6 +111,11 @@ describe('hosted API composition', () => {
         payload: {},
       }),
       app.inject({
+        method: 'POST',
+        url: `/api/repositories/${repositoryId}/patch-proposals/${repositoryId}/publish-suggestion`,
+        payload: {},
+      }),
+      app.inject({
         method: 'GET',
         url: '/auth/github/callback?code=sensitive-code&state=sensitive-state',
       }),
@@ -120,6 +130,7 @@ describe('hosted API composition', () => {
     expect(reviews.statusCode).toBe(401);
     expect(findings.statusCode).toBe(401);
     expect(credentialStatus.statusCode).toBe(401);
+    expect(patchDecision.statusCode).toBe(401);
     expect(patchSuggestion.statusCode).toBe(401);
     expect(callback.statusCode).toBe(400);
     expect(configs.headers['cache-control']).toBe('private, no-store');
@@ -155,6 +166,10 @@ describe('hosted API composition', () => {
         },
         github: { forInstallation: vi.fn() },
         proofImage: `node@sha256:${'a'.repeat(64)}`,
+      },
+      patchSuggestions: {
+        authenticator,
+        publisher: { publish: vi.fn() },
       },
       repositories: {
         authenticator,
