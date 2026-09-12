@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import type {
   CapturedOutput,
@@ -12,6 +12,7 @@ import type {
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  buildDockerProofArguments,
   executeProofInContainer,
   executeProofPair,
   type DockerCommandExecutor,
@@ -119,6 +120,41 @@ afterEach(async () => {
 });
 
 describe('executeProofInContainer', () => {
+  it('mounts only the selected subdirectory from a shared workspace volume', async () => {
+    const target = await workspace('head');
+    const args = buildDockerProofArguments(
+      plan(),
+      target.path,
+      'walkz-proof-head-volume',
+      '1000:1000',
+      {
+        name: 'walkz-proof-workspaces',
+        root: dirname(target.path),
+      },
+    );
+
+    expect(args).toContain(
+      'type=volume,source=walkz-proof-workspaces,target=/workspace,readonly,' +
+      `volume-subpath=${basename(target.path)}`,
+    );
+    expect(args.some((argument) => argument.startsWith('type=bind,'))).toBe(false);
+  });
+
+  it('rejects a workspace outside the configured shared volume', async () => {
+    const target = await workspace('head');
+
+    expect(() => buildDockerProofArguments(
+      plan(),
+      target.path,
+      'walkz-proof-head-volume',
+      '1000:1000',
+      {
+        name: 'walkz-proof-workspaces',
+        root: join(target.path, 'different-root'),
+      },
+    )).toThrow('shared Docker volume');
+  });
+
   it('builds a locked argument-array invocation and removes its inputs', async () => {
     const target = await workspace('base');
     const calls: CommandSpec[] = [];

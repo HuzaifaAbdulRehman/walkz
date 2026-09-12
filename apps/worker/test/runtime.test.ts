@@ -20,6 +20,8 @@ function environment(): NodeJS.ProcessEnv {
       'primary-2026': encryptionKey,
     }),
     WALKZ_WORKER_ID: 'worker-1',
+    WALKZ_PROOF_WORKSPACE_ROOT: '/var/lib/walkz/proof',
+    WALKZ_DOCKER_WORKSPACE_VOLUME: 'walkz-proof-workspaces',
   };
 }
 
@@ -32,6 +34,10 @@ describe('hosted worker runtime configuration', () => {
       githubAppId: '1234',
       githubPrivateKey: privateKey,
       workerId: 'worker-1',
+      workspaceVolume: {
+        name: 'walkz-proof-workspaces',
+        root: '/var/lib/walkz/proof',
+      },
       outboxLeaseMs: 30_000,
       reviewLeaseMs: 300_000,
       recoveryIntervalMs: 15_000,
@@ -46,6 +52,13 @@ describe('hosted worker runtime configuration', () => {
         tls: { servername: 'redis.example' },
       },
     });
+  });
+
+  it('requires the workspace root and Docker volume together', () => {
+    const input = environment();
+    delete input.WALKZ_DOCKER_WORKSPACE_VOLUME;
+
+    expect(() => parseHostedWorkerEnvironment(input)).toThrow();
   });
 
   it('rejects unsupported Redis URL data without echoing credentials', () => {

@@ -32,6 +32,7 @@ export {
 export type {
   DockerCommandExecutor,
   DockerProofWorkspace,
+  DockerWorkspaceVolume,
   ExecuteDockerProofOptions,
   ProofExecutionPair,
 } from './docker-proof.js';

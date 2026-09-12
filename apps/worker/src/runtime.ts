@@ -1,19 +1,34 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { isAbsolute } from 'node:path';
 
 import type { ConnectionOptions } from 'bullmq';
+import type { DockerWorkspaceVolume } from '@walkz/sandbox';
 import {
   createGitHubInstallationApp,
   createInstallationReviewCheckPublisherFactory,
+  createInstallationGitHubSuggestionServiceFactory,
 } from '@walkz/github';
 import {
+  claimPatchFixJob,
   claimHostedReviewRun,
+  completePatchFixJob,
   completeHostedReviewRun,
   createCredentialVault,
   createDatabasePool,
   createOutboxEventStore,
+  failPatchFixJob,
+  getLatestPatchReproofResult,
+  listRecoverablePatchFixProposalIds,
   listRecoverableHostedReviewRunIds,
+  loadClaimedPatchFixTarget,
   loadProviderCredential,
+  preparePatchSuggestionPublication,
+  recordPatchReproofResult,
+  recordPatchSuggestionPublication,
+  releasePatchFixJob,
+  releasePatchSuggestionPublication,
+  renewPatchFixJobLease,
   renewHostedReviewRunLease,
 } from '@walkz/persistence';
 import { z } from 'zod';
@@ -24,10 +39,14 @@ import {
   createHostedReviewJobHandler,
   createOutboxQueue,
   createOutboxWorker,
+  createPatchFixQueue,
+  createPatchFixWorker,
+  createHostedPatchFixJobHandler,
   createReviewQueue,
   createReviewWorker,
   recoverOutboxEvents,
   recoverReviewRuns,
+  recoverPatchFixes,
   type HostedReviewStore,
 } from './index.js';
 
@@ -44,10 +63,32 @@ const environmentSchema = z.object({
     .default(30_000),
   WALKZ_REVIEW_LEASE_MS: z.coerce.number().int().min(10_000)
     .max(60 * 60 * 1_000).default(300_000),
+  WALKZ_PATCH_FIX_LEASE_MS: z.coerce.number().int().min(10_000)
+    .max(60 * 60 * 1_000).default(600_000),
+  WALKZ_PROOF_IMAGE: z.string().trim().max(512)
+    .regex(/^(?!-)[^\s@]+@sha256:[a-f0-9]{64}$/i)
+    .default('node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf'),
+  WALKZ_PROOF_WORKSPACE_ROOT: z.string().trim().min(1).max(4_096)
+    .refine((value) => isAbsolute(value), 'Proof workspace root must be absolute.')
+    .optional(),
+  WALKZ_DOCKER_WORKSPACE_VOLUME: z.string().trim()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/)
+    .optional(),
   WALKZ_RECOVERY_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000)
     .default(15_000),
   WALKZ_RECOVERY_BATCH: z.coerce.number().int().min(1).max(1_000).default(100),
-}).passthrough();
+}).passthrough().superRefine((environment, context) => {
+  if (
+    (environment.WALKZ_PROOF_WORKSPACE_ROOT === undefined) !==
+    (environment.WALKZ_DOCKER_WORKSPACE_VOLUME === undefined)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Proof workspace root and Docker volume must be configured together.',
+      path: ['WALKZ_DOCKER_WORKSPACE_VOLUME'],
+    });
+  }
+});
 
 export interface HostedWorkerEnvironment {
   databaseUrl: string;
@@ -58,6 +99,9 @@ export interface HostedWorkerEnvironment {
   workerId: string;
   outboxLeaseMs: number;
   reviewLeaseMs: number;
+  patchFixLeaseMs: number;
+  proofImage: string;
+  workspaceVolume?: DockerWorkspaceVolume;
   recoveryIntervalMs: number;
   recoveryBatch: number;
 }
@@ -141,6 +185,17 @@ export function parseHostedWorkerEnvironment(
       `${hostname()}-${process.pid}-${randomUUID()}`.slice(0, 128),
     outboxLeaseMs: environment.WALKZ_OUTBOX_LEASE_MS,
     reviewLeaseMs: environment.WALKZ_REVIEW_LEASE_MS,
+    patchFixLeaseMs: environment.WALKZ_PATCH_FIX_LEASE_MS,
+    proofImage: environment.WALKZ_PROOF_IMAGE,
+    ...(environment.WALKZ_PROOF_WORKSPACE_ROOT === undefined ||
+      environment.WALKZ_DOCKER_WORKSPACE_VOLUME === undefined
+      ? {}
+      : {
+          workspaceVolume: {
+            name: environment.WALKZ_DOCKER_WORKSPACE_VOLUME,
+            root: environment.WALKZ_PROOF_WORKSPACE_ROOT,
+          },
+        }),
     recoveryIntervalMs: environment.WALKZ_RECOVERY_INTERVAL_MS,
     recoveryBatch: environment.WALKZ_RECOVERY_BATCH,
   };
@@ -171,17 +226,51 @@ export function createHostedWorkerFromEnvironment(
     complete: (result) => completeHostedReviewRun(pool, result),
   };
   const outboxQueue = createOutboxQueue(config.redis);
+  const patchFixQueue = createPatchFixQueue(config.redis);
   const reviewQueue = createReviewQueue(config.redis);
   const reviewHandler = createHostedReviewJobHandler({
     store: reviewStore,
     tokens: githubApp,
     workerId: config.workerId,
     leaseMs: config.reviewLeaseMs,
+    proofImage: config.proofImage,
+    ...(config.workspaceVolume === undefined
+      ? {}
+      : { workspaceVolume: config.workspaceVolume }),
+  });
+  const patchFixHandler = createHostedPatchFixJobHandler({
+    store: {
+      claim: (lease) => claimPatchFixJob(pool, lease),
+      renew: (lease) => renewPatchFixJobLease(pool, lease),
+      loadTarget: (target) => loadClaimedPatchFixTarget(pool, target),
+      loadCredential: (binding) =>
+        loadProviderCredential(pool, config.credentialVault, binding),
+      latestReproof: (proposalId) => getLatestPatchReproofResult(pool, proposalId),
+      recordReproof: (result) => recordPatchReproofResult(pool, result),
+      preparePublication: (publication) =>
+        preparePatchSuggestionPublication(pool, publication),
+      recordPublication: (publication) =>
+        recordPatchSuggestionPublication(pool, publication),
+      releasePublication: (publication) =>
+        releasePatchSuggestionPublication(pool, publication),
+      complete: (completion) => completePatchFixJob(pool, completion),
+      release: (lease) => releasePatchFixJob(pool, lease),
+      fail: (failure) => failPatchFixJob(pool, failure),
+    },
+    tokens: githubApp,
+    github: createInstallationGitHubSuggestionServiceFactory(githubApp),
+    workerId: config.workerId,
+    leaseMs: config.patchFixLeaseMs,
+    proofImage: config.proofImage,
+    ...(config.workspaceVolume === undefined
+      ? {}
+      : { workspaceVolume: config.workspaceVolume }),
   });
   const outboxHandler = createHostedOutboxHandler({
     checks: createGitHubCheckOutboxHandler(
       createInstallationReviewCheckPublisherFactory(githubApp),
     ),
+    patchFixes: patchFixQueue,
     reviews: reviewQueue,
   });
   const outboxWorker = createOutboxWorker(
@@ -191,6 +280,7 @@ export function createHostedWorkerFromEnvironment(
     { workerId: config.workerId, leaseMs: config.outboxLeaseMs },
   );
   const reviewWorker = createReviewWorker(config.redis, reviewHandler);
+  const patchFixWorker = createPatchFixWorker(config.redis, patchFixHandler);
   const reportBackgroundError = (): void => {
     try {
       onBackgroundError();
@@ -198,6 +288,7 @@ export function createHostedWorkerFromEnvironment(
   };
   outboxWorker.on('error', reportBackgroundError);
   reviewWorker.on('error', reportBackgroundError);
+  patchFixWorker.on('error', reportBackgroundError);
 
   let started = false;
   let stopping = false;
@@ -209,6 +300,10 @@ export function createHostedWorkerFromEnvironment(
     await recoverReviewRuns(reviewQueue, {
       listRecoverableReviewRunIds: (limit) =>
         listRecoverableHostedReviewRunIds(pool, limit),
+    }, config.recoveryBatch);
+    await recoverPatchFixes(patchFixQueue, {
+      listRecoverablePatchFixProposalIds: (limit) =>
+        listRecoverablePatchFixProposalIds(pool, limit),
     }, config.recoveryBatch);
   };
   const scheduleRecovery = (): void => {
@@ -229,9 +324,11 @@ export function createHostedWorkerFromEnvironment(
       started = true;
       await Promise.all([
         outboxQueue.waitUntilReady(),
+        patchFixQueue.waitUntilReady(),
         reviewQueue.waitUntilReady(),
         outboxWorker.waitUntilReady(),
         reviewWorker.waitUntilReady(),
+        patchFixWorker.waitUntilReady(),
       ]);
       await recover();
       scheduleRecovery();
@@ -244,9 +341,11 @@ export function createHostedWorkerFromEnvironment(
       const results = await Promise.allSettled([
         outboxWorker.close(),
         reviewWorker.close(),
+        patchFixWorker.close(),
       ]);
       const queueResults = await Promise.allSettled([
         outboxQueue.close(),
+        patchFixQueue.close(),
         reviewQueue.close(),
         pool.end(),
       ]);

@@ -26,6 +26,9 @@
     },
     {
       "path": "../../packages/providers"
+    },
+    {
+      "path": "../../packages/sandbox"
     }
   ]
 }

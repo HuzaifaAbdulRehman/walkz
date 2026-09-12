@@ -13,12 +13,31 @@ export {
   reviewQueueName,
 } from './review-queue.js';
 export type { ReviewJobHandler, ReviewQueue } from './review-queue.js';
+export {
+  createPatchFixQueue,
+  createPatchFixWorker,
+  enqueuePatchFix,
+  patchFixQueueName,
+  recoverPatchFixes,
+} from './patch-fix-queue.js';
+export type { PatchFixJobHandler, PatchFixQueue } from './patch-fix-queue.js';
+export { createHostedPatchFixJobHandler } from './hosted-patch-fix-handler.js';
+export type {
+  HostedPatchFixHandlerOptions,
+  HostedPatchFixStore,
+  HostedPatchFixTokens,
+} from './hosted-patch-fix-handler.js';
 export { createHostedReviewJobHandler } from './hosted-review-handler.js';
 export type {
   HostedInstallationTokens,
   HostedReviewHandlerOptions,
   HostedReviewStore,
 } from './hosted-review-handler.js';
+export {
+  proveHostedFindings,
+  runHostedDeterministicChecks,
+} from './hosted-review-proof.js';
+export type { HostedReviewProofContext } from './hosted-review-proof.js';
 
 export const outboxQueueName = 'walkz-outbox';
 

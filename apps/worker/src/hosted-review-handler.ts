@@ -1,5 +1,11 @@
-import type { ProviderAdapter, ReviewVerdict } from '@walkz/contracts';
+import type {
+  Evidence,
+  Finding,
+  ProviderAdapter,
+  ReviewVerdict,
+} from '@walkz/contracts';
 import {
+  adjudicateLocalVerdict,
   runLocalReviewPipeline,
   WALKZ_REVIEW_PROMPT_VERSION,
   type LocalReviewPipelineResult,
@@ -20,13 +26,20 @@ import type {
   CompletedHostedReviewRun,
 } from '@walkz/persistence';
 import { createGroqProvider } from '@walkz/providers';
+import type { DockerWorkspaceVolume } from '@walkz/sandbox';
 import { z } from 'zod';
 
+import {
+  proveHostedFindings,
+  runHostedDeterministicChecks,
+} from './hosted-review-proof.js';
 import type { ReviewJobHandler } from './review-queue.js';
 
 const workerOptionsSchema = z.object({
   workerId: z.string().trim().min(1).max(128),
   leaseMs: z.number().int().min(10_000).max(60 * 60 * 1_000),
+  proofImage: z.string().trim().max(512)
+    .regex(/^(?!-)[^\s@]+@sha256:[a-f0-9]{64}$/i),
 }).strict();
 
 interface HostedResultFinding {
@@ -44,6 +57,7 @@ interface HostedResultFinding {
   claim: string;
   failureMechanism: string;
   suggestedProof: string;
+  evidence: Evidence[];
 }
 
 interface HostedReviewResult {
@@ -93,6 +107,8 @@ export interface HostedReviewHandlerOptions {
   tokens: HostedInstallationTokens;
   workerId: string;
   leaseMs: number;
+  proofImage: string;
+  workspaceVolume?: DockerWorkspaceVolume;
   checkout?: Checkout;
   collectContext?: (
     repositoryRoot: string,
@@ -105,6 +121,7 @@ export interface HostedReviewHandlerOptions {
     options: ResolveGitReferencesOptions,
   ) => Promise<ResolvedGitReferences>;
   runPipeline?: typeof runLocalReviewPipeline;
+  proveFindings?: typeof proveHostedFindings;
 }
 
 function summaryFor(verdict: ReviewVerdict): string {
@@ -126,12 +143,15 @@ function boundedSummary(value: string): string {
   return Array.from(value).slice(0, 1_024).join('');
 }
 
-function resultFromPipeline(result: LocalReviewPipelineResult): HostedReviewResult {
-  const verdict = result.decision.verdict;
+function resultFromPipeline(
+  result: LocalReviewPipelineResult,
+  findings: readonly Finding[] = result.run.findings,
+  verdict: ReviewVerdict = result.decision.verdict,
+): HostedReviewResult {
   return {
     verdict,
     summary: summaryFor(verdict),
-    findings: result.run.findings.slice(0, 50).map((finding) => ({
+    findings: findings.slice(0, 50).map((finding) => ({
       fingerprint: finding.fingerprint,
       category: finding.category,
       path: finding.file,
@@ -145,8 +165,36 @@ function resultFromPipeline(result: LocalReviewPipelineResult): HostedReviewResu
       claim: finding.claim,
       failureMechanism: finding.failureMechanism,
       suggestedProof: finding.suggestedProof,
+      evidence: finding.evidence.filter((evidence) =>
+        evidence.kind === 'counterfactual_proof'),
     })),
   };
+}
+
+function requiredCheckFailed(result: LocalReviewPipelineResult): boolean {
+  return result.deterministicChecks?.checks.some((check) =>
+    check.required && check.execution.outcome === 'failed') ?? false;
+}
+
+function adjudicateProofedResult(
+  result: LocalReviewPipelineResult,
+  findings: readonly Finding[],
+  proofStatus: 'complete' | 'not_requested' | 'incomplete',
+): ReviewVerdict {
+  return adjudicateLocalVerdict({
+    contextStatus: result.context === null
+      ? result.failure?.stage === 'context' ? 'error' : 'incomplete'
+      : result.context.coverage.complete && !result.provider.promptTruncated
+        ? 'complete'
+        : 'incomplete',
+    checkStatus: result.deterministicChecks?.status ??
+      (result.failure?.stage === 'checks' ? 'error' : 'incomplete'),
+    providerStatus: result.provider.status,
+    proofStatus,
+    findings,
+    blockingEvidenceLevels: result.run.config.blockingEvidenceLevels,
+    humanJudgmentRequired: requiredCheckFailed(result),
+  }).verdict;
 }
 
 function infrastructureFailure(): HostedReviewResult {
@@ -210,17 +258,23 @@ export function createHostedReviewJobHandler(
   const worker = workerOptionsSchema.parse({
     workerId: input.workerId,
     leaseMs: input.leaseMs,
+    proofImage: input.proofImage,
   });
   const checkout = input.checkout ?? withHostedGitHubCheckout;
   const collectContext = input.collectContext ?? collectReviewContext;
   const createProvider = input.createProvider ?? ((apiKey: string) =>
     createGroqProvider({ apiKey }));
   const runPipeline = input.runPipeline ?? runLocalReviewPipeline;
+  const proveFindings = input.proveFindings ?? proveHostedFindings;
   const resolveReferences = input.resolveReferences ?? resolveGitReferences;
 
   return {
     async handle(reviewRunId) {
-      const leaseInput = { reviewRunId, ...worker };
+      const leaseInput = {
+        reviewRunId,
+        workerId: worker.workerId,
+        leaseMs: worker.leaseMs,
+      };
       const run = await input.store.claim(leaseInput);
       if (run === null) return;
 
@@ -245,42 +299,84 @@ export function createHostedReviewJobHandler(
           baseSha: run.baseSha,
           headSha: run.headSha,
           githubToken: installation.token,
-        }, async (repositoryRoot) => resultFromPipeline(await runPipeline({
-          request: {
+        }, async (repositoryRoot) => {
+          const pipeline = await runPipeline({
+            request: {
+              repositoryRoot,
+              baseRef: 'refs/walkz/base',
+              headRef: 'HEAD',
+              trigger: 'github',
+              configVersion: run.config.schemaVersion,
+              configHash: run.configHash,
+              runBudget: {
+                maxDurationMs: 10 * 60 * 1_000,
+                maxModelTokens: run.config.tokenBudget,
+                maxProofAttempts: 3,
+              },
+              callerCapabilities: {
+                canRunCommands: true,
+                canUseModel: true,
+                canWriteFiles: false,
+              },
+              prNumber: run.pullRequestNumber,
+            },
+            config: run.config,
+            ...(provider === undefined ? {} : { provider }),
+            dependencies: {
+              collectContext: (root, references, options) => collectContext(
+                root,
+                references,
+                { ...options, githubToken: installation.token },
+              ),
+              resolveReferences: (root, options) => resolveReferences(
+                root,
+                { ...options, githubToken: installation.token },
+              ),
+              runChecks: (config, root, options) =>
+                runHostedDeterministicChecks({
+                  reviewRunId: run.reviewRunId,
+                  baseSha: run.baseSha,
+                  headSha: run.headSha,
+                  proofImage: worker.proofImage,
+                  repositoryRoot: root,
+                  config,
+                  ...(options.signal === undefined
+                    ? {}
+                    : { signal: options.signal }),
+                  ...(input.workspaceVolume === undefined
+                    ? {}
+                    : { workspaceVolume: input.workspaceVolume }),
+                }),
+            },
+            runIdFactory: () => run.reviewRunId,
+            signal: controller.signal,
+          });
+          if (pipeline.context == null || pipeline.deterministicChecks == null) {
+            return resultFromPipeline(pipeline);
+          }
+          const proof = await proveFindings(pipeline.run.findings, {
+            reviewRunId: run.reviewRunId,
+            baseSha: run.baseSha,
+            headSha: run.headSha,
+            proofImage: worker.proofImage,
             repositoryRoot,
-            baseRef: 'refs/walkz/base',
-            headRef: 'HEAD',
-            trigger: 'github',
-            configVersion: run.config.schemaVersion,
-            configHash: run.configHash,
-            runBudget: {
-              maxDurationMs: 10 * 60 * 1_000,
-              maxModelTokens: run.config.tokenBudget,
-              maxProofAttempts: 0,
-            },
-            callerCapabilities: {
-              canRunCommands: false,
-              canUseModel: true,
-              canWriteFiles: false,
-            },
-            prNumber: run.pullRequestNumber,
-          },
-          config: run.config,
-          ...(provider === undefined ? {} : { provider }),
-          dependencies: {
-            collectContext: (root, references, options) => collectContext(
-              root,
-              references,
-              { ...options, githubToken: installation.token },
-            ),
-            resolveReferences: (root, options) => resolveReferences(
-              root,
-              { ...options, githubToken: installation.token },
-            ),
-          },
-          runIdFactory: () => run.reviewRunId,
+            config: run.config,
+            signal: controller.signal,
+            ...(input.workspaceVolume === undefined
+              ? {}
+              : { workspaceVolume: input.workspaceVolume }),
+          });
+          return resultFromPipeline(
+            pipeline,
+            proof.findings,
+            adjudicateProofedResult(pipeline, proof.findings, proof.proofStatus),
+          );
+        }, {
           signal: controller.signal,
-        })), { signal: controller.signal });
+          ...(input.workspaceVolume === undefined
+            ? {}
+            : { temporaryRoot: input.workspaceVolume.root }),
+        });
       } catch {
         if (controller.signal.aborted) {
           await heartbeat.stop();

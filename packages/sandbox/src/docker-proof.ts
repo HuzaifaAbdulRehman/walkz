@@ -37,6 +37,11 @@ export interface DockerProofWorkspace {
   path: string;
 }
 
+export interface DockerWorkspaceVolume {
+  name: string;
+  root: string;
+}
+
 export type DockerCommandExecutor = (
   spec: CommandSpec,
   options: ExecuteCommandOptions,
@@ -52,6 +57,7 @@ export interface ExecuteDockerProofOptions {
   ) => string;
   containerUser?: string;
   now?: () => Date;
+  workspaceVolume?: DockerWorkspaceVolume;
 }
 
 export interface ProofExecutionPair {
@@ -113,6 +119,34 @@ function safeMountSource(path: string): string {
   return path;
 }
 
+function workspaceMount(
+  workspacePath: string,
+  volume: DockerWorkspaceVolume | undefined,
+): string {
+  if (volume === undefined) {
+    return 'type=bind,source=' + safeMountSource(workspacePath) +
+      ',target=' + CONTAINER_WORKSPACE + ',readonly';
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(volume.name)) {
+    throw new Error('Shared Docker volume name is unsafe.');
+  }
+  const root = resolve(volume.root);
+  const target = resolve(workspacePath);
+  const subpath = relative(root, target);
+  if (
+    subpath.length === 0 ||
+    subpath.startsWith('..') ||
+    isAbsolute(subpath) ||
+    subpath.includes(',') ||
+    /[\u0000-\u001f\u007f]/.test(subpath)
+  ) {
+    throw new Error('Proof workspace escaped its shared Docker volume.');
+  }
+  return 'type=volume,source=' + volume.name +
+    ',target=' + CONTAINER_WORKSPACE + ',readonly,volume-subpath=' +
+    subpath.replaceAll('\\', '/');
+}
+
 function containerWorkingDirectory(cwd: string): string {
   return cwd === '.' ? CONTAINER_WORKSPACE : CONTAINER_WORKSPACE + '/' + cwd;
 }
@@ -128,6 +162,7 @@ export function buildDockerProofArguments(
   workspacePath: string,
   containerName: string,
   containerUser = resolveContainerUser(),
+  workspaceVolume?: DockerWorkspaceVolume,
 ): string[] {
   const plan = parseProofPlan(planInput);
   assertContainerName(containerName);
@@ -173,11 +208,7 @@ export function buildDockerProofArguments(
     '--log-driver',
     'none',
     '--mount',
-    'type=bind,source=' +
-      safeMountSource(workspacePath) +
-      ',target=' +
-      CONTAINER_WORKSPACE +
-      ',readonly',
+    workspaceMount(workspacePath, workspaceVolume),
     '--tmpfs',
     '/tmp:rw,noexec,nosuid,nodev,size=' +
       plan.limits.maxWritableBytes +
@@ -514,6 +545,7 @@ export async function executeProofInContainer(
           prepared.root,
           containerName,
           options.containerUser,
+          options.workspaceVolume,
         ),
         repositoryRoot: prepared.root,
         cwd: '.',

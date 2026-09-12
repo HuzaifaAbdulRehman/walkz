@@ -1,9 +1,11 @@
 import {
+  patchFixQueuedOutboxEventSchema,
   reviewRunQueuedOutboxEventSchema,
   type ClaimedOutboxEvent,
 } from '@walkz/persistence';
 
 import type { OutboxEventHandler } from './index.js';
+import { enqueuePatchFix, type PatchFixQueue } from './patch-fix-queue.js';
 import { enqueueReviewRun, type ReviewQueue } from './review-queue.js';
 
 export interface CheckOutboxHandler {
@@ -15,6 +17,7 @@ export interface CheckOutboxHandler {
 
 export function createHostedOutboxHandler(options: {
   checks: CheckOutboxHandler;
+  patchFixes: PatchFixQueue;
   reviews: ReviewQueue;
 }): OutboxEventHandler {
   return {
@@ -29,6 +32,15 @@ export function createHostedOutboxHandler(options: {
           payload: event.payload,
         });
         await enqueueReviewRun(options.reviews, queued.payload.reviewRunId);
+        return;
+      }
+      if (event.eventType === 'patch_fix.queued') {
+        const queued = patchFixQueuedOutboxEventSchema.parse({
+          aggregateId: event.aggregateId,
+          eventType: event.eventType,
+          payload: event.payload,
+        });
+        await enqueuePatchFix(options.patchFixes, queued.payload.proposalId);
         return;
       }
       if (

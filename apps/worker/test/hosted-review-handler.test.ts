@@ -1,5 +1,6 @@
+import type { Evidence, Finding } from '@walkz/contracts';
 import { createDefaultWalkzConfig } from '@walkz/contracts';
-import { hashWalkzConfig } from '@walkz/engine';
+import { digestProofCommand, hashWalkzConfig } from '@walkz/engine';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,6 +12,11 @@ const reviewRunId = '3d963b52-8203-4ba6-bcac-15bf132371f0';
 const repositoryId = '08d0dd85-734e-4f74-bcfc-3436ec7b4abd';
 const baseSha = 'a'.repeat(40);
 const headSha = 'b'.repeat(40);
+const proofImage = `node@sha256:${'c'.repeat(64)}`;
+const workspaceVolume = {
+  name: 'walkz-proof-workspaces',
+  root: 'C:/temp',
+};
 const config = createDefaultWalkzConfig();
 const claimed = {
   reviewRunId,
@@ -50,6 +56,63 @@ function pipelineResult(verdict: 'SHIP' | 'INCONCLUSIVE' = 'SHIP') {
   } as never;
 }
 
+function proofPipelineResult(finding: Finding) {
+  return {
+    decision: { verdict: 'HUMAN', reasons: ['human_judgment_required'] },
+    run: { config, findings: [finding] },
+    context: { coverage: { complete: true } },
+    deterministicChecks: {
+      status: 'complete',
+      checks: [{ required: true, execution: { outcome: 'failed' } }],
+    },
+    provider: { status: 'complete', promptTruncated: false },
+    failure: null,
+  } as never;
+}
+
+function evidence(kind: Evidence['kind']): Evidence {
+  return {
+    kind,
+    planDigest: kind === 'counterfactual_proof' ? 'e'.repeat(64) : null,
+    commandDigest: digestProofCommand({
+      executable: 'node',
+      args: ['test.mjs'],
+      cwd: '.',
+    }),
+    baseSha: kind === 'counterfactual_proof' ? baseSha : null,
+    headSha: kind === 'counterfactual_proof' ? headSha : null,
+    baseOutcome: kind === 'counterfactual_proof' ? 'passed' : null,
+    headOutcome: 'failed',
+    baseExitCode: kind === 'counterfactual_proof' ? 0 : null,
+    headExitCode: 1,
+    durationMs: 20,
+    sanitizedSummary: 'Bound proof output.',
+    artifactHashes: [],
+    recordedAt: '2026-09-12T10:00:00.000Z',
+  };
+}
+
+function finding(evidenceItems: Evidence[]): Finding {
+  return {
+    fingerprint: 'd'.repeat(64),
+    category: 'correctness',
+    severity: 'high',
+    file: 'src/value.ts',
+    line: 1,
+    claim: 'The changed value breaks the boundary.',
+    failureMechanism: 'The test observes the wrong value.',
+    suggestedProof: 'Run the trusted test.',
+    lifecycleStatus: evidenceItems.some((item) =>
+      item.kind === 'counterfactual_proof') ? 'verified' : 'supported',
+    evidenceLevel: evidenceItems.some((item) =>
+      item.kind === 'counterfactual_proof') ? 'VERIFIED' : 'SUPPORTED',
+    advisoryConfidence: 0.99,
+    evidence: evidenceItems,
+    dismissal: null,
+    fix: null,
+  };
+}
+
 describe('hosted review job handler', () => {
   it('reviews exact revisions and stores the terminal outcome', async () => {
     const reviewStore = store();
@@ -79,6 +142,7 @@ describe('hosted review job handler', () => {
       tokens,
       workerId: 'worker-1',
       leaseMs: 60_000,
+      proofImage,
       checkout,
       collectContext,
       createProvider,
@@ -98,7 +162,7 @@ describe('hosted review job handler', () => {
       request: expect.objectContaining({
         baseRef: 'refs/walkz/base',
         callerCapabilities: {
-          canRunCommands: false,
+          canRunCommands: true,
           canUseModel: true,
           canWriteFiles: false,
         },
@@ -147,6 +211,7 @@ describe('hosted review job handler', () => {
       },
       workerId: 'worker-1',
       leaseMs: 60_000,
+      proofImage,
       checkout: async (_input, operation) => operation('C:/temp/repo'),
       runPipeline,
     });
@@ -156,6 +221,67 @@ describe('hosted review job handler', () => {
     expect(runPipeline.mock.calls[0]?.[0]).not.toHaveProperty('provider');
     expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
       verdict: 'INCONCLUSIVE',
+    }));
+  });
+
+  it('stores only bound proof evidence after verification', async () => {
+    const reviewStore = store();
+    const supported = finding([evidence('deterministic_check')]);
+    const verified = finding([
+      evidence('deterministic_check'),
+      evidence('counterfactual_proof'),
+    ]);
+    const proveFindings = vi.fn().mockResolvedValue({
+      findings: [verified],
+      proofStatus: 'complete',
+    });
+    const checkout = vi.fn(async (_input, operation) => operation('C:/temp/repo'));
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      workspaceVolume,
+      checkout,
+      runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(supported)),
+      proveFindings,
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(proveFindings).toHaveBeenCalledWith(
+      [supported],
+      expect.objectContaining({
+        reviewRunId,
+        baseSha,
+        headSha,
+        proofImage,
+        repositoryRoot: 'C:/temp/repo',
+        workspaceVolume,
+      }),
+    );
+    expect(checkout).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Function),
+      expect.objectContaining({ temporaryRoot: workspaceVolume.root }),
+    );
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'FIX',
+      findings: [expect.objectContaining({
+        evidenceLevel: 'VERIFIED',
+        lifecycleStatus: 'verified',
+        evidence: [expect.objectContaining({
+          kind: 'counterfactual_proof',
+          baseSha,
+          headSha,
+        })],
+      })],
     }));
   });
 
@@ -171,6 +297,7 @@ describe('hosted review job handler', () => {
       },
       workerId: 'worker-1',
       leaseMs: 60_000,
+      proofImage,
       checkout: async () => { throw new Error('sensitive dependency detail'); },
     });
 
@@ -195,6 +322,7 @@ describe('hosted review job handler', () => {
       tokens,
       workerId: 'worker-1',
       leaseMs: 60_000,
+      proofImage,
     });
 
     await handler.handle(reviewRunId);
@@ -218,6 +346,7 @@ describe('hosted review job handler', () => {
       },
       workerId: 'worker-1',
       leaseMs: 60_000,
+      proofImage,
       checkout: async (_input, operation) => operation('C:/temp/repo'),
       runPipeline: vi.fn().mockResolvedValue(pipelineResult()),
     });
@@ -234,6 +363,7 @@ describe('hosted review job handler', () => {
       tokens,
       workerId: 'worker-1',
       leaseMs: 60_000,
+      proofImage,
     });
 
     await handler.handle(reviewRunId);
