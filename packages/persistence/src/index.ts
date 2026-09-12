@@ -90,10 +90,10 @@ export type {
 } from './github-review-intake.js';
 
 export {
-  claimReviewCommentCommand,
+  claimGitHubCommentCommand,
   completeGitHubCommentCommand,
   failGitHubCommentCommand,
-  listRecoverableReviewCommentCommandIds,
+  listRecoverableGitHubCommentCommandIds,
   releaseGitHubCommentCommand,
   renewGitHubCommentCommandLease,
 } from './github-comment-command.js';
@@ -157,6 +157,7 @@ export {
   claimPatchFixJob,
   completePatchFixJob,
   createPatchFixProposal,
+  createPatchFixProposalForCommentCommand,
   decidePatchFixProposal,
   failPatchFixJob,
   getPatchFixJob,
@@ -173,6 +174,7 @@ export type {
 
 export {
   loadClaimedPatchFixTarget,
+  loadLatestVerifiedPatchFixSourceForPullRequest,
   loadVerifiedPatchFixSource,
 } from './patch-fix-target.js';
 export type {

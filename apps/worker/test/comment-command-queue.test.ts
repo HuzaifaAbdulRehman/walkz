@@ -21,12 +21,12 @@ describe('comment command queue', () => {
 
   it('restores PostgreSQL-owned commands to disposable Redis state', async () => {
     const add = vi.fn().mockResolvedValue(undefined);
-    const listRecoverableReviewCommentCommandIds = vi.fn()
+    const listRecoverableGitHubCommentCommandIds = vi.fn()
       .mockResolvedValue([commandId]);
 
     await expect(recoverCommentCommands(
       { add },
-      { listRecoverableReviewCommentCommandIds },
+      { listRecoverableGitHubCommentCommandIds },
       100,
     )).resolves.toBe(1);
     expect(add).toHaveBeenCalledWith(

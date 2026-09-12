@@ -36,6 +36,10 @@ const patchFixProposalInputSchema = z.object({
   proofPlanDigest: sha256Schema,
   proofCommandDigest: sha256Schema,
 }).strict();
+const commentCommandPatchFixInputSchema = patchFixProposalInputSchema.extend({
+  commandId: z.uuid(),
+  workerId: z.string().trim().min(1).max(128),
+}).strict();
 
 const patchFixDecisionInputSchema = z.object({
   repositoryId: z.uuid(),
@@ -176,41 +180,72 @@ function sameGenerationBinding(
     job.proofCommandDigest === input.proofCommandDigest;
 }
 
-export async function createPatchFixProposal(
-  pool: Pick<Pool, 'connect'>,
-  inputValue: unknown,
+async function createPatchFixProposalInTransaction(
+  client: Pick<PoolClient, 'query'>,
+  input: z.infer<typeof patchFixProposalInputSchema>,
 ): Promise<CreatedPatchFixProposal> {
-  const input = patchFixProposalInputSchema.parse(inputValue);
-  return withTransaction(pool, async (client) => {
-    const proposal = await createPatchProposalInTransaction(client, input.proposal);
-    const inserted = await client.query(
-      `INSERT INTO patch_fix_jobs (
+  const proposal = await createPatchProposalInTransaction(client, input.proposal);
+  const inserted = await client.query(
+    `INSERT INTO patch_fix_jobs (
          proposal_id, provider, model, prompt_version,
          proof_plan_digest, proof_command_digest
        ) VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (proposal_id) DO NOTHING
        RETURNING ${jobColumns()}`,
-      [
-        proposal.proposal.id,
-        input.provider,
-        input.model,
-        input.promptVersion,
-        input.proofPlanDigest,
-        input.proofCommandDigest,
-      ],
+    [
+      proposal.proposal.id,
+      input.provider,
+      input.model,
+      input.promptVersion,
+      input.proofPlanDigest,
+      input.proofCommandDigest,
+    ],
+  );
+  const insertedRow = inserted.rows[0];
+  const job = insertedRow === undefined
+    ? await loadJob(client, proposal.proposal.id, true)
+    : parseJob(insertedRow);
+  if (job === null || !sameGenerationBinding(job, input)) {
+    throw new Error('Patch fix proposal generation metadata conflicts with its hash.');
+  }
+  return {
+    proposal: proposal.proposal,
+    job,
+    created: insertedRow !== undefined,
+  };
+}
+
+export async function createPatchFixProposal(
+  pool: Pick<Pool, 'connect'>,
+  inputValue: unknown,
+): Promise<CreatedPatchFixProposal> {
+  const input = patchFixProposalInputSchema.parse(inputValue);
+  return withTransaction(pool, (client) =>
+    createPatchFixProposalInTransaction(client, input));
+}
+
+export async function createPatchFixProposalForCommentCommand(
+  pool: Pick<Pool, 'connect'>,
+  inputValue: unknown,
+): Promise<CreatedPatchFixProposal> {
+  const input = commentCommandPatchFixInputSchema.parse(inputValue);
+  return withTransaction(pool, async (client) => {
+    const created = await createPatchFixProposalInTransaction(client, input);
+    const linked = await client.query(
+      `UPDATE github_comment_commands
+       SET patch_proposal_id = $3, updated_at = now()
+       WHERE id = $1
+         AND lease_owner = $2
+         AND status = 'processing'
+         AND command = 'propose_fix'
+         AND patch_proposal_id IS NULL
+       RETURNING id`,
+      [input.commandId, input.workerId, created.proposal.id],
     );
-    const insertedRow = inserted.rows[0];
-    const job = insertedRow === undefined
-      ? await loadJob(client, proposal.proposal.id, true)
-      : parseJob(insertedRow);
-    if (job === null || !sameGenerationBinding(job, input)) {
-      throw new Error('Patch fix proposal generation metadata conflicts with its hash.');
+    if (linked.rows.length !== 1) {
+      throw new Error('Comment command lost its lease before proposal binding.');
     }
-    return {
-      proposal: proposal.proposal,
-      job,
-      created: insertedRow !== undefined,
-    };
+    return created;
   });
 }
 

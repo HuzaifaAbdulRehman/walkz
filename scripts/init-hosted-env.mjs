@@ -49,6 +49,7 @@ export function buildHostedEnvironment(template, publicUrl, randomSource = rando
     'GITHUB_OAUTH_CALLBACK_URL',
     `${origin}/auth/github/callback`,
   );
+  output = replaceSetting(output, 'WALKZ_PUBLIC_URL', origin);
   output = replaceSetting(output, 'GITHUB_WEBHOOK_SECRET', base64UrlSecret());
   output = replaceSetting(output, 'WALKZ_OAUTH_STATE_SECRET', base64UrlSecret());
   output = replaceSetting(

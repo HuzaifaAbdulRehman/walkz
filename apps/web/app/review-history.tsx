@@ -96,7 +96,7 @@ export function ReviewHistory({
       ) : (
         <div className="review-list">
           {reviews.map((review) => (
-            <article className="review-card" key={review.id}>
+            <article className="review-card" id={`review-${review.id}`} key={review.id}>
               <div className="review-card-header">
                 <div>
                   <p className="repository">

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   acceptGitHubWebhook,
-  claimReviewCommentCommand,
+  claimGitHubCommentCommand,
   completeGitHubCommentCommand,
   renewGitHubCommentCommandLease,
 } from '../src/index.js';
@@ -117,7 +117,7 @@ describe('PostgreSQL GitHub comment command intake', () => {
         workerId: 'integration-worker',
         leaseMs: 60_000,
       };
-      await expect(claimReviewCommentCommand(pool, lease)).resolves.toMatchObject({
+      await expect(claimGitHubCommentCommand(pool, lease)).resolves.toMatchObject({
         commandId: first.commandId,
         repositoryId,
         installationId: installationGitHubId,

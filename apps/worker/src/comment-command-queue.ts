@@ -39,10 +39,10 @@ export async function enqueueCommentCommand(
 
 export async function recoverCommentCommands(
   queue: CommentCommandQueue,
-  store: { listRecoverableReviewCommentCommandIds(limit: number): Promise<string[]> },
+  store: { listRecoverableGitHubCommentCommandIds(limit: number): Promise<string[]> },
   limit: number,
 ): Promise<number> {
-  const commandIds = await store.listRecoverableReviewCommentCommandIds(limit);
+  const commandIds = await store.listRecoverableGitHubCommentCommandIds(limit);
   await Promise.all(commandIds.map((commandId) =>
     enqueueCommentCommand(queue, commandId)));
   return commandIds.length;

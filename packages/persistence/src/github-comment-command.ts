@@ -16,6 +16,7 @@ const completionSchema = ownerSchema.extend({
   status: z.enum(['completed', 'denied', 'ignored']),
   replyUrl: z.url().max(512),
   reviewRunId: z.uuid().nullable().default(null),
+  patchProposalId: z.uuid().nullable().default(null),
 }).strict();
 const claimedCommandSchema = z.object({
   commandId: z.uuid(),
@@ -28,13 +29,29 @@ const claimedCommandSchema = z.object({
   commenterId: githubIdSchema,
   commenterLogin: z.string().trim().min(1).max(100),
   pullRequestNumber: z.number().int().positive(),
-  command: z.literal('review'),
+  command: z.enum(['review', 'propose_fix']),
+  patchProposalId: z.uuid().nullable(),
+  proposalReviewRunId: z.uuid().nullable(),
+  proposalHeadSha: z.string().regex(/^[a-f0-9]{40}$/i).nullable(),
   attempt: z.number().int().positive(),
-}).strict();
+}).strict().superRefine((command, context) => {
+  const linked = [
+    command.patchProposalId,
+    command.proposalReviewRunId,
+    command.proposalHeadSha,
+  ];
+  if (linked.some((value) => value !== null) && linked.some((value) => value === null)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Linked proposal metadata must be present together.',
+      path: ['patchProposalId'],
+    });
+  }
+});
 
 export type ClaimedGitHubCommentCommand = z.infer<typeof claimedCommandSchema>;
 
-export async function claimReviewCommentCommand(
+export async function claimGitHubCommentCommand(
   pool: Pick<Pool, 'query'>,
   inputValue: unknown,
 ): Promise<ClaimedGitHubCommentCommand | null> {
@@ -50,7 +67,6 @@ export async function claimReviewCommentCommand(
      WHERE gcc.id = $1
        AND gcc.repository_id = r.id
        AND r.installation_id = gi.id
-       AND gcc.command = 'review'
        AND gcc.attempt < 5
        AND (
          gcc.status = 'queued' OR (
@@ -69,6 +85,11 @@ export async function claimReviewCommentCommand(
                gcc.commenter_login AS "commenterLogin",
                gcc.pull_request_number AS "pullRequestNumber",
                gcc.command,
+               gcc.patch_proposal_id AS "patchProposalId",
+               (SELECT pp.review_run_id FROM patch_proposals pp
+                 WHERE pp.id = gcc.patch_proposal_id) AS "proposalReviewRunId",
+               (SELECT pp.head_sha FROM patch_proposals pp
+                 WHERE pp.id = gcc.patch_proposal_id) AS "proposalHeadSha",
                gcc.attempt`,
     [input.commandId, input.workerId, input.leaseMs],
   );
@@ -113,15 +134,16 @@ export async function completeGitHubCommentCommand(
   inputValue: unknown,
 ): Promise<boolean> {
   const input = completionSchema.parse(inputValue);
-  if (input.status === 'completed' && input.reviewRunId === null) {
-    throw new Error('Completed review commands require a review run ID.');
-  }
-  if (input.status !== 'completed' && input.reviewRunId !== null) {
-    throw new Error('Non-completed commands cannot reference a review run.');
+  const resultTargets = [input.reviewRunId, input.patchProposalId]
+    .filter((value) => value !== null).length;
+  if ((input.status === 'completed' && resultTargets !== 1) ||
+      (input.status !== 'completed' && resultTargets !== 0)) {
+    throw new Error('Command completion must reference exactly one matching result.');
   }
   const result = await pool.query(
     `UPDATE github_comment_commands
      SET status = $3, reply_url = $4, review_run_id = $5,
+         patch_proposal_id = $6,
          lease_owner = NULL, lease_expires_at = NULL,
          updated_at = now(), completed_at = now()
      WHERE id = $1 AND lease_owner = $2 AND status = 'processing'
@@ -132,6 +154,7 @@ export async function completeGitHubCommentCommand(
       input.status,
       input.replyUrl,
       input.reviewRunId,
+      input.patchProposalId,
     ],
   );
   return result.rows.length === 1;
@@ -155,7 +178,7 @@ export async function failGitHubCommentCommand(
   return result.rows.length === 1;
 }
 
-export async function listRecoverableReviewCommentCommandIds(
+export async function listRecoverableGitHubCommentCommandIds(
   pool: Pick<Pool, 'query'>,
   inputValue: unknown,
 ): Promise<string[]> {
@@ -163,8 +186,7 @@ export async function listRecoverableReviewCommentCommandIds(
   const result = await pool.query<{ commandId: string }>(
     `SELECT id AS "commandId"
      FROM github_comment_commands
-     WHERE command = 'review'
-       AND attempt < 5
+     WHERE attempt < 5
        AND (
          status = 'queued' OR (
            status = 'processing' AND

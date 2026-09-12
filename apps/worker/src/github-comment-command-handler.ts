@@ -14,6 +14,13 @@ const optionsSchema = z.object({
   workerId: z.string().trim().min(1).max(128),
   leaseMs: z.number().int().min(10_000).max(60 * 60 * 1_000),
   promptVersion: z.string().trim().min(1).max(128),
+  dashboardUrl: z.url().refine((value) => {
+    const url = new URL(value);
+    return url.protocol === 'https:' &&
+      url.username.length === 0 && url.password.length === 0 &&
+      (url.pathname === '' || url.pathname === '/') &&
+      url.search.length === 0 && url.hash.length === 0;
+  }, 'Dashboard URL must be an HTTPS origin without credentials.'),
 }).strict();
 
 interface CommentCommandLease {
@@ -32,6 +39,7 @@ export interface GitHubCommentCommandStore {
     status: 'completed' | 'denied' | 'ignored';
     replyUrl: string;
     reviewRunId: string | null;
+    patchProposalId: string | null;
   }): Promise<boolean>;
   release(input: { commandId: string; workerId: string }): Promise<boolean>;
   fail(input: {
@@ -45,9 +53,26 @@ export interface GitHubCommentCommandHandlerOptions {
   store: GitHubCommentCommandStore;
   comments: InstallationGitHubCommentCommandClientFactory;
   pullRequests: InstallationPullRequestReaderFactory;
+  proposals: {
+    prepare(
+      command: ClaimedGitHubCommentCommand,
+      signal: AbortSignal,
+    ): Promise<{
+      proposalId: string;
+      reviewRunId: string;
+      headSha: string;
+    } | null>;
+  };
   workerId: string;
   leaseMs: number;
   promptVersion: string;
+  dashboardUrl: string;
+}
+
+function dashboardReviewUrl(baseUrl: string, reviewRunId: string): string {
+  const url = new URL(baseUrl);
+  url.hash = `review-${reviewRunId}`;
+  return url.toString();
 }
 
 function startLeaseHeartbeat(
@@ -98,6 +123,7 @@ export function createGitHubCommentCommandJobHandler(
     workerId: input.workerId,
     leaseMs: input.leaseMs,
     promptVersion: input.promptVersion,
+    dashboardUrl: input.dashboardUrl,
   });
   return {
     async handle(commandId) {
@@ -107,9 +133,10 @@ export function createGitHubCommentCommandJobHandler(
       const controller = new AbortController();
       const heartbeat = startLeaseHeartbeat(input.store, lease, controller);
       let completion: {
-        status: 'completed' | 'denied';
+        status: 'completed' | 'denied' | 'ignored';
         replyUrl: string;
         reviewRunId: string | null;
+        patchProposalId: string | null;
       } | null = null;
       let failureReplyUrl: string | undefined;
       let retry = false;
@@ -133,8 +160,9 @@ export function createGitHubCommentCommandJobHandler(
             status: 'denied',
             replyUrl: reply.url,
             reviewRunId: null,
+            patchProposalId: null,
           };
-        } else {
+        } else if (command.command === 'review') {
           const reader = await input.pullRequests.forInstallation(command.installationId);
           const pullRequest = await reader.get(
             { owner: command.owner, repository: command.repository },
@@ -171,7 +199,54 @@ export function createGitHubCommentCommandJobHandler(
             status: 'completed',
             replyUrl: reply.url,
             reviewRunId: queued.reviewRunId,
+            patchProposalId: null,
           };
+        } else {
+          let proposal;
+          if (command.patchProposalId === null) {
+            proposal = await input.proposals.prepare(command, controller.signal);
+          } else {
+            if (command.proposalReviewRunId === null || command.proposalHeadSha === null) {
+              throw new Error('Linked proposal metadata is incomplete.');
+            }
+            proposal = {
+              proposalId: command.patchProposalId,
+              reviewRunId: command.proposalReviewRunId,
+              headSha: command.proposalHeadSha,
+            };
+          }
+          if (proposal === null) {
+            const reply = await comments.publishReply({
+              owner: command.owner,
+              repository: command.repository,
+              pullRequestNumber: command.pullRequestNumber,
+              commandCommentId: command.commentId,
+              kind: 'ignored',
+              summary: 'Walkz found no current verified finding that is eligible for a fix proposal.',
+            });
+            completion = {
+              status: 'ignored',
+              replyUrl: reply.url,
+              reviewRunId: null,
+              patchProposalId: null,
+            };
+          } else {
+            const link = dashboardReviewUrl(options.dashboardUrl, proposal.reviewRunId);
+            const reply = await comments.publishReply({
+              owner: command.owner,
+              repository: command.repository,
+              pullRequestNumber: command.pullRequestNumber,
+              commandCommentId: command.commentId,
+              kind: 'proposal',
+              summary: `Walkz prepared proposal ${proposal.proposalId} for head \`${proposal.headSha.slice(0, 7)}\`. [Review and approve it in the Walkz dashboard](${link}).`,
+            });
+            completion = {
+              status: 'completed',
+              replyUrl: reply.url,
+              reviewRunId: null,
+              patchProposalId: proposal.proposalId,
+            };
+          }
         }
       } catch {
         if (controller.signal.aborted || command.attempt < 5) {
@@ -185,7 +260,7 @@ export function createGitHubCommentCommandJobHandler(
               pullRequestNumber: command.pullRequestNumber,
               commandCommentId: command.commentId,
               kind: 'error',
-              summary: 'Walkz could not start this review after several attempts. Run the command again later.',
+              summary: 'Walkz could not complete this command after several attempts. Run it again later.',
             });
             failureReplyUrl = reply.url;
           } catch {

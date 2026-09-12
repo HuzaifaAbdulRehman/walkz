@@ -10,8 +10,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   claimPatchFixJob,
+  claimGitHubCommentCommand,
   completePatchFixJob,
-  createPatchFixProposal,
+  createPatchFixProposalForCommentCommand,
   decidePatchFixProposal,
   loadClaimedPatchFixTarget,
   releasePatchFixJob,
@@ -44,6 +45,8 @@ describe('PostgreSQL hosted patch fix jobs', () => {
     const pullRequestId = randomUUID();
     const reviewRunId = randomUUID();
     const findingId = randomUUID();
+    const commandId = randomUUID();
+    const deliveryId = randomUUID();
     const githubUserId = String(randomInt(100_000_000, 999_999_999));
     const githubInstallationId = String(randomInt(100_000_000, 999_999_999));
     const githubRepositoryId = String(randomInt(100_000_000, 999_999_999));
@@ -152,7 +155,34 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         [findingId, proofBinding.planDigest, commandDigest],
       );
 
-      const created = await createPatchFixProposal(pool, {
+      await pool.query(
+        `INSERT INTO webhook_deliveries
+          (id, delivery_id, installation_id, event_name, payload_hash)
+         VALUES ($1, $2, $3, 'issue_comment', $4)`,
+        [deliveryId, randomUUID(), installationId, '9'.repeat(64)],
+      );
+      await pool.query(
+        `INSERT INTO github_comment_commands
+          (id, webhook_delivery_id, repository_id, github_comment_id,
+           commenter_github_id, commenter_login, pull_request_number, command)
+         VALUES ($1, $2, $3, $4, $5, 'maintainer', 7, 'propose_fix')`,
+        [
+          commandId,
+          deliveryId,
+          repositoryId,
+          String(randomInt(1_000_000_000, 1_999_999_999)),
+          githubUserId,
+        ],
+      );
+      await expect(claimGitHubCommentCommand(pool, {
+        commandId,
+        workerId: 'command-worker',
+        leaseMs: 60_000,
+      })).resolves.toMatchObject({ command: 'propose_fix', patchProposalId: null });
+
+      const created = await createPatchFixProposalForCommentCommand(pool, {
+        commandId,
+        workerId: 'command-worker',
         proposal: {
           reviewRunId,
           findingId,
@@ -168,6 +198,11 @@ describe('PostgreSQL hosted patch fix jobs', () => {
         proofCommandDigest: commandDigest,
       });
       proposalId = created.proposal.id;
+      await expect(pool.query(
+        `SELECT patch_proposal_id AS "patchProposalId"
+         FROM github_comment_commands WHERE id = $1`,
+        [commandId],
+      )).resolves.toMatchObject({ rows: [{ patchProposalId: proposalId }] });
 
       const decisionInput = {
         repositoryId,
@@ -227,6 +262,8 @@ describe('PostgreSQL hosted patch fix jobs', () => {
       );
       expect(outbox.rows).toEqual([{ payload: { proposalId } }]);
     } finally {
+      await pool.query('DELETE FROM github_comment_commands WHERE id = $1', [commandId]);
+      await pool.query('DELETE FROM webhook_deliveries WHERE id = $1', [deliveryId]);
       if (proposalId !== null) {
         await pool.query(
           `DELETE FROM audit_events

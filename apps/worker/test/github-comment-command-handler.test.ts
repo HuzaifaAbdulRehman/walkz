@@ -4,6 +4,7 @@ import { createGitHubCommentCommandJobHandler } from '../src/index.js';
 
 const commandId = '9058b3c9-3243-43b3-b0d8-dd692ece130f';
 const reviewRunId = '4a14bcbf-d2cf-49b1-9144-c0a16e5722f6';
+const proposalId = 'ed395cbc-3f3f-4702-a3a2-619dd94c93d0';
 const baseSha = 'a'.repeat(40);
 const headSha = 'b'.repeat(40);
 
@@ -20,6 +21,9 @@ function command(attempt = 1) {
     commenterLogin: 'maintainer',
     pullRequestNumber: 29,
     command: 'review' as const,
+    patchProposalId: null,
+    proposalReviewRunId: null,
+    proposalHeadSha: null,
     attempt,
   };
 }
@@ -53,15 +57,18 @@ function dependencies(attempt = 1) {
     release: vi.fn().mockResolvedValue(true),
     fail: vi.fn().mockResolvedValue(true),
   };
+  const proposals = { prepare: vi.fn().mockResolvedValue(null) };
   const handler = createGitHubCommentCommandJobHandler({
     store,
     comments: { forInstallation: vi.fn().mockResolvedValue(client) },
     pullRequests: { forInstallation: vi.fn().mockResolvedValue(reader) },
+    proposals,
     workerId: 'worker-1',
     leaseMs: 60_000,
     promptVersion: 'walkz-review-v1',
+    dashboardUrl: 'https://walkz.example/',
   });
-  return { client, handler, reader, store };
+  return { client, handler, proposals, reader, store };
 }
 
 describe('GitHub review comment command handler', () => {
@@ -99,6 +106,7 @@ describe('GitHub review comment command handler', () => {
       status: 'completed',
       replyUrl: 'https://github.com/owner/repo/pull/29#issuecomment-77',
       reviewRunId,
+      patchProposalId: null,
     });
   });
 
@@ -155,5 +163,63 @@ describe('GitHub review comment command handler', () => {
     await expect(handler.handle(commandId)).rejects.toThrow('will be retried');
 
     expect(store.complete).not.toHaveBeenCalled();
+  });
+
+  it('prepares an approval-gated proposal and links the dashboard reply', async () => {
+    const { client, handler, proposals, reader, store } = dependencies();
+    store.claim.mockResolvedValue({ ...command(), command: 'propose_fix' });
+    proposals.prepare.mockResolvedValue({ proposalId, reviewRunId, headSha });
+
+    await handler.handle(commandId);
+
+    expect(reader.get).not.toHaveBeenCalled();
+    expect(store.queueReview).not.toHaveBeenCalled();
+    expect(proposals.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'propose_fix' }),
+      expect.any(AbortSignal),
+    );
+    expect(client.publishReply).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'proposal',
+      summary: expect.stringContaining(`#review-${reviewRunId}`),
+    }));
+    expect(store.complete).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'completed',
+      reviewRunId: null,
+      patchProposalId: proposalId,
+    }));
+  });
+
+  it('reuses a durably linked proposal after a reply interruption', async () => {
+    const { handler, proposals, store } = dependencies();
+    store.claim.mockResolvedValue({
+      ...command(),
+      command: 'propose_fix',
+      patchProposalId: proposalId,
+      proposalReviewRunId: reviewRunId,
+      proposalHeadSha: headSha,
+    });
+
+    await handler.handle(commandId);
+
+    expect(proposals.prepare).not.toHaveBeenCalled();
+    expect(store.complete).toHaveBeenCalledWith(expect.objectContaining({
+      patchProposalId: proposalId,
+    }));
+  });
+
+  it('records an ignored reply when no current finding is eligible', async () => {
+    const { client, handler, store } = dependencies();
+    store.claim.mockResolvedValue({ ...command(), command: 'propose_fix' });
+
+    await handler.handle(commandId);
+
+    expect(client.publishReply).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'ignored',
+    }));
+    expect(store.complete).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'ignored',
+      reviewRunId: null,
+      patchProposalId: null,
+    }));
   });
 });

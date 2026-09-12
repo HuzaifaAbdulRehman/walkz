@@ -4,6 +4,7 @@ import {
   claimPatchFixJob,
   completePatchFixJob,
   createPatchFixProposal,
+  createPatchFixProposalForCommentCommand,
   decidePatchFixProposal,
   failPatchFixJob,
   listRecoverablePatchFixProposalIds,
@@ -101,6 +102,71 @@ describe('hosted patch fix persistence', () => {
       'COMMIT',
     ]);
     expect(JSON.stringify(query.mock.calls)).not.toContain('replacement');
+  });
+
+  it('atomically binds a generated proposal to its leased comment command', async () => {
+    const commandId = '9058b3c9-3243-43b3-b0d8-dd692ece130f';
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [proposalRow()] })
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-id' }] })
+      .mockResolvedValueOnce({ rows: [jobRow()] })
+      .mockResolvedValueOnce({ rows: [{ id: commandId }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(createPatchFixProposalForCommentCommand(transactionalPool(query), {
+      commandId,
+      workerId: 'worker-1',
+      proposal: {
+        reviewRunId,
+        findingId,
+        baseSha,
+        headSha,
+        patchHash,
+        deliveryMode: 'suggestion',
+      },
+      provider: 'groq',
+      model: 'openai/gpt-oss-120b',
+      promptVersion: 'walkz-patch-v1',
+      proofPlanDigest,
+      proofCommandDigest,
+    })).resolves.toMatchObject({ proposal: { id: proposalId }, created: true });
+
+    const linkSql = String(query.mock.calls[4]?.[0]);
+    expect(linkSql).toContain('patch_proposal_id = $3');
+    expect(linkSql).toContain('lease_owner = $2');
+    expect(query.mock.calls[4]?.[1]).toEqual([commandId, 'worker-1', proposalId]);
+  });
+
+  it('rolls back proposal creation when the command lease is lost', async () => {
+    const commandId = '9058b3c9-3243-43b3-b0d8-dd692ece130f';
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [proposalRow()] })
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-id' }] })
+      .mockResolvedValueOnce({ rows: [jobRow()] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(createPatchFixProposalForCommentCommand(transactionalPool(query), {
+      commandId,
+      workerId: 'stale-worker',
+      proposal: {
+        reviewRunId,
+        findingId,
+        baseSha,
+        headSha,
+        patchHash,
+        deliveryMode: 'suggestion',
+      },
+      provider: 'groq',
+      model: 'openai/gpt-oss-120b',
+      promptVersion: 'walkz-patch-v1',
+      proofPlanDigest,
+      proofCommandDigest,
+    })).rejects.toThrow('lost its lease');
+
+    expect(query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
 
   it('queues one identifier-only job after approval', async () => {

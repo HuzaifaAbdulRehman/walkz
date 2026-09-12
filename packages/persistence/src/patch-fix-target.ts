@@ -30,6 +30,10 @@ const sourceIdentitySchema = z.object({
   reviewRunId: z.uuid(),
   findingId: z.uuid(),
 }).strict();
+const pullRequestSourceIdentitySchema = z.object({
+  repositoryId: z.uuid(),
+  pullRequestNumber: z.number().int().positive(),
+}).strict();
 const claimedIdentitySchema = z.object({
   proposalId: z.uuid(),
   workerId: z.string().trim().min(1).max(128),
@@ -308,6 +312,43 @@ export async function loadVerifiedPatchFixSource(
        AND f.evidence_level = 'VERIFIED'
      LIMIT 1`,
     [input.repositoryId, input.actorUserId, input.reviewRunId, input.findingId],
+  );
+  return result.rows[0] === undefined
+    ? null
+    : sourceFromRow(sourceRowSchema.parse(result.rows[0]));
+}
+
+export async function loadLatestVerifiedPatchFixSourceForPullRequest(
+  pool: Pick<Pool, 'query'>,
+  inputValue: unknown,
+): Promise<VerifiedPatchFixSource | null> {
+  const input = pullRequestSourceIdentitySchema.parse(inputValue);
+  const result = await pool.query(
+    `SELECT ${sourceColumns}
+     FROM review_runs rr
+     JOIN repositories r ON r.id = rr.repository_id
+     JOIN github_installations gi ON gi.id = r.installation_id
+     JOIN pull_requests pr ON pr.id = rr.pull_request_id
+     JOIN repository_configs rc ON rc.id = rr.config_id
+     JOIN findings f ON f.review_run_id = rr.id
+     ${eligibleProofJoin}
+     WHERE r.id = $1
+       AND pr.number = $2
+       AND rr.status = 'awaiting_human'
+       AND pr.head_sha = rr.head_sha
+       AND f.lifecycle_status = 'verified'
+       AND f.evidence_level = 'VERIFIED'
+     ORDER BY rr.created_at DESC,
+              CASE f.severity
+                WHEN 'critical' THEN 4
+                WHEN 'high' THEN 3
+                WHEN 'medium' THEN 2
+                WHEN 'low' THEN 1
+                ELSE 0
+              END DESC,
+              f.id ASC
+     LIMIT 1`,
+    [input.repositoryId, input.pullRequestNumber],
   );
   return result.rows[0] === undefined
     ? null

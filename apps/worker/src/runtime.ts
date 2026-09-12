@@ -4,7 +4,10 @@ import { isAbsolute } from 'node:path';
 
 import type { ConnectionOptions } from 'bullmq';
 import type { DockerWorkspaceVolume } from '@walkz/sandbox';
-import { WALKZ_REVIEW_PROMPT_VERSION } from '@walkz/engine';
+import {
+  prepareVerifiedPatchProposal,
+  WALKZ_REVIEW_PROMPT_VERSION,
+} from '@walkz/engine';
 import {
   createInstallationGitHubCommentCommandClientFactory,
   createGitHubInstallationApp,
@@ -13,7 +16,7 @@ import {
   createInstallationGitHubSuggestionServiceFactory,
 } from '@walkz/github';
 import {
-  claimReviewCommentCommand,
+  claimGitHubCommentCommand,
   claimPatchFixJob,
   claimHostedReviewRun,
   completeGitHubCommentCommand,
@@ -22,12 +25,14 @@ import {
   createCredentialVault,
   createDatabasePool,
   createOutboxEventStore,
+  createPatchFixProposalForCommentCommand,
   failGitHubCommentCommand,
   failPatchFixJob,
   getLatestPatchReproofResult,
   listRecoverablePatchFixProposalIds,
-  listRecoverableReviewCommentCommandIds,
+  listRecoverableGitHubCommentCommandIds,
   listRecoverableHostedReviewRunIds,
+  loadLatestVerifiedPatchFixSourceForPullRequest,
   loadClaimedPatchFixTarget,
   loadProviderCredential,
   preparePatchSuggestionPublication,
@@ -41,6 +46,7 @@ import {
   renewPatchFixJobLease,
   renewHostedReviewRunLease,
 } from '@walkz/persistence';
+import { createGroqProvider } from '@walkz/providers';
 import { z } from 'zod';
 
 import {
@@ -82,6 +88,13 @@ const environmentSchema = z.object({
     .max(60 * 60 * 1_000).default(300_000),
   WALKZ_COMMENT_COMMAND_LEASE_MS: z.coerce.number().int().min(10_000)
     .max(60 * 60 * 1_000).default(60_000),
+  WALKZ_PUBLIC_URL: z.url().refine((value) => {
+    const url = new URL(value);
+    return url.protocol === 'https:' &&
+      url.username.length === 0 && url.password.length === 0 &&
+      (url.pathname === '' || url.pathname === '/') &&
+      url.search.length === 0 && url.hash.length === 0;
+  }, 'WALKZ_PUBLIC_URL must be an HTTPS origin without credentials.'),
   WALKZ_PATCH_FIX_LEASE_MS: z.coerce.number().int().min(10_000)
     .max(60 * 60 * 1_000).default(600_000),
   WALKZ_PROOF_IMAGE: z.string().trim().max(512)
@@ -119,6 +132,7 @@ export interface HostedWorkerEnvironment {
   outboxLeaseMs: number;
   reviewLeaseMs: number;
   commentCommandLeaseMs: number;
+  publicUrl: string;
   patchFixLeaseMs: number;
   proofImage: string;
   workspaceVolume?: DockerWorkspaceVolume;
@@ -206,6 +220,7 @@ export function parseHostedWorkerEnvironment(
     outboxLeaseMs: environment.WALKZ_OUTBOX_LEASE_MS,
     reviewLeaseMs: environment.WALKZ_REVIEW_LEASE_MS,
     commentCommandLeaseMs: environment.WALKZ_COMMENT_COMMAND_LEASE_MS,
+    publicUrl: environment.WALKZ_PUBLIC_URL,
     patchFixLeaseMs: environment.WALKZ_PATCH_FIX_LEASE_MS,
     proofImage: environment.WALKZ_PROOF_IMAGE,
     ...(environment.WALKZ_PROOF_WORKSPACE_ROOT === undefined ||
@@ -238,6 +253,7 @@ export function createHostedWorkerFromEnvironment(
     privateKey: config.githubPrivateKey,
     requestTimeoutMs: 15_000,
   });
+  const githubSuggestions = createInstallationGitHubSuggestionServiceFactory(githubApp);
   const outboxStore = createOutboxEventStore(pool);
   const reviewStore: HostedReviewStore = {
     claim: (lease) => claimHostedReviewRun(pool, lease),
@@ -280,7 +296,7 @@ export function createHostedWorkerFromEnvironment(
       fail: (failure) => failPatchFixJob(pool, failure),
     },
     tokens: githubApp,
-    github: createInstallationGitHubSuggestionServiceFactory(githubApp),
+    github: githubSuggestions,
     workerId: config.workerId,
     leaseMs: config.patchFixLeaseMs,
     proofImage: config.proofImage,
@@ -290,7 +306,7 @@ export function createHostedWorkerFromEnvironment(
   });
   const commentCommandHandler = createGitHubCommentCommandJobHandler({
     store: {
-      claim: (lease) => claimReviewCommentCommand(pool, lease),
+      claim: (lease) => claimGitHubCommentCommand(pool, lease),
       renew: (lease) => renewGitHubCommentCommandLease(pool, lease),
       queueReview: (review) => queueManualReview(pool, review),
       complete: (completion) => completeGitHubCommentCommand(pool, completion),
@@ -302,9 +318,46 @@ export function createHostedWorkerFromEnvironment(
       Number(config.githubAppId),
     ),
     pullRequests: createInstallationPullRequestReaderFactory(githubApp),
+    proposals: {
+      async prepare(command, signal) {
+        const source = await loadLatestVerifiedPatchFixSourceForPullRequest(pool, {
+          repositoryId: command.repositoryId,
+          pullRequestNumber: command.pullRequestNumber,
+        });
+        if (source === null) return null;
+        const prepared = await prepareVerifiedPatchProposal(
+          source,
+          config.proofImage,
+          {
+            loadCredential: (binding) =>
+              loadProviderCredential(pool, config.credentialVault, binding),
+            async loadHeadFile(target) {
+              const service = await githubSuggestions.forInstallation(
+                target.installationId,
+              );
+              return service.loadHeadFile(target);
+            },
+            createProvider: (apiKey) => createGroqProvider({ apiKey }),
+            createProposal: (proposal) =>
+              createPatchFixProposalForCommentCommand(pool, {
+                ...proposal,
+                commandId: command.commandId,
+                workerId: config.workerId,
+              }),
+          },
+          signal,
+        );
+        return {
+          proposalId: prepared.proposal.id,
+          reviewRunId: prepared.proposal.reviewRunId,
+          headSha: prepared.proposal.headSha,
+        };
+      },
+    },
     workerId: config.workerId,
     leaseMs: config.commentCommandLeaseMs,
     promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
+    dashboardUrl: config.publicUrl,
   });
   const outboxHandler = createHostedOutboxHandler({
     checks: createGitHubCheckOutboxHandler(
@@ -344,8 +397,8 @@ export function createHostedWorkerFromEnvironment(
   const recover = async (): Promise<void> => {
     await recoverOutboxEvents(outboxQueue, outboxStore, config.recoveryBatch);
     await recoverCommentCommands(commentCommandQueue, {
-      listRecoverableReviewCommentCommandIds: (limit) =>
-        listRecoverableReviewCommentCommandIds(pool, limit),
+      listRecoverableGitHubCommentCommandIds: (limit) =>
+        listRecoverableGitHubCommentCommandIds(pool, limit),
     }, config.recoveryBatch);
     await recoverReviewRuns(reviewQueue, {
       listRecoverableReviewRunIds: (limit) =>

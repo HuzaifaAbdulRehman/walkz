@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  claimReviewCommentCommand,
+  claimGitHubCommentCommand,
   completeGitHubCommentCommand,
   failGitHubCommentCommand,
-  listRecoverableReviewCommentCommandIds,
+  listRecoverableGitHubCommentCommandIds,
   releaseGitHubCommentCommand,
   renewGitHubCommentCommandLease,
 } from '../src/index.js';
@@ -26,6 +26,9 @@ function claimedRow() {
     commenterLogin: 'maintainer',
     pullRequestNumber: 29,
     command: 'review',
+    patchProposalId: null,
+    proposalReviewRunId: null,
+    proposalHeadSha: null,
     attempt: 1,
   };
 }
@@ -34,11 +37,10 @@ describe('GitHub review comment command persistence', () => {
   it('claims only review commands with an available durable lease', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [claimedRow()] });
 
-    await expect(claimReviewCommentCommand({ query }, lease))
+    await expect(claimGitHubCommentCommand({ query }, lease))
       .resolves.toEqual(claimedRow());
 
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql).toContain("gcc.command = 'review'");
     expect(sql).toContain('gcc.attempt < 5');
     expect(sql).toContain('gcc.lease_expires_at <= now()');
   });
@@ -76,10 +78,11 @@ describe('GitHub review comment command persistence', () => {
       'completed',
       'https://github.com/owner/repo/pull/29#issuecomment-77',
       reviewRunId,
+      null,
     ]);
   });
 
-  it('requires a review run before completing a review command', async () => {
+  it('requires exactly one result before completing a command', async () => {
     const query = vi.fn();
 
     await expect(completeGitHubCommentCommand({ query }, {
@@ -88,7 +91,7 @@ describe('GitHub review comment command persistence', () => {
       status: 'completed',
       replyUrl: 'https://github.com/owner/repo/pull/29#issuecomment-77',
       reviewRunId: null,
-    })).rejects.toThrow('require a review run ID');
+    })).rejects.toThrow('exactly one matching result');
     expect(query).not.toHaveBeenCalled();
   });
 
@@ -108,11 +111,10 @@ describe('GitHub review comment command persistence', () => {
   it('recovers only review commands below the retry cap', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ commandId }] });
 
-    await expect(listRecoverableReviewCommentCommandIds({ query }, 50))
+    await expect(listRecoverableGitHubCommentCommandIds({ query }, 50))
       .resolves.toEqual([commandId]);
 
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql).toContain("command = 'review'");
     expect(sql).toContain('attempt < 5');
   });
 });

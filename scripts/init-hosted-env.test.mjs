@@ -12,6 +12,7 @@ import {
 
 const template = `POSTGRES_PASSWORD=replace-password
 GITHUB_OAUTH_CALLBACK_URL=https://replace-me.example/auth/github/callback
+WALKZ_PUBLIC_URL=https://replace-me.example
 GITHUB_WEBHOOK_SECRET=replace-webhook
 WALKZ_OAUTH_STATE_SECRET=replace-oauth
 WALKZ_CREDENTIAL_KEYS_JSON={"local-2026":"replace-key"}
@@ -51,6 +52,7 @@ describe('hosted environment setup', () => {
     expect(output).toContain(
       'GITHUB_OAUTH_CALLBACK_URL=https://walkz.example/auth/github/callback',
     );
+    expect(output).toContain('WALKZ_PUBLIC_URL=https://walkz.example');
     expect(output).not.toContain('replace-');
     const values = Object.fromEntries(output.trim().split('\n').map((line) => {
       const separator = line.indexOf('=');
