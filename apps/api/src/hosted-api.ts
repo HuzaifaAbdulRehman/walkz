@@ -23,10 +23,7 @@ import {
   registerProviderCredentialRoutes,
   type ProviderCredentialApiOptions,
 } from './provider-credential-api.js';
-import {
-  registerPatchSuggestionRoutes,
-  type PatchSuggestionApiOptions,
-} from './patch-suggestion-api.js';
+import { registerPatchFixRoutes, type PatchFixApiOptions } from './patch-fix-api.js';
 import {
   registerRepositoryRoutes,
   type RepositoryApiOptions,
@@ -43,7 +40,7 @@ export interface HostedApiOptions {
   installations: InstallationApiOptions;
   manualReviews: ManualReviewApiOptions;
   providerCredentials: ProviderCredentialApiOptions;
-  patchSuggestions: PatchSuggestionApiOptions;
+  patchFixes: PatchFixApiOptions;
   repositories: RepositoryApiOptions;
   webhook: GitHubWebhookApiOptions;
   readiness: {
@@ -111,7 +108,7 @@ export function createHostedApi(options: HostedApiOptions): FastifyInstance {
   registerInstallationRoutes(app, options.installations);
   registerManualReviewRoutes(app, options.manualReviews);
   registerProviderCredentialRoutes(app, options.providerCredentials);
-  registerPatchSuggestionRoutes(app, options.patchSuggestions);
+  registerPatchFixRoutes(app, options.patchFixes);
   registerRepositoryRoutes(app, options.repositories);
   return app;
 }

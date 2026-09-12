@@ -48,6 +48,7 @@ export interface DashboardConfiguration {
 }
 
 export interface DashboardFinding {
+  id: string;
   fingerprint: string;
   category: 'correctness' | 'security' | 'performance' | 'reliability' |
     'maintainability' | null;
@@ -210,6 +211,7 @@ function parseDashboardFinding(input: unknown): DashboardFinding | null {
   if (typeof input !== 'object' || input === null) return null;
   const value = input as Record<string, unknown>;
   if (
+    typeof value.id !== 'string' || !uuidPattern.test(value.id) ||
     typeof value.fingerprint !== 'string' ||
     !/^[a-f0-9]{64}$/i.test(value.fingerprint) ||
     (value.category !== null && (

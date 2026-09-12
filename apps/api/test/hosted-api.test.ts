@@ -37,9 +37,14 @@ describe('hosted API composition', () => {
         credentials: { has: vi.fn(), save: vi.fn(), delete: vi.fn() },
         validator: { validate: vi.fn() },
       },
-      patchSuggestions: {
+      patchFixes: {
         authenticator,
-        publisher: { publish: vi.fn() },
+        store: {
+          loadSource: vi.fn(), loadCredential: vi.fn(), create: vi.fn(),
+          decide: vi.fn(), list: vi.fn(),
+        },
+        github: { forInstallation: vi.fn() },
+        proofImage: `node@sha256:${'a'.repeat(64)}`,
       },
       repositories: {
         authenticator,
@@ -97,7 +102,7 @@ describe('hosted API composition', () => {
       }),
       app.inject({
         method: 'POST',
-        url: `/api/repositories/${repositoryId}/patch-proposals/${repositoryId}/publish-suggestion`,
+        url: `/api/repositories/${repositoryId}/patch-proposals/${repositoryId}/decision`,
         payload: {},
       }),
       app.inject({
@@ -142,9 +147,14 @@ describe('hosted API composition', () => {
         credentials: { has: vi.fn(), save: vi.fn(), delete: vi.fn() },
         validator: { validate: vi.fn() },
       },
-      patchSuggestions: {
+      patchFixes: {
         authenticator,
-        publisher: { publish: vi.fn() },
+        store: {
+          loadSource: vi.fn(), loadCredential: vi.fn(), create: vi.fn(),
+          decide: vi.fn(), list: vi.fn(),
+        },
+        github: { forInstallation: vi.fn() },
+        proofImage: `node@sha256:${'a'.repeat(64)}`,
       },
       repositories: {
         authenticator,

@@ -145,6 +145,7 @@ describe('loadDashboardFindings', () => {
       );
       expect(init?.headers).toEqual({ cookie: 'walkz_session=session-1' });
       return new Response(JSON.stringify({ findings: [{
+        id: '2d437195-a9f0-4af9-aaf4-3cbda1c8f61f',
         fingerprint: 'a'.repeat(64),
         category: 'correctness',
         severity: 'high',

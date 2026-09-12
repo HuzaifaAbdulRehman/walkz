@@ -10,6 +10,7 @@ const reviewParamsSchema = z.object({
 }).strict();
 
 const dashboardFindingSchema = z.object({
+  id: z.uuid(),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/i),
   category: z.enum([
     'correctness',

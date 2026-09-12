@@ -113,6 +113,7 @@ describe('authenticated repository API', () => {
 
   it('returns named finding fields for an authorized review', async () => {
     const list = vi.fn().mockResolvedValue([{
+      id: '2d437195-a9f0-4af9-aaf4-3cbda1c8f61f',
       fingerprint: 'a'.repeat(64),
       category: 'correctness',
       severity: 'high',
@@ -144,6 +145,7 @@ describe('authenticated repository API', () => {
     expect(response.statusCode).toBe(200);
     expect(list).toHaveBeenCalledWith(repositoryId, otherRepositoryId);
     expect(response.json()).toEqual({ findings: [{
+      id: '2d437195-a9f0-4af9-aaf4-3cbda1c8f61f',
       fingerprint: 'a'.repeat(64),
       category: 'correctness',
       severity: 'high',

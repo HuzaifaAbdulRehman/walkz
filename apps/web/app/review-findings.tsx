@@ -6,6 +6,7 @@ import {
   parseDashboardFindings,
   type DashboardFinding,
 } from './lib/reviews';
+import { PatchFixControls } from './patch-fix-controls';
 
 interface ReviewFindingsProps {
   reviewRunId: string;
@@ -94,7 +95,7 @@ export function ReviewFindings({ reviewRunId }: ReviewFindingsProps) {
           ) : (
             <ol className="finding-list">
               {state.findings.map((finding) => (
-                <li className="finding-item" key={finding.fingerprint}>
+                <li className="finding-item" key={finding.id}>
                   <div className="finding-heading">
                     <span className={`evidence evidence-${finding.evidenceLevel.toLowerCase()}`}>
                       {evidenceLabel(finding.evidenceLevel)}
@@ -108,6 +109,14 @@ export function ReviewFindings({ reviewRunId }: ReviewFindingsProps) {
                   {finding.suggestedProof === null ? null : (
                     <p><strong>How to check it.</strong> {finding.suggestedProof}</p>
                   )}
+                  {finding.lifecycleStatus === 'verified' &&
+                    finding.evidenceLevel === 'VERIFIED' &&
+                    finding.path !== null && finding.startLine !== null ? (
+                      <PatchFixControls
+                        findingId={finding.id}
+                        reviewRunId={reviewRunId}
+                      />
+                    ) : null}
                 </li>
               ))}
             </ol>

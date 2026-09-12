@@ -53,6 +53,12 @@ export {
   PatchSuggestionWorkflowError,
   registerPatchSuggestionRoutes,
 } from './patch-suggestion-api.js';
+export { registerPatchFixRoutes } from './patch-fix-api.js';
+export type {
+  PatchFixApiOptions,
+  PatchFixAuthenticator,
+  PatchFixStore,
+} from './patch-fix-api.js';
 export type {
   PatchSuggestionApiOptions,
   PatchSuggestionAuthenticator,

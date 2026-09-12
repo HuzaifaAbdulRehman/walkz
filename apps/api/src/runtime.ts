@@ -10,14 +10,16 @@ import {
 import {
   consumeOAuthState,
   createCredentialVault,
+  createPatchFixProposal,
   createDatabasePool,
   createPersistentGitHubSessionService,
+  decidePatchFixProposal,
+  listPatchFixes,
   listReviewFindings,
   listRepositoryConfigVersions,
   listReviewHistory,
-  preparePatchSuggestionPublication,
-  recordPatchSuggestionPublication,
-  releasePatchSuggestionPublication,
+  loadProviderCredential,
+  loadVerifiedPatchFixSource,
   storeOAuthState,
 } from '@walkz/persistence';
 import { classifyProviderError, validateProviderAccess } from '@walkz/providers';
@@ -27,7 +29,6 @@ import { createHostedApi } from './hosted-api.js';
 import { createPersistentInstallationRepositoryStore } from './installation-store.js';
 import { createPersistentManualReviewStarter } from './manual-review-api.js';
 import { createPersistentProviderCredentialStore } from './provider-credential-api.js';
-import { createPatchSuggestionPublisher } from './patch-suggestion-api.js';
 import { createApiSessionAuthenticator } from './session-auth.js';
 import { createPersistentGitHubWebhookIntake } from './webhook.js';
 
@@ -45,6 +46,9 @@ const environmentSchema = z.object({
   WALKZ_CREDENTIAL_KEYS_JSON: z.string().min(1).max(100_000),
   WALKZ_PROMPT_VERSION: z.string().trim().min(1).max(128)
     .default('walkz-review-v1'),
+  WALKZ_PROOF_IMAGE: z.string().trim().max(512)
+    .regex(/^(?!-)[^\s@]+@sha256:[a-f0-9]{64}$/i)
+    .default('node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf'),
   WALKZ_HOST: z.string().trim().min(1).max(255).default('0.0.0.0'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
 }).passthrough();
@@ -60,6 +64,7 @@ export interface HostedApiEnvironment {
   oauthStateSecret: string;
   credentialVault: ReturnType<typeof createCredentialVault>;
   promptVersion: string;
+  proofImage: string;
   host: string;
   port: number;
 }
@@ -100,6 +105,7 @@ export function parseHostedApiEnvironment(input: NodeJS.ProcessEnv): HostedApiEn
       keys: parseCredentialKeys(environment.WALKZ_CREDENTIAL_KEYS_JSON),
     }),
     promptVersion: environment.WALKZ_PROMPT_VERSION,
+    proofImage: environment.WALKZ_PROOF_IMAGE,
     host: environment.WALKZ_HOST,
     port: environment.PORT,
   };
@@ -183,16 +189,18 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
         },
       },
     },
-    patchSuggestions: {
+    patchFixes: {
       authenticator,
-      publisher: createPatchSuggestionPublisher(
-        {
-          prepare: (input) => preparePatchSuggestionPublication(pool, input),
-          record: (input) => recordPatchSuggestionPublication(pool, input),
-          release: (input) => releasePatchSuggestionPublication(pool, input),
-        },
-        createInstallationGitHubSuggestionServiceFactory(githubApp),
-      ),
+      store: {
+        loadSource: (source) => loadVerifiedPatchFixSource(pool, source),
+        loadCredential: (binding) =>
+          loadProviderCredential(pool, config.credentialVault, binding),
+        create: (proposal) => createPatchFixProposal(pool, proposal),
+        decide: (decision) => decidePatchFixProposal(pool, decision),
+        list: (query) => listPatchFixes(pool, query),
+      },
+      github: createInstallationGitHubSuggestionServiceFactory(githubApp),
+      proofImage: config.proofImage,
     },
     repositories: {
       authenticator,

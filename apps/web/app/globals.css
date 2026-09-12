@@ -85,6 +85,16 @@ h3 { font-size: 20px; margin: 0 0 8px; }
 .finding-item h4 { font-size: 16px; line-height: 1.4; margin: 14px 0 8px; overflow-wrap: anywhere; }
 .finding-item p { color: #c4d0df; line-height: 1.5; margin: 8px 0 0; overflow-wrap: anywhere; }
 .finding-location { color: #91a4bf; font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.patch-fix-controls { border-top: 1px solid #23334c; display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; }
+.patch-fix-status { background: #101c30; border: 1px solid #385276; border-radius: 8px; padding: 12px; }
+.patch-fix-status p { margin: 0; }
+.patch-fix-binding { color: #91a4bf; font-family: Consolas, monospace; font-size: 12px; }
+.patch-fix-status a { color: #8bb7ff; display: inline-block; margin-top: 8px; }
+.patch-candidate { display: grid; gap: 10px; }
+.patch-candidate pre { background: #07101e; border: 1px solid #385276; border-radius: 8px; color: #e7edf7; margin: 0; max-height: 320px; overflow: auto; padding: 14px; white-space: pre-wrap; }
+.patch-privacy-note { color: #91a4bf; font-size: 13px; }
+.patch-fix-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.patch-fix-error { color: #ff9b9b; }
 .evidence { border: 1px solid #385276; border-radius: 999px; color: #a8c8ff; font-size: 12px; padding: 5px 9px; }
 .evidence-verified { border-color: #2c7148; color: #8ce0ac; }
 .evidence-supported { border-color: #806128; color: #ffd58a; }
