@@ -55,7 +55,7 @@ describe('hosted API composition', () => {
         authenticator,
         configHistory: { list: vi.fn() },
         reviewHistory: { list: vi.fn() },
-        reviewFindings: { list: vi.fn() },
+        reviewFindings: { list: vi.fn(), recordFeedback: vi.fn() },
       },
       webhook: {
         secret: 'webhook-secret',
@@ -177,7 +177,7 @@ describe('hosted API composition', () => {
         authenticator,
         configHistory: { list: vi.fn() },
         reviewHistory: { list: vi.fn() },
-        reviewFindings: { list: vi.fn() },
+        reviewFindings: { list: vi.fn(), recordFeedback: vi.fn() },
       },
       webhook: {
         secret: 'webhook-secret',

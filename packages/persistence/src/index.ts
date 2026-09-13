@@ -131,6 +131,11 @@ export type { ReviewHistoryItem } from './review-history.js';
 
 export { listReviewFindings } from './review-findings.js';
 export type { ReviewFindingItem } from './review-findings.js';
+export { recordFindingFeedback } from './finding-feedback.js';
+export type {
+  FindingFeedbackRecord,
+  RecordFindingFeedbackResult,
+} from './finding-feedback.js';
 
 export {
   createPatchProposal,

@@ -135,6 +135,18 @@ export type {
   ModelInvocationStatus,
 } from './model-invocation.js';
 
+export {
+  findingFeedbackAssessmentSchema,
+  findingFeedbackReasonSchema,
+  findingFeedbackRequestSchema,
+  parseFindingFeedbackRequest,
+} from './finding-feedback.js';
+export type {
+  FindingFeedbackAssessment,
+  FindingFeedbackReason,
+  FindingFeedbackRequest,
+} from './finding-feedback.js';
+
 export type {
   Evidence,
   EvidenceKind,

@@ -21,6 +21,7 @@ import {
   loadProviderCredential,
   loadVerifiedPatchFixSource,
   preparePatchSuggestionPublication,
+  recordFindingFeedback,
   recordModelInvocation,
   recordPatchSuggestionPublication,
   releasePatchSuggestionPublication,
@@ -226,6 +227,7 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
       reviewFindings: {
         list: (repositoryId, reviewRunId) =>
           listReviewFindings(pool, { repositoryId, reviewRunId }),
+        recordFeedback: (feedback) => recordFindingFeedback(pool, feedback),
       },
     },
     webhook: {

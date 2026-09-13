@@ -1,12 +1,19 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { repositoryConfigSchema } from '@walkz/contracts';
+import {
+  parseFindingFeedbackRequest,
+  repositoryConfigSchema,
+} from '@walkz/contracts';
+import type { RecordFindingFeedbackResult } from '@walkz/persistence';
 
 const repositoryParamsSchema = z.object({ repositoryId: z.uuid() }).strict();
 const reviewParamsSchema = z.object({
   repositoryId: z.uuid(),
   reviewRunId: z.uuid(),
+}).strict();
+const findingParamsSchema = reviewParamsSchema.extend({
+  findingId: z.uuid(),
 }).strict();
 
 const dashboardFindingSchema = z.object({
@@ -121,10 +128,23 @@ export interface ReviewHistoryStore {
 
 export interface ReviewFindingsStore {
   list(repositoryId: string, reviewRunId: string): Promise<readonly unknown[]>;
+  recordFeedback(input: {
+    requestId: string;
+    repositoryId: string;
+    reviewRunId: string;
+    findingId: string;
+    actorUserId: string;
+    assessment: 'correct' | 'false_positive';
+    reason: 'incorrect_claim' | 'intentional_behavior' | 'not_actionable' |
+      'duplicate' | 'other' | null;
+  }): Promise<RecordFindingFeedbackResult>;
 }
 
 export interface RepositoryApiAuthenticator {
-  authenticate(request: unknown): Promise<{ repositoryIds: readonly string[] } | null>;
+  authenticate(request: unknown): Promise<{
+    userId: string;
+    repositoryIds: readonly string[];
+  } | null>;
 }
 
 export interface RepositoryApiOptions {
@@ -179,6 +199,38 @@ export function registerRepositoryRoutes(
               : parsed.createdAt,
           };
         }),
+      });
+    },
+  );
+  app.post(
+    '/api/repositories/:repositoryId/reviews/:reviewRunId/findings/:findingId/feedback',
+    async (request, reply) => {
+      const params = findingParamsSchema.parse(request.params);
+      const identity = await options.authenticator.authenticate(request);
+      if (identity === null) {
+        return reply.code(401).send({ error: 'authentication_required' });
+      }
+      if (!identity.repositoryIds.includes(params.repositoryId)) {
+        return reply.code(403).send({ error: 'repository_forbidden' });
+      }
+      const feedback = parseFindingFeedbackRequest(request.body);
+      const result = await options.reviewFindings.recordFeedback({
+        ...params,
+        ...feedback,
+        actorUserId: identity.userId,
+      });
+      if (result.feedback === null) {
+        return result.outcome === 'not_found'
+          ? reply.code(404).send({ error: 'finding_not_found' })
+          : reply.code(409).send({ error: 'feedback_conflict' });
+      }
+      return reply.code(result.outcome === 'created' ? 201 : 200).send({
+        outcome: result.outcome,
+        feedback: {
+          assessment: result.feedback.assessment,
+          reason: result.feedback.reason,
+          createdAt: result.feedback.createdAt.toISOString(),
+        },
       });
     },
   );
