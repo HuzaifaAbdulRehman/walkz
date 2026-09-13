@@ -184,13 +184,16 @@ describe('hosted review proof', () => {
     });
   });
 
-  it('promotes a supported finding only after base passes and head fails', async () => {
+  it('proves a challenged supported finding against base and head', async () => {
     const commandDigest = digestProofCommand({
       executable: command.executable,
       args: command.args,
       cwd: command.cwd,
     });
-    const finding = supportedFinding(commandDigest);
+    const finding = {
+      ...supportedFinding(commandDigest),
+      lifecycleStatus: 'challenged' as const,
+    };
     const runProof = vi.fn(async (
       candidate: Finding,
       planInput: unknown,

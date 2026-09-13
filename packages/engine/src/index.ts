@@ -68,6 +68,17 @@ export type {
 } from './proof-evidence.js';
 export { runLocalReviewPipeline } from './pipeline.js';
 export {
+  challengeLikelyBlockers,
+  NO_CHALLENGER,
+  selectChallengeCandidates,
+  selectChallengerModel,
+  WALKZ_CHALLENGE_PROMPT_VERSION,
+} from './challenger.js';
+export type {
+  ChallengerDecision,
+  ChallengerStep,
+} from './challenger.js';
+export {
   compareGoldenProofBaseline,
   evaluateGoldenProofs,
 } from './golden-evaluation.js';

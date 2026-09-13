@@ -161,7 +161,11 @@ export async function proveHostedFindings(
   let incomplete = false;
 
   for (const [index, original] of updated.entries()) {
-    if (original.lifecycleStatus !== 'supported' || original.evidenceLevel !== 'SUPPORTED') {
+    if (
+      (original.lifecycleStatus !== 'supported' &&
+        original.lifecycleStatus !== 'challenged') ||
+      original.evidenceLevel !== 'SUPPORTED'
+    ) {
       continue;
     }
     requested = true;

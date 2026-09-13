@@ -114,6 +114,7 @@ export async function reviewWithProvider(
   step: ProviderReviewStep;
   findings: Finding[];
   cancelled: boolean;
+  access: ProviderAccessResult | null;
 }> {
   if (
     !run.request.callerCapabilities.canUseModel ||
@@ -123,6 +124,7 @@ export async function reviewWithProvider(
       step: cloneProviderStep(NO_PROVIDER),
       findings: [],
       cancelled: false,
+      access: null,
     };
   }
   if (provider === undefined) {
@@ -130,6 +132,7 @@ export async function reviewWithProvider(
       step: incompleteProvider(undefined, 'not_configured', false),
       findings: [],
       cancelled: false,
+      access: null,
     };
   }
   if (budget.maxModelTokens < 1) {
@@ -137,13 +140,15 @@ export async function reviewWithProvider(
       step: incompleteProvider(provider, 'budget_exhausted', false),
       findings: [],
       cancelled: false,
+      access: null,
     };
   }
 
+  let access: ProviderAccessResult;
   let selectedModel: string;
   let maxCompletionTokens: number | null = null;
   try {
-    const access = await provider.validateAccess(run.config.provider.model, {
+    access = await provider.validateAccess(run.config.provider.model, {
       signal,
     });
     await onAccess?.(access);
@@ -161,6 +166,7 @@ export async function reviewWithProvider(
       ),
       findings: [],
       cancelled,
+      access: null,
     };
   }
 
@@ -181,6 +187,7 @@ export async function reviewWithProvider(
       ),
       findings: [],
       cancelled: false,
+      access,
     };
   }
 
@@ -212,6 +219,7 @@ export async function reviewWithProvider(
       },
       findings: [],
       cancelled,
+      access,
     };
   }
 
@@ -233,6 +241,7 @@ export async function reviewWithProvider(
       },
       findings: [],
       cancelled: false,
+      access,
     };
   }
 
@@ -254,6 +263,7 @@ export async function reviewWithProvider(
       },
       findings: [],
       cancelled: false,
+      access,
     };
   }
 
@@ -273,6 +283,7 @@ export async function reviewWithProvider(
     },
     findings: normalized.findings,
     cancelled: false,
+    access,
   };
 }
 

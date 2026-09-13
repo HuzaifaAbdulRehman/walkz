@@ -75,6 +75,20 @@ function result(
       rejectedFindings: [],
       failureCode: null,
     },
+    challenger: {
+      status: 'not_requested',
+      attempted: false,
+      provider: null,
+      model: null,
+      promptVersion: null,
+      schemaVersion: null,
+      usage: null,
+      requestId: null,
+      promptTruncated: false,
+      decisions: [],
+      needsHuman: false,
+      failureCode: null,
+    },
     decision: { verdict, reasons: ['no_blocking_evidence'] },
     failure: null,
   };
@@ -96,6 +110,29 @@ describe('review output', () => {
       'Walkz review\n\nVerdict: SHIP\n\nChecks:\n  none\n\n' +
         'Findings:\n  none\n',
     );
+  });
+
+  it('reports the independent challenger without its rationale', () => {
+    const reviewed = result();
+    reviewed.challenger = {
+      ...reviewed.challenger,
+      status: 'complete',
+      attempted: true,
+      provider: 'groq',
+      model: 'qwen/challenger',
+      promptVersion: 'walkz-challenge-v1',
+      schemaVersion: 'walkz-challenge-v1',
+      requestId: 'request-2',
+      decisions: [{
+        findingFingerprint: 'a'.repeat(64),
+        verdict: 'uphold',
+      }],
+    };
+
+    expect(renderTerminalReport(reviewed)).toContain(
+      'Challenger: groq / qwen/challenger',
+    );
+    expect(renderJsonReport(reviewed)).not.toContain('rationale');
   });
 
   it('renders machine-readable JSON without a line index map', () => {

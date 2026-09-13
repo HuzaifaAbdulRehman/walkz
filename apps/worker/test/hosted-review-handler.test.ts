@@ -57,16 +57,32 @@ function pipelineResult(verdict: 'SHIP' | 'INCONCLUSIVE' = 'SHIP') {
   } as never;
 }
 
-function proofPipelineResult(finding: Finding) {
+function proofPipelineResult(
+  finding: Finding,
+  options: {
+    checkOutcome?: 'succeeded' | 'failed';
+    challengerStatus?: 'complete' | 'not_requested' | 'incomplete';
+    challengerNeedsHuman?: boolean;
+    challengerPromptTruncated?: boolean;
+  } = {},
+) {
   return {
     decision: { verdict: 'HUMAN', reasons: ['human_judgment_required'] },
     run: { config, findings: [finding] },
     context: { coverage: { complete: true } },
     deterministicChecks: {
       status: 'complete',
-      checks: [{ required: true, execution: { outcome: 'failed' } }],
+      checks: [{
+        required: true,
+        execution: { outcome: options.checkOutcome ?? 'failed' },
+      }],
     },
     provider: { status: 'complete', promptTruncated: false },
+    challenger: {
+      status: options.challengerStatus ?? 'not_requested',
+      needsHuman: options.challengerNeedsHuman ?? false,
+      promptTruncated: options.challengerPromptTruncated ?? false,
+    },
     failure: null,
   } as never;
 }
@@ -217,6 +233,7 @@ describe('hosted review job handler', () => {
         },
       }),
       provider: expect.objectContaining({ name: 'groq' }),
+      enableBlockerArbitration: true,
     }));
     expect(runPipeline.mock.calls[0]?.[0].provider).not.toBe(provider);
     const pipelineInput = runPipeline.mock.calls[0]?.[0];
@@ -398,6 +415,116 @@ describe('hosted review job handler', () => {
           headSha,
         })],
       })],
+    }));
+  });
+
+  it('preserves challenger disagreement after proof adjudication', async () => {
+    const reviewStore = store();
+    const advisory = {
+      ...finding([]),
+      lifecycleStatus: 'challenged' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+    };
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(advisory, {
+        checkOutcome: 'succeeded',
+        challengerStatus: 'complete',
+        challengerNeedsHuman: true,
+      })),
+      proveFindings: vi.fn().mockResolvedValue({
+        findings: [advisory],
+        proofStatus: 'not_requested',
+      }),
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'HUMAN',
+    }));
+  });
+
+  it('preserves incomplete arbitration after proof adjudication', async () => {
+    const reviewStore = store();
+    const advisory = {
+      ...finding([]),
+      lifecycleStatus: 'proposed' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+    };
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(advisory, {
+        checkOutcome: 'succeeded',
+        challengerStatus: 'incomplete',
+      })),
+      proveFindings: vi.fn().mockResolvedValue({
+        findings: [advisory],
+        proofStatus: 'not_requested',
+      }),
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'INCONCLUSIVE',
+    }));
+  });
+
+  it('preserves truncated challenge context after proof adjudication', async () => {
+    const reviewStore = store();
+    const advisory = {
+      ...finding([]),
+      lifecycleStatus: 'challenged' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+    };
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(advisory, {
+        checkOutcome: 'succeeded',
+        challengerStatus: 'complete',
+        challengerPromptTruncated: true,
+      })),
+      proveFindings: vi.fn().mockResolvedValue({
+        findings: [advisory],
+        proofStatus: 'not_requested',
+      }),
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'INCONCLUSIVE',
     }));
   });
 

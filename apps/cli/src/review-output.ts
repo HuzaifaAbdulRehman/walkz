@@ -120,6 +120,17 @@ export function renderTerminalReport(
         result.provider.model,
     );
   }
+  if (result.challenger.failureCode !== null) {
+    lines.push('', 'Challenger: ' + result.challenger.failureCode);
+  } else if (result.challenger.status === 'complete') {
+    lines.push(
+      '',
+      'Challenger: ' +
+        result.challenger.provider +
+        ' / ' +
+        result.challenger.model,
+    );
+  }
   return lines.join('\n') + '\n';
 }
 
@@ -141,6 +152,7 @@ export function renderJsonReport(
         deterministicChecks: result.deterministicChecks,
         findings: result.run.findings,
         provider: result.provider,
+        challenger: result.challenger,
         startedAt: result.run.startedAt,
         completedAt: result.run.completedAt,
         failure: result.failure,

@@ -26,6 +26,11 @@ import type {
   FindingRejectionReason,
 } from './evidence.js';
 import {
+  challengeLikelyBlockers,
+  NO_CHALLENGER,
+  type ChallengerStep,
+} from './challenger.js';
+import {
   cloneProviderStep,
   NO_PROVIDER,
   requiredCheckFailed,
@@ -80,6 +85,7 @@ export interface LocalReviewPipelineInput
   onProviderAccess?: (
     access: ProviderAccessResult,
   ) => void | Promise<void>;
+  enableBlockerArbitration?: boolean;
   signal?: AbortSignal;
   dependencies?: LocalReviewPipelineDependencies;
 }
@@ -90,6 +96,7 @@ export interface LocalReviewPipelineResult {
   context: ReviewContext | null;
   deterministicChecks: DeterministicCheckRun | null;
   provider: ProviderReviewStep;
+  challenger: ChallengerStep;
   decision: LocalVerdictDecision;
   failure: PipelineFailure | null;
 }
@@ -158,6 +165,7 @@ function result(
   context: ReviewContext | null,
   checks: DeterministicCheckRun | null,
   provider: ProviderReviewStep,
+  challenger: ChallengerStep,
   decision: LocalVerdictDecision,
   failure: PipelineFailure | null,
   clock: (() => Date) | undefined,
@@ -169,6 +177,16 @@ function result(
     context,
     deterministicChecks: checks,
     provider: cloneProviderStep(provider),
+    challenger: {
+      ...challenger,
+      decisions: [...challenger.decisions],
+      usage: challenger.usage === null
+        ? null
+        : {
+            ...challenger.usage,
+            rateLimit: { ...challenger.usage.rateLimit },
+          },
+    },
     decision,
     failure,
   };
@@ -247,6 +265,7 @@ export async function runLocalReviewPipeline(
         null,
         null,
         NO_PROVIDER,
+        NO_CHALLENGER,
         decision,
         {
           stage: 'context',
@@ -294,6 +313,7 @@ export async function runLocalReviewPipeline(
         context,
         null,
         NO_PROVIDER,
+        NO_CHALLENGER,
         decision,
         {
           stage: 'checks',
@@ -322,6 +342,7 @@ export async function runLocalReviewPipeline(
         context,
         checks,
         NO_PROVIDER,
+        NO_CHALLENGER,
         decision,
         null,
         input.clock,
@@ -346,16 +367,47 @@ export async function runLocalReviewPipeline(
       providerReview.step.failureCode = 'budget_exhausted';
     }
     run = { ...run, findings: providerReview.findings };
+    let challenger = { ...NO_CHALLENGER };
+    let challengerCancelled = false;
+    if (
+      input.enableBlockerArbitration === true &&
+      providerReview.step.status === 'complete' &&
+      providerReview.access !== null &&
+      providerReview.step.usage !== null
+    ) {
+      const challenge = await challengeLikelyBlockers({
+        findings: run.findings,
+        context,
+        budget,
+        primaryAccess: providerReview.access,
+        primaryUsage: providerReview.step.usage,
+        provider: input.provider,
+        signal,
+      });
+      challenger = challenge.step;
+      challengerCancelled = challenge.cancelled;
+      if (deadlineReached && challenger.failureCode === 'cancelled') {
+        challenger.failureCode = 'budget_exhausted';
+      }
+      run = { ...run, findings: challenge.findings };
+    }
     const contextStatus =
-      context.coverage.complete && !providerReview.step.promptTruncated
+      context.coverage.complete &&
+      !providerReview.step.promptTruncated &&
+      !challenger.promptTruncated
         ? 'complete'
         : 'incomplete';
+    const providerStatus =
+      providerReview.step.status === 'incomplete' ||
+      challenger.status === 'incomplete'
+        ? 'incomplete'
+        : providerReview.step.status;
     const decision = decide(
       run,
       contextStatus,
       checks.status,
-      providerReview.step.status,
-      requiredCheckFailed(checks),
+      providerStatus,
+      requiredCheckFailed(checks) || challenger.needsHuman,
     );
     return result(
       run,
@@ -363,10 +415,11 @@ export async function runLocalReviewPipeline(
       context,
       checks,
       providerReview.step,
+      challenger,
       decision,
       null,
       input.clock,
-      providerReview.cancelled && !deadlineReached,
+      (providerReview.cancelled || challengerCancelled) && !deadlineReached,
     );
   } finally {
     clearTimeout(deadlineTimer);

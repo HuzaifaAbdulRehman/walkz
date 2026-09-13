@@ -189,19 +189,27 @@ function adjudicateProofedResult(
   findings: readonly Finding[],
   proofStatus: 'complete' | 'not_requested' | 'incomplete',
 ): ReviewVerdict {
+  const providerStatus =
+    result.provider.status === 'incomplete' ||
+    result.challenger.status === 'incomplete'
+      ? 'incomplete'
+      : result.provider.status;
   return adjudicateLocalVerdict({
     contextStatus: result.context === null
       ? result.failure?.stage === 'context' ? 'error' : 'incomplete'
-      : result.context.coverage.complete && !result.provider.promptTruncated
+      : result.context.coverage.complete &&
+          !result.provider.promptTruncated &&
+          !result.challenger.promptTruncated
         ? 'complete'
         : 'incomplete',
     checkStatus: result.deterministicChecks?.status ??
       (result.failure?.stage === 'checks' ? 'error' : 'incomplete'),
-    providerStatus: result.provider.status,
+    providerStatus,
     proofStatus,
     findings,
     blockingEvidenceLevels: result.run.config.blockingEvidenceLevels,
-    humanJudgmentRequired: requiredCheckFailed(result),
+    humanJudgmentRequired:
+      requiredCheckFailed(result) || result.challenger.needsHuman,
   }).verdict;
 }
 
@@ -338,6 +346,7 @@ export function createHostedReviewJobHandler(
             },
             config: run.config,
             ...(provider === undefined ? {} : { provider }),
+            enableBlockerArbitration: true,
             dependencies: {
               collectContext: (root, references, options) => collectContext(
                 root,

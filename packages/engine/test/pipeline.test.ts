@@ -6,6 +6,7 @@ import type {
   ProviderUsage,
   RepositoryConfig,
   ReviewRequest,
+  StructuredChallengeResult,
   StructuredReviewResult,
 } from '@walkz/contracts';
 import { createDefaultWalkzConfig } from '@walkz/contracts';
@@ -228,6 +229,63 @@ function provider(
       };
     },
   };
+}
+
+function providerWithChallenge(
+  review: ModelReviewResponse,
+  verdict: 'uphold' | 'dispute' | 'needs_human',
+  events: string[] = [],
+): ProviderAdapter {
+  const selected = provider(review, events);
+  selected.validateAccess = async () => {
+    events.push('access');
+    return {
+      provider: 'mock',
+      selectedModel: 'openai/primary',
+      models: [
+        {
+          id: 'openai/primary',
+          active: true,
+          contextWindow: 32_000,
+          maxCompletionTokens: 4_000,
+          supportsStrictStructuredOutput: true,
+        },
+        {
+          id: 'qwen/challenger',
+          active: true,
+          contextWindow: 32_000,
+          maxCompletionTokens: 4_000,
+          supportsStrictStructuredOutput: true,
+        },
+      ],
+      privacyNotice: 'Local test provider.',
+      dataControlsUrl: null,
+    };
+  };
+  selected.requestStructuredChallenge = async (
+    prompt,
+  ): Promise<StructuredChallengeResult> => {
+    events.push('challenge');
+    const payload = JSON.parse(prompt.userPrompt) as {
+      findings: Array<{ findingFingerprint: string }>;
+    };
+    return {
+      provider: 'mock',
+      model: prompt.model,
+      promptVersion: prompt.promptVersion,
+      schemaVersion: 'walkz.challenge.v1',
+      challenge: {
+        decisions: payload.findings.map((finding) => ({
+          findingFingerprint: finding.findingFingerprint,
+          verdict,
+          rationale: 'Independent challenge result.',
+        })),
+      },
+      usage,
+      requestId: 'challenge-request-1',
+    };
+  };
+  return selected;
 }
 
 function dependencies(
@@ -615,5 +673,125 @@ describe('runLocalReviewPipeline', () => {
     expect(result.run.verdict).toBe('INCONCLUSIVE');
     expect(result.run.status).toBe('cancelled');
     expect(result.provider.failureCode).toBe('cancelled');
+  });
+
+  it('challenges only a likely blocker with a second model', async () => {
+    const events: string[] = [];
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: providerWithChallenge(
+        { findings: [modelFinding()] },
+        'uphold',
+        events,
+      ),
+      enableBlockerArbitration: true,
+      dependencies: dependencies(context(), checks(), events),
+      clock: () => NOW,
+    });
+
+    expect(events).toEqual([
+      'references',
+      'context',
+      'checks',
+      'access',
+      'review',
+      'challenge',
+    ]);
+    expect(result.challenger).toMatchObject({
+      status: 'complete',
+      model: 'qwen/challenger',
+      decisions: [{ verdict: 'uphold' }],
+      needsHuman: false,
+    });
+    expect(result.run.findings[0]?.lifecycleStatus).toBe('challenged');
+    expect(result.run.verdict).toBe('SHIP');
+  });
+
+  it('does not spend a second call on a low-risk advisory', async () => {
+    const events: string[] = [];
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: providerWithChallenge({
+        findings: [{ ...modelFinding(), severity: 'low' }],
+      }, 'uphold', events),
+      enableBlockerArbitration: true,
+      dependencies: dependencies(context(), checks(), events),
+      clock: () => NOW,
+    });
+
+    expect(events).not.toContain('challenge');
+    expect(result.challenger.status).toBe('not_requested');
+  });
+
+  it('routes a model-only challenger disagreement to a person', async () => {
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: providerWithChallenge(
+        { findings: [modelFinding()] },
+        'dispute',
+      ),
+      enableBlockerArbitration: true,
+      dependencies: dependencies(context(), checks()),
+      clock: () => NOW,
+    });
+
+    expect(result.challenger.needsHuman).toBe(true);
+    expect(result.run.findings[0]).toMatchObject({
+      lifecycleStatus: 'challenged',
+      dismissal: null,
+      evidenceLevel: 'UNVERIFIED',
+    });
+    expect(result.run.verdict).toBe('HUMAN');
+  });
+
+  it('returns inconclusive when required arbitration fails', async () => {
+    const selected = providerWithChallenge(
+      { findings: [modelFinding()] },
+      'uphold',
+    );
+    selected.requestStructuredChallenge = async () => {
+      throw { code: 'rate_limited' };
+    };
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: selected,
+      enableBlockerArbitration: true,
+      dependencies: dependencies(context(), checks()),
+      clock: () => NOW,
+    });
+
+    expect(result.challenger).toMatchObject({
+      status: 'incomplete',
+      failureCode: 'request_failed',
+    });
+    expect(result.run.verdict).toBe('INCONCLUSIVE');
+  });
+
+  it('does not let a challenger erase deterministic blocking evidence', async () => {
+    const config = configWithCommand();
+    const result = await runLocalReviewPipeline({
+      request: request({}, config),
+      config,
+      provider: providerWithChallenge(
+        { findings: [modelFinding()] },
+        'dispute',
+      ),
+      enableBlockerArbitration: true,
+      dependencies: dependencies(
+        context(),
+        checks(commandExecution('failed', 'src/value.ts:1 failed')),
+      ),
+      clock: () => NOW,
+    });
+
+    expect(result.run.findings[0]).toMatchObject({
+      lifecycleStatus: 'challenged',
+      evidenceLevel: 'SUPPORTED',
+    });
+    expect(result.run.verdict).toBe('FIX');
   });
 });
