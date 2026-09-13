@@ -5,6 +5,7 @@ import {
   type GoldenProofClassification,
   type GoldenProofExpectation,
   type GoldenProofRecord,
+  type ReviewLanguageId,
 } from '@walkz/contracts';
 
 export interface GoldenProofMetrics {
@@ -31,6 +32,10 @@ export interface GoldenProofMetrics {
 export interface GoldenProofEvaluation {
   records: GoldenProofRecord[];
   metrics: GoldenProofMetrics;
+  languages: Array<{
+    language: ReviewLanguageId;
+    metrics: GoldenProofMetrics;
+  }>;
 }
 
 export interface GoldenProofCaseRegression {
@@ -40,6 +45,8 @@ export interface GoldenProofCaseRegression {
   baselineClassification: GoldenProofClassification | null;
   currentExpected: GoldenProofExpectation | null;
   currentClassification: GoldenProofClassification | null;
+  baselineLanguage: ReviewLanguageId | null;
+  currentLanguage: ReviewLanguageId | null;
 }
 
 export interface GoldenProofBaselineComparison {
@@ -53,8 +60,9 @@ function rate(numerator: number, denominator: number): number | null {
   return denominator === 0 ? null : numerator / denominator;
 }
 
-export function evaluateGoldenProofs(input: unknown): GoldenProofEvaluation {
-  const records = parseGoldenProofRecords(input);
+function calculateMetrics(
+  records: readonly GoldenProofRecord[],
+): GoldenProofMetrics {
   let regressionCount = 0;
   let cleanCount = 0;
   let truePositives = 0;
@@ -91,27 +99,40 @@ export function evaluateGoldenProofs(input: unknown): GoldenProofEvaluation {
   }
 
   return {
+    caseCount: records.length,
+    regressionCount,
+    cleanCount,
+    truePositives,
+    falsePositives,
+    falseNegatives,
+    verifiedProofCount,
+    incompleteCount,
+    catchRate: rate(truePositives, regressionCount),
+    falsePositiveRate: rate(falsePositives, cleanCount),
+    proofRate: verifiedProofCount / records.length,
+    incompleteRate: incompleteCount / records.length,
+    totalProofDurationMs,
+    averageProofDurationMs: totalProofDurationMs / records.length,
+    modelInvocationCount,
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalModelLatencyMs,
+  };
+}
+
+export function evaluateGoldenProofs(input: unknown): GoldenProofEvaluation {
+  const records = parseGoldenProofRecords(input);
+  const languageIds = [...new Set(records.map((record) => record.language))]
+    .sort();
+  return {
     records,
-    metrics: {
-      caseCount: records.length,
-      regressionCount,
-      cleanCount,
-      truePositives,
-      falsePositives,
-      falseNegatives,
-      verifiedProofCount,
-      incompleteCount,
-      catchRate: rate(truePositives, regressionCount),
-      falsePositiveRate: rate(falsePositives, cleanCount),
-      proofRate: verifiedProofCount / records.length,
-      incompleteRate: incompleteCount / records.length,
-      totalProofDurationMs,
-      averageProofDurationMs: totalProofDurationMs / records.length,
-      modelInvocationCount,
-      totalPromptTokens,
-      totalCompletionTokens,
-      totalModelLatencyMs,
-    },
+    metrics: calculateMetrics(records),
+    languages: languageIds.map((language) => ({
+      language,
+      metrics: calculateMetrics(
+        records.filter((record) => record.language === language),
+      ),
+    })),
   };
 }
 
@@ -136,12 +157,15 @@ export function compareGoldenProofBaseline(
         baselineClassification: expected.classification,
         currentExpected: null,
         currentClassification: null,
+        baselineLanguage: expected.language,
+        currentLanguage: null,
       });
       continue;
     }
     if (
       current.expected !== expected.expected ||
-      current.classification !== expected.classification
+      current.classification !== expected.classification ||
+      current.language !== expected.language
     ) {
       caseRegressions.push({
         id: expected.id,
@@ -150,6 +174,8 @@ export function compareGoldenProofBaseline(
         baselineClassification: expected.classification,
         currentExpected: current.expected,
         currentClassification: current.classification,
+        baselineLanguage: expected.language,
+        currentLanguage: current.language,
       });
     }
   }
@@ -163,6 +189,8 @@ export function compareGoldenProofBaseline(
         baselineClassification: null,
         currentExpected: current.expected,
         currentClassification: current.classification,
+        baselineLanguage: null,
+        currentLanguage: current.language,
       });
     }
   }

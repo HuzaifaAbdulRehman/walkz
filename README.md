@@ -205,8 +205,8 @@ that data cannot reveal defects Walkz never reported.
 
 ## Roadmap
 
-Milestones 1 through 5 are complete. The current hosted path covers the GitHub
-App, check publishing, configuration, review history, bounded fix proposals,
-human approval, reproof, and GitHub suggestions. Milestone 6 remains planned and
-adds deeper reliability, specialist review passes, evaluation, and more
-languages.
+Milestones 1 through 6 are complete. The hosted path covers the GitHub App,
+checks, configuration, review history, approved fixes, and reproof. Advanced
+reliability adds blocker arbitration, security review, versioned policy packs,
+scoped MCP tools, feedback evaluation, and explicit JavaScript/TypeScript and
+Python adapters. More language adapters remain future work.

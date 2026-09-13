@@ -305,3 +305,24 @@ per-tool call limits. Tool arguments cannot replace those values. Responses
 must match the requested record and head revision. The fix tool can prepare a
 hashed proposal, but approval, publication, pushing, and merging remain outside
 its authority.
+
+## Python proof adapter
+
+We checked Python's official [`runpy` documentation](https://docs.python.org/3/library/runpy.html)
+and [command-line reference](https://docs.python.org/3/using/cmdline.html) on 13
+September 2026. Running the reproducer through `python -c` keeps the repository
+root on the import path, while `runpy.run_path` still gives the proof file normal
+script semantics. The `-B` flag prevents bytecode files from changing the
+read-only checkout.
+
+The image source was checked at official-images commit
+[`e9b472b`](https://github.com/docker-library/official-images/commit/e9b472b26d5c900e59f7e9a3d5980e7f2a1e5b8f)
+and Python image commit
+[`8f2cb2e`](https://github.com/docker-library/python/commit/8f2cb2e1c9cae4d8f772fe61f1427c96acea3257).
+The adapter pins the locally verified Linux amd64 Python 3.14.7 image digest
+`sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f`.
+
+Each explicit adapter owns file extensions, trusted review guidance, its proof
+command, and reproducer path. Findings, evidence, budgets, and verdicts remain
+language-neutral. Python package installation and automatic discovery of
+third-party tools are deliberately outside this phase.

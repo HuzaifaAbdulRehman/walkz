@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { modelFindingSchema } from './review.js';
+import { reviewLanguageIdSchema } from './language.js';
 
 const sha1Schema = z
   .string()
@@ -36,6 +37,7 @@ export const goldenProofRecordSchema = z
   .object({
     id: identifierSchema,
     fixture: identifierSchema,
+    language: reviewLanguageIdSchema,
     expected: goldenProofExpectationSchema,
     classification: goldenProofClassificationSchema,
     baseSha: sha1Schema,
@@ -93,7 +95,7 @@ export const goldenProofRecordsSchema = z
 
 export const goldenProofBaselineSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     suiteId: identifierSchema,
     behaviorFingerprint: z
       .string()
@@ -104,6 +106,7 @@ export const goldenProofBaselineSchema = z
         z
           .object({
             id: identifierSchema,
+            language: reviewLanguageIdSchema,
             expected: goldenProofExpectationSchema,
             classification: goldenProofClassificationSchema,
           })
@@ -134,13 +137,14 @@ export const goldenProofBaselineSchema = z
 
 export const goldenProofFixtureManifestSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     cases: z
       .array(
         z
           .object({
             id: identifierSchema,
             fixture: identifierSchema,
+            language: reviewLanguageIdSchema,
             expected: goldenProofExpectationSchema,
             finding: modelFindingSchema,
             reproducerSource: z.string().min(1).max(8_192),

@@ -29,12 +29,20 @@ dockerTest(
     const report = JSON.parse(result.stdout) as {
       behavior: {
         codeRevision: string;
-        containerImage: string;
+        languageAdapters: Array<{
+          id: string;
+          containerImage: string;
+          command: { executable: string };
+        }>;
         provider: null;
       };
       behaviorFingerprint: string;
       records: Array<{ id: string; classification: string }>;
       metrics: Record<string, number>;
+      languages: Array<{
+        language: string;
+        metrics: Record<string, number>;
+      }>;
       comparison: {
         baselineFingerprint: string;
         caseRegressions: unknown[];
@@ -45,7 +53,18 @@ dockerTest(
 
     expect(report.behavior).toMatchObject({
       codeRevision: expect.stringMatching(/^[a-f0-9]{40}$/),
-      containerImage: image,
+      languageAdapters: [
+        {
+          id: 'javascript-typescript',
+          containerImage: image,
+          command: { executable: 'node' },
+        },
+        {
+          id: 'python',
+          containerImage: expect.stringMatching(/^python@sha256:[a-f0-9]{64}$/),
+          command: { executable: 'python' },
+        },
+      ],
       provider: null,
     });
     expect(report.behaviorFingerprint).toMatch(/^[a-f0-9]{64}$/);
@@ -58,15 +77,43 @@ dockerTest(
         id: 'clean-positive-value',
         classification: 'not_verified',
       }),
+      expect.objectContaining({
+        id: 'python-broken-boundary',
+        language: 'python',
+        classification: 'verified',
+      }),
+      expect.objectContaining({
+        id: 'python-clean-positive-value',
+        language: 'python',
+        classification: 'not_verified',
+      }),
     ]);
     expect(report.metrics).toMatchObject({
-      caseCount: 2,
-      truePositives: 1,
+      caseCount: 4,
+      truePositives: 2,
       falsePositives: 0,
       falseNegatives: 0,
       proofRate: 0.5,
       modelInvocationCount: 0,
     });
+    expect(report.languages).toEqual([
+      expect.objectContaining({
+        language: 'javascript-typescript',
+        metrics: expect.objectContaining({
+          caseCount: 2,
+          truePositives: 1,
+          falsePositives: 0,
+        }),
+      }),
+      expect.objectContaining({
+        language: 'python',
+        metrics: expect.objectContaining({
+          caseCount: 2,
+          truePositives: 1,
+          falsePositives: 0,
+        }),
+      }),
+    ]);
     expect(report.comparison).toEqual({
       baselineFingerprint:
         '40642cc0f8213970f56a0f1e089a2bbf93c2828d5f11146424ab55b4707b5e48',

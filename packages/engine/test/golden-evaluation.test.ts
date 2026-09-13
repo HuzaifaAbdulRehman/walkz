@@ -11,6 +11,7 @@ function record(
   return {
     id: 'broken-boundary',
     fixture: 'broken',
+    language: 'javascript-typescript',
     expected: 'verified',
     classification: 'verified',
     baseSha: '1'.repeat(40),
@@ -59,6 +60,12 @@ describe('evaluateGoldenProofs', () => {
       totalCompletionTokens: 0,
       totalModelLatencyMs: 0,
     });
+    expect(evaluation.languages).toEqual([
+      {
+        language: 'javascript-typescript',
+        metrics: evaluation.metrics,
+      },
+    ]);
   });
 
   it('counts missed and incomplete regressions without calling them catches', () => {
@@ -104,17 +111,47 @@ describe('evaluateGoldenProofs', () => {
       totalModelLatencyMs: 9,
     });
   });
+
+  it('reports independent metrics for each language adapter', () => {
+    const evaluation = evaluateGoldenProofs([
+      record(),
+      record({
+        id: 'python-clean',
+        fixture: 'python-clean',
+        language: 'python',
+        expected: 'not_verified',
+        classification: 'not_verified',
+        baseSha: '3'.repeat(40),
+        headSha: '4'.repeat(40),
+      }),
+    ]);
+
+    expect(evaluation.languages).toEqual([
+      expect.objectContaining({
+        language: 'javascript-typescript',
+        metrics: expect.objectContaining({ caseCount: 1, catchRate: 1 }),
+      }),
+      expect.objectContaining({
+        language: 'python',
+        metrics: expect.objectContaining({
+          caseCount: 1,
+          falsePositiveRate: 0,
+        }),
+      }),
+    ]);
+  });
 });
 
 describe('compareGoldenProofBaseline', () => {
   function baseline() {
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       suiteId: 'counterfactual-proof-v1',
       behaviorFingerprint: 'a'.repeat(64),
       cases: [
         {
           id: 'broken-boundary',
+          language: 'javascript-typescript',
           expected: 'verified',
           classification: 'verified',
         },
@@ -134,6 +171,23 @@ describe('compareGoldenProofBaseline', () => {
       caseRegressions: [],
       threshold: 0,
       passed: true,
+    });
+  });
+
+  it('fails when a case moves to another language adapter', () => {
+    const comparison = compareGoldenProofBaseline(
+      baseline(),
+      evaluateGoldenProofs([record({ language: 'python' })]),
+    );
+
+    expect(comparison).toMatchObject({
+      caseRegressions: [{
+        id: 'broken-boundary',
+        kind: 'changed',
+        baselineLanguage: 'javascript-typescript',
+        currentLanguage: 'python',
+      }],
+      passed: false,
     });
   });
 

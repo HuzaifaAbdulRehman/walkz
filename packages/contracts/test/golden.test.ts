@@ -10,6 +10,7 @@ function record() {
   return {
     id: 'broken-boundary',
     fixture: 'broken',
+    language: 'javascript-typescript',
     expected: 'verified',
     classification: 'verified',
     baseSha: '1'.repeat(40),
@@ -47,11 +48,12 @@ describe('parseGoldenProofRecords', () => {
   it('requires an explicit, unique fixture expectation and reproducer', () => {
     expect(
       parseGoldenProofFixtureManifest({
-        schemaVersion: 1,
+        schemaVersion: 2,
         cases: [
           {
             id: 'broken-boundary',
             fixture: 'broken',
+            language: 'javascript-typescript',
             expected: 'verified',
             finding: {
               category: 'correctness',
@@ -73,12 +75,13 @@ describe('parseGoldenProofRecords', () => {
 
 describe('parseGoldenProofBaseline', () => {
   const baseline = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     suiteId: 'counterfactual-proof-v1',
     behaviorFingerprint: 'A'.repeat(64),
     cases: [
       {
         id: 'broken-boundary',
+        language: 'javascript-typescript',
         expected: 'verified',
         classification: 'verified',
       },

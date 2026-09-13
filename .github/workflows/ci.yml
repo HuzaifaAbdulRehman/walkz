@@ -30,6 +30,8 @@ jobs:
       - if: runner.os == 'Linux'
         run: docker image pull node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
       - if: runner.os == 'Linux'
+        run: docker image pull python@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f
+      - if: runner.os == 'Linux'
         run: docker image pull redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
       - if: runner.os == 'Linux'
         run: docker run --detach --rm --name walkz-ci-redis --publish 127.0.0.1:56379:6379 redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
@@ -47,6 +49,7 @@ jobs:
         run: npm test
         env:
           WALKZ_DOCKER_TEST_IMAGE: node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+          WALKZ_PYTHON_DOCKER_TEST_IMAGE: python@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f
           WALKZ_REDIS_TEST_URL: redis://127.0.0.1:56379
           WALKZ_POSTGRES_TEST_URL: postgresql://walkz:walkz@127.0.0.1:55435/walkz
       - if: always() && runner.os == 'Linux'

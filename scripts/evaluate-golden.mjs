@@ -21,6 +21,8 @@ import {
   createProofPlan,
   digestProofCommand,
   evaluateGoldenProofs,
+  getReviewLanguageAdapter,
+  listReviewLanguageAdapters,
   normalizeFinding,
   runAndAssessCounterfactualProof,
 } from '../packages/engine/dist/index.js';
@@ -32,14 +34,6 @@ const manifest = parseGoldenProofFixtureManifest(JSON.parse(manifestBytes));
 const baseline = parseGoldenProofBaseline(JSON.parse(
   await readFile(join(goldenRoot, 'proof-baseline.json'), 'utf8'),
 ));
-const image =
-  process.env.WALKZ_DOCKER_TEST_IMAGE ??
-  'node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf';
-const command = {
-  executable: 'node',
-  args: ['.walkz-proof/reproducer.mjs'],
-  cwd: '.',
-};
 const limits = {
   timeoutMs: 10_000,
   maxOutputBytesPerStream: 16_384,
@@ -60,11 +54,20 @@ const budget = {
   deadlineMs: Date.now() + 60_000,
 };
 const workspaceLimits = { maxFiles: 100, maxBytes: 1024 * 1_024 };
-const commandDigest = digestProofCommand(command);
-const authorization = {
-  authorizedCommandDigests: new Set([commandDigest]),
-};
 const temporaryRepositories = new Set();
+
+function imageForLanguage(language) {
+  const adapter = getReviewLanguageAdapter(language);
+  if (language === 'javascript-typescript') {
+    return process.env.WALKZ_DOCKER_TEST_IMAGE ??
+      adapter.proofRuntime.defaultContainerImage;
+  }
+  if (language === 'python') {
+    return process.env.WALKZ_PYTHON_DOCKER_TEST_IMAGE ??
+      adapter.proofRuntime.defaultContainerImage;
+  }
+  throw new Error(`No golden proof image is configured for ${language}.`);
+}
 
 function canonicalJson(value) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') {
@@ -143,6 +146,13 @@ function percentage(value) {
 async function evaluate() {
   const records = [];
   for (const fixture of manifest.cases) {
+    const adapter = getReviewLanguageAdapter(fixture.language);
+    const image = imageForLanguage(fixture.language);
+    const command = adapter.proofRuntime.command;
+    const commandDigest = digestProofCommand(command);
+    const authorization = {
+      authorizedCommandDigests: new Set([commandDigest]),
+    };
     const { repository, baseSha, headSha } = await createFixtureRepository(
       fixture.fixture,
     );
@@ -157,7 +167,7 @@ async function evaluate() {
         command,
         files: [
           {
-            path: '.walkz-proof/reproducer.mjs',
+            path: adapter.proofRuntime.reproducerPath,
             content: fixture.reproducerSource,
           },
         ],
@@ -176,6 +186,7 @@ async function evaluate() {
     records.push({
       id: fixture.id,
       fixture: fixture.fixture,
+      language: fixture.language,
       expected: fixture.expected,
       classification: proof.assessment.classification,
       baseSha,
@@ -194,14 +205,19 @@ try {
   const evaluation = await evaluate();
   const metrics = evaluation.metrics;
   const codeRevision = git(projectRoot, 'rev-parse', 'HEAD');
+  const languageAdapters = listReviewLanguageAdapters().map((adapter) => ({
+    id: adapter.id,
+    containerImage: imageForLanguage(adapter.id),
+    command: adapter.proofRuntime.command,
+    commandDigest: digestProofCommand(adapter.proofRuntime.command),
+    reproducerPath: adapter.proofRuntime.reproducerPath,
+  }));
   const behavior = {
     schemaVersion: 1,
     suiteId: baseline.suiteId,
     codeRevision,
     fixtureManifestHash: sha256(manifest),
-    containerImage: image,
-    command,
-    commandDigest,
+    languageAdapters,
     limits,
     proofBudget,
     workspaceLimits,

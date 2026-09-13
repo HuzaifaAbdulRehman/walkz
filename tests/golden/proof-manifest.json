@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "cases": [
     {
       "id": "broken-boundary",
       "fixture": "broken",
+      "language": "javascript-typescript",
       "expected": "verified",
       "finding": {
         "category": "correctness",
@@ -20,6 +21,7 @@
     {
       "id": "clean-positive-value",
       "fixture": "clean",
+      "language": "javascript-typescript",
       "expected": "not_verified",
       "finding": {
         "category": "correctness",
@@ -32,6 +34,40 @@
         "confidence": 0.55
       },
       "reproducerSource": "import { value } from '../src/value.mjs';\n\nprocess.exit(value > 0 ? 0 : 1);\n"
+    },
+    {
+      "id": "python-broken-boundary",
+      "fixture": "python-broken",
+      "language": "python",
+      "expected": "verified",
+      "finding": {
+        "category": "correctness",
+        "severity": "high",
+        "file": "src/value.py",
+        "line": 2,
+        "claim": "Zero crosses the wrong boundary.",
+        "failureMechanism": "The strict comparison returns one for zero.",
+        "suggestedProof": "Run the boundary case.",
+        "confidence": 0.98
+      },
+      "reproducerSource": "from src.value import boundary\n\nraise SystemExit(0 if boundary(0) == 0 else 1)\n"
+    },
+    {
+      "id": "python-clean-positive-value",
+      "fixture": "python-clean",
+      "language": "python",
+      "expected": "not_verified",
+      "finding": {
+        "category": "correctness",
+        "severity": "medium",
+        "file": "src/value.py",
+        "line": 1,
+        "claim": "The changed value becomes non-positive.",
+        "failureMechanism": "A later consumer receives a non-positive value.",
+        "suggestedProof": "Check that the exported value remains positive.",
+        "confidence": 0.55
+      },
+      "reproducerSource": "from src.value import value\n\nraise SystemExit(0 if value > 0 else 1)\n"
     }
   ]
 }

@@ -1,15 +1,29 @@
 {
-  "schemaVersion": 1,
-  "suiteId": "counterfactual-proof-v1",
+  "schemaVersion": 2,
+  "suiteId": "counterfactual-proof-v2",
   "behaviorFingerprint": "40642cc0f8213970f56a0f1e089a2bbf93c2828d5f11146424ab55b4707b5e48",
   "cases": [
     {
       "id": "broken-boundary",
+      "language": "javascript-typescript",
       "expected": "verified",
       "classification": "verified"
     },
     {
       "id": "clean-positive-value",
+      "language": "javascript-typescript",
+      "expected": "not_verified",
+      "classification": "not_verified"
+    },
+    {
+      "id": "python-broken-boundary",
+      "language": "python",
+      "expected": "verified",
+      "classification": "verified"
+    },
+    {
+      "id": "python-clean-positive-value",
+      "language": "python",
       "expected": "not_verified",
       "classification": "not_verified"
     }
