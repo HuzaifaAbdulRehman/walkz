@@ -101,6 +101,12 @@ export type { ClaimedGitHubCommentCommand } from './github-comment-command.js';
 
 export { purgeExpiredAuditEvents, recordAuditEvent } from './audit.js';
 
+export { recordModelInvocation } from './model-invocation.js';
+export type {
+  ModelInvocationPersistenceInput,
+  StoredModelInvocation,
+} from './model-invocation.js';
+
 export {
   listRepositoryConfigVersions,
   saveRepositoryConfig,

@@ -122,6 +122,19 @@ export type {
   StructuredPatchResult,
 } from './provider.js';
 
+export {
+  modelInvocationEventSchema,
+  modelInvocationStageSchema,
+  modelInvocationStatusSchema,
+  parseModelInvocationEvent,
+} from './model-invocation.js';
+
+export type {
+  ModelInvocationEvent,
+  ModelInvocationStage,
+  ModelInvocationStatus,
+} from './model-invocation.js';
+
 export type {
   Evidence,
   EvidenceKind,
