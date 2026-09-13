@@ -32,3 +32,5 @@ export type {
   MockProviderOptions,
   MockProviderOutcome,
 } from './mock.js';
+export { withModelInvocationTelemetry } from './telemetry.js';
+export type { ModelInvocationTelemetryOptions } from './telemetry.js';
