@@ -16,7 +16,8 @@ import { digestProofCommand } from './proof-plan.js';
 export type FindingRejectionReason =
   | FindingLocationFailure
   | 'invalid_finding'
-  | 'duplicate_fingerprint';
+  | 'duplicate_fingerprint'
+  | 'specialist_non_security_finding';
 
 export interface FindingRejection {
   index: number;

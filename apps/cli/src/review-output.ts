@@ -131,6 +131,17 @@ export function renderTerminalReport(
         result.challenger.model,
     );
   }
+  if (result.security.failureCode !== null) {
+    lines.push('', 'Security specialist: ' + result.security.failureCode);
+  } else if (result.security.status === 'complete') {
+    lines.push(
+      '',
+      'Security specialist: ' +
+        result.security.provider +
+        ' / ' +
+        result.security.model,
+    );
+  }
   return lines.join('\n') + '\n';
 }
 
@@ -153,6 +164,7 @@ export function renderJsonReport(
         findings: result.run.findings,
         provider: result.provider,
         challenger: result.challenger,
+        security: result.security,
         startedAt: result.run.startedAt,
         completedAt: result.run.completedAt,
         failure: result.failure,

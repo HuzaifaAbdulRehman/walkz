@@ -211,6 +211,27 @@ describe('buildReviewPrompt', () => {
     });
   });
 
+  it('uses a bounded tool-free prompt for security review', () => {
+    const prompt = buildReviewPrompt(
+      context('safe\u202Ehidden'),
+      emptyChecks,
+      buildReviewBudget(
+        request(),
+        createDefaultWalkzConfig(),
+        1_000,
+      ),
+      { model: 'mock/reviewer', purpose: 'security' },
+    );
+
+    expect(prompt.promptVersion).toBe('walkz-security-v1');
+    expect(prompt.systemPrompt).toContain('no tools');
+    expect(prompt.systemPrompt).toContain('only security findings');
+    expect(prompt.userPrompt).not.toContain('\u202E');
+    expect(JSON.parse(prompt.userPrompt)).toMatchObject({
+      diff: 'safe\\u{202E}hidden',
+    });
+  });
+
   it('packs oversized text within a conservative token ceiling', () => {
     const modelBudget = {
       ...buildReviewBudget(

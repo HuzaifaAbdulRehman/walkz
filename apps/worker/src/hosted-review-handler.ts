@@ -191,6 +191,7 @@ function adjudicateProofedResult(
 ): ReviewVerdict {
   const providerStatus =
     result.provider.status === 'incomplete' ||
+    result.security.status === 'incomplete' ||
     result.challenger.status === 'incomplete'
       ? 'incomplete'
       : result.provider.status;
@@ -199,6 +200,7 @@ function adjudicateProofedResult(
       ? result.failure?.stage === 'context' ? 'error' : 'incomplete'
       : result.context.coverage.complete &&
           !result.provider.promptTruncated &&
+          !result.security.promptTruncated &&
           !result.challenger.promptTruncated
         ? 'complete'
         : 'incomplete',
@@ -347,6 +349,7 @@ export function createHostedReviewJobHandler(
             config: run.config,
             ...(provider === undefined ? {} : { provider }),
             enableBlockerArbitration: true,
+            enableSecuritySpecialist: true,
             dependencies: {
               collectContext: (root, references, options) => collectContext(
                 root,

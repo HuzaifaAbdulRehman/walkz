@@ -245,7 +245,7 @@ export async function challengeLikelyBlockers(input: {
   context: ReviewContext;
   budget: LocalReviewBudget;
   primaryAccess: ProviderAccessResult;
-  primaryUsage: ProviderUsage;
+  usedModelTokens: number;
   provider: ProviderAdapter | undefined;
   signal: AbortSignal;
 }): Promise<{ step: ChallengerStep; findings: Finding[]; cancelled: boolean }> {
@@ -270,7 +270,7 @@ export async function challengeLikelyBlockers(input: {
       cancelled: false,
     };
   }
-  const remainingTokens = input.budget.maxModelTokens - input.primaryUsage.totalTokens;
+  const remainingTokens = input.budget.maxModelTokens - input.usedModelTokens;
   if (remainingTokens < 1) {
     return {
       step: incomplete(input.provider, 'budget_exhausted', false, model.id),

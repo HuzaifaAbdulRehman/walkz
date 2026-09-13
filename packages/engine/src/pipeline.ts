@@ -31,6 +31,10 @@ import {
   type ChallengerStep,
 } from './challenger.js';
 import {
+  NO_SECURITY_SPECIALIST,
+  runSecuritySpecialist,
+} from './security-specialist.js';
+import {
   cloneProviderStep,
   NO_PROVIDER,
   requiredCheckFailed,
@@ -86,6 +90,7 @@ export interface LocalReviewPipelineInput
     access: ProviderAccessResult,
   ) => void | Promise<void>;
   enableBlockerArbitration?: boolean;
+  enableSecuritySpecialist?: boolean;
   signal?: AbortSignal;
   dependencies?: LocalReviewPipelineDependencies;
 }
@@ -97,6 +102,7 @@ export interface LocalReviewPipelineResult {
   deterministicChecks: DeterministicCheckRun | null;
   provider: ProviderReviewStep;
   challenger: ChallengerStep;
+  security: ProviderReviewStep;
   decision: LocalVerdictDecision;
   failure: PipelineFailure | null;
 }
@@ -166,6 +172,7 @@ function result(
   checks: DeterministicCheckRun | null,
   provider: ProviderReviewStep,
   challenger: ChallengerStep,
+  security: ProviderReviewStep,
   decision: LocalVerdictDecision,
   failure: PipelineFailure | null,
   clock: (() => Date) | undefined,
@@ -187,6 +194,7 @@ function result(
             rateLimit: { ...challenger.usage.rateLimit },
           },
     },
+    security: cloneProviderStep(security),
     decision,
     failure,
   };
@@ -266,6 +274,7 @@ export async function runLocalReviewPipeline(
         null,
         NO_PROVIDER,
         NO_CHALLENGER,
+        NO_SECURITY_SPECIALIST,
         decision,
         {
           stage: 'context',
@@ -314,6 +323,7 @@ export async function runLocalReviewPipeline(
         null,
         NO_PROVIDER,
         NO_CHALLENGER,
+        NO_SECURITY_SPECIALIST,
         decision,
         {
           stage: 'checks',
@@ -343,6 +353,7 @@ export async function runLocalReviewPipeline(
         checks,
         NO_PROVIDER,
         NO_CHALLENGER,
+        NO_SECURITY_SPECIALIST,
         decision,
         null,
         input.clock,
@@ -350,6 +361,7 @@ export async function runLocalReviewPipeline(
       );
     }
 
+    const recordedAt = (input.clock?.() ?? new Date()).toISOString();
     const providerReview = await reviewWithProvider(
       run,
       context,
@@ -357,7 +369,7 @@ export async function runLocalReviewPipeline(
       budget,
       input.provider,
       signal,
-      (input.clock?.() ?? new Date()).toISOString(),
+      recordedAt,
       input.onProviderAccess,
     );
     if (
@@ -367,11 +379,38 @@ export async function runLocalReviewPipeline(
       providerReview.step.failureCode = 'budget_exhausted';
     }
     run = { ...run, findings: providerReview.findings };
+    let security = { ...NO_SECURITY_SPECIALIST };
+    let securityCancelled = false;
+    if (
+      input.enableSecuritySpecialist === true &&
+      providerReview.step.status === 'complete' &&
+      providerReview.access !== null &&
+      providerReview.step.usage !== null
+    ) {
+      const specialist = await runSecuritySpecialist({
+        findings: run.findings,
+        context,
+        checks,
+        budget,
+        usedModelTokens: providerReview.step.usage.totalTokens,
+        access: providerReview.access,
+        provider: input.provider,
+        signal,
+        recordedAt,
+      });
+      security = specialist.step;
+      securityCancelled = specialist.cancelled;
+      if (deadlineReached && security.failureCode === 'cancelled') {
+        security.failureCode = 'budget_exhausted';
+      }
+      run = { ...run, findings: specialist.findings };
+    }
     let challenger = { ...NO_CHALLENGER };
     let challengerCancelled = false;
     if (
       input.enableBlockerArbitration === true &&
       providerReview.step.status === 'complete' &&
+      security.status !== 'incomplete' &&
       providerReview.access !== null &&
       providerReview.step.usage !== null
     ) {
@@ -380,7 +419,9 @@ export async function runLocalReviewPipeline(
         context,
         budget,
         primaryAccess: providerReview.access,
-        primaryUsage: providerReview.step.usage,
+        usedModelTokens:
+          providerReview.step.usage.totalTokens +
+          (security.usage?.totalTokens ?? 0),
         provider: input.provider,
         signal,
       });
@@ -394,11 +435,13 @@ export async function runLocalReviewPipeline(
     const contextStatus =
       context.coverage.complete &&
       !providerReview.step.promptTruncated &&
+      !security.promptTruncated &&
       !challenger.promptTruncated
         ? 'complete'
         : 'incomplete';
     const providerStatus =
       providerReview.step.status === 'incomplete' ||
+      security.status === 'incomplete' ||
       challenger.status === 'incomplete'
         ? 'incomplete'
         : providerReview.step.status;
@@ -416,10 +459,12 @@ export async function runLocalReviewPipeline(
       checks,
       providerReview.step,
       challenger,
+      security,
       decision,
       null,
       input.clock,
-      (providerReview.cancelled || challengerCancelled) && !deadlineReached,
+      (providerReview.cancelled || securityCancelled || challengerCancelled) &&
+        !deadlineReached,
     );
   } finally {
     clearTimeout(deadlineTimer);

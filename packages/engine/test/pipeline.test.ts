@@ -288,6 +288,40 @@ function providerWithChallenge(
   return selected;
 }
 
+function providerWithSecurity(
+  review: ModelReviewResponse,
+  securityReview: ModelReviewResponse,
+  events: string[] = [],
+): ProviderAdapter {
+  const selected = provider(review, events);
+  selected.requestStructuredSecurityReview = async (
+    prompt,
+  ): Promise<StructuredReviewResult> => {
+    events.push('security');
+    return {
+      provider: 'mock',
+      model: prompt.model,
+      promptVersion: prompt.promptVersion,
+      schemaVersion: 'walkz.review.v1',
+      review: securityReview,
+      usage,
+      requestId: 'security-request-1',
+    };
+  };
+  return selected;
+}
+
+function securityContext(): ReviewContext {
+  return context({
+    risks: {
+      'src/value.ts': {
+        score: 35,
+        reasons: ['security-sensitive path'],
+      },
+    },
+  });
+}
+
 function dependencies(
   reviewContext: ReviewContext,
   checkRun: DeterministicCheckRun,
@@ -673,6 +707,147 @@ describe('runLocalReviewPipeline', () => {
     expect(result.run.verdict).toBe('INCONCLUSIVE');
     expect(result.run.status).toBe('cancelled');
     expect(result.provider.failureCode).toBe('cancelled');
+  });
+
+  it('runs the security specialist only for a security-sensitive change', async () => {
+    const events: string[] = [];
+    const selected = providerWithSecurity(
+      { findings: [] },
+      {
+        findings: [{
+          ...modelFinding(),
+          category: 'security',
+          claim: 'The changed authorization branch accepts another owner.',
+          failureMechanism: 'An attacker can bypass the owner comparison.',
+        }],
+      },
+      events,
+    );
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: selected,
+      enableSecuritySpecialist: true,
+      dependencies: dependencies(securityContext(), checks(), events),
+      clock: () => NOW,
+    });
+
+    expect(events).toEqual([
+      'references',
+      'context',
+      'checks',
+      'access',
+      'review',
+      'security',
+    ]);
+    expect(result.security).toMatchObject({
+      status: 'complete',
+      model: 'mock/reviewer',
+      promptVersion: 'walkz-security-v1',
+    });
+    expect(result.run.findings).toEqual([
+      expect.objectContaining({
+        category: 'security',
+        file: 'src/value.ts',
+        line: 1,
+      }),
+    ]);
+  });
+
+  it('skips the security specialist for an ordinary source change', async () => {
+    const events: string[] = [];
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: providerWithSecurity(
+        { findings: [] },
+        { findings: [] },
+        events,
+      ),
+      enableSecuritySpecialist: true,
+      dependencies: dependencies(context(), checks(), events),
+      clock: () => NOW,
+    });
+
+    expect(events).not.toContain('security');
+    expect(result.security.status).toBe('not_requested');
+  });
+
+  it('returns inconclusive when a required security review fails', async () => {
+    const selected = providerWithSecurity(
+      { findings: [] },
+      { findings: [] },
+    );
+    selected.requestStructuredSecurityReview = async () => {
+      throw { code: 'rate_limited' };
+    };
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: selected,
+      enableSecuritySpecialist: true,
+      dependencies: dependencies(securityContext(), checks()),
+      clock: () => NOW,
+    });
+
+    expect(result.security).toMatchObject({
+      status: 'incomplete',
+      failureCode: 'request_failed',
+    });
+    expect(result.run.verdict).toBe('INCONCLUSIVE');
+  });
+
+  it('shares one model budget across review, security, and challenge', async () => {
+    const events: string[] = [];
+    const selected = providerWithChallenge(
+      { findings: [modelFinding()] },
+      'uphold',
+      events,
+    );
+    let securityOutputBudget = 0;
+    selected.requestStructuredSecurityReview = async (prompt) => {
+      events.push('security');
+      securityOutputBudget = prompt.maxOutputTokens;
+      return {
+        provider: 'mock',
+        model: prompt.model,
+        promptVersion: prompt.promptVersion,
+        schemaVersion: 'walkz.review.v1',
+        review: { findings: [] },
+        usage,
+        requestId: 'security-request-1',
+      };
+    };
+    const challenge = selected.requestStructuredChallenge!;
+    let challengeOutputBudget = 0;
+    selected.requestStructuredChallenge = async (prompt, options) => {
+      challengeOutputBudget = prompt.maxOutputTokens;
+      return challenge(prompt, options);
+    };
+
+    const result = await runLocalReviewPipeline({
+      request: request(),
+      config: createDefaultWalkzConfig(),
+      provider: selected,
+      enableSecuritySpecialist: true,
+      enableBlockerArbitration: true,
+      dependencies: dependencies(securityContext(), checks(), events),
+      clock: () => NOW,
+    });
+
+    expect(events).toEqual([
+      'references',
+      'context',
+      'checks',
+      'access',
+      'review',
+      'security',
+      'challenge',
+    ]);
+    expect(securityOutputBudget).toBe(1_962);
+    expect(challengeOutputBudget).toBe(1_925);
+    expect(result.security.status).toBe('complete');
+    expect(result.challenger.status).toBe('complete');
   });
 
   it('challenges only a likely blocker with a second model', async () => {

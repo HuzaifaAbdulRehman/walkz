@@ -61,6 +61,8 @@ function proofPipelineResult(
   finding: Finding,
   options: {
     checkOutcome?: 'succeeded' | 'failed';
+    securityStatus?: 'complete' | 'not_requested' | 'incomplete';
+    securityPromptTruncated?: boolean;
     challengerStatus?: 'complete' | 'not_requested' | 'incomplete';
     challengerNeedsHuman?: boolean;
     challengerPromptTruncated?: boolean;
@@ -78,6 +80,10 @@ function proofPipelineResult(
       }],
     },
     provider: { status: 'complete', promptTruncated: false },
+    security: {
+      status: options.securityStatus ?? 'not_requested',
+      promptTruncated: options.securityPromptTruncated ?? false,
+    },
     challenger: {
       status: options.challengerStatus ?? 'not_requested',
       needsHuman: options.challengerNeedsHuman ?? false,
@@ -234,6 +240,7 @@ describe('hosted review job handler', () => {
       }),
       provider: expect.objectContaining({ name: 'groq' }),
       enableBlockerArbitration: true,
+      enableSecuritySpecialist: true,
     }));
     expect(runPipeline.mock.calls[0]?.[0].provider).not.toBe(provider);
     const pipelineInput = runPipeline.mock.calls[0]?.[0];
@@ -477,6 +484,79 @@ describe('hosted review job handler', () => {
       runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(advisory, {
         checkOutcome: 'succeeded',
         challengerStatus: 'incomplete',
+      })),
+      proveFindings: vi.fn().mockResolvedValue({
+        findings: [advisory],
+        proofStatus: 'not_requested',
+      }),
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'INCONCLUSIVE',
+    }));
+  });
+
+  it('preserves an incomplete security review after proof adjudication', async () => {
+    const reviewStore = store();
+    const advisory = {
+      ...finding([]),
+      lifecycleStatus: 'proposed' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+    };
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(advisory, {
+        checkOutcome: 'succeeded',
+        securityStatus: 'incomplete',
+      })),
+      proveFindings: vi.fn().mockResolvedValue({
+        findings: [advisory],
+        proofStatus: 'not_requested',
+      }),
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'INCONCLUSIVE',
+    }));
+  });
+
+  it('preserves truncated security context after proof adjudication', async () => {
+    const reviewStore = store();
+    const advisory = {
+      ...finding([]),
+      lifecycleStatus: 'proposed' as const,
+      evidenceLevel: 'UNVERIFIED' as const,
+    };
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      runPipeline: vi.fn().mockResolvedValue(proofPipelineResult(advisory, {
+        checkOutcome: 'succeeded',
+        securityStatus: 'complete',
+        securityPromptTruncated: true,
       })),
       proveFindings: vi.fn().mockResolvedValue({
         findings: [advisory],
