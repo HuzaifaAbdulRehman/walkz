@@ -773,6 +773,29 @@ describe('runLocalReviewPipeline', () => {
     expect(result.security.status).toBe('not_requested');
   });
 
+  it('honours a trusted configuration that disables policy packs', async () => {
+    const events: string[] = [];
+    const config = {
+      ...createDefaultWalkzConfig(),
+      policyPacks: [],
+    };
+    const result = await runLocalReviewPipeline({
+      request: request({}, config),
+      config,
+      provider: providerWithSecurity(
+        { findings: [] },
+        { findings: [] },
+        events,
+      ),
+      enableSecuritySpecialist: true,
+      dependencies: dependencies(securityContext(), checks(), events),
+      clock: () => NOW,
+    });
+
+    expect(events).not.toContain('security');
+    expect(result.security.status).toBe('not_requested');
+  });
+
   it('returns inconclusive when a required security review fails', async () => {
     const selected = providerWithSecurity(
       { findings: [] },

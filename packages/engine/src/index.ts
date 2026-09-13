@@ -80,6 +80,8 @@ export {
   requiresSecuritySpecialist,
   runSecuritySpecialist,
 } from './security-specialist.js';
+export { resolvePolicyPacks } from './policy-packs.js';
+export type { ResolvedPolicyPacks } from './policy-packs.js';
 export type {
   ChallengerDecision,
   ChallengerStep,

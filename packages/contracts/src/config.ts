@@ -11,6 +11,18 @@ export const evidenceLevelSchema = z.enum([
   'UNVERIFIED',
 ]);
 
+export const policyPackIdSchema = z.enum([
+  'security-core@1',
+  'supply-chain@1',
+  'delivery-safety@1',
+]);
+
+export const DEFAULT_POLICY_PACK_IDS = [
+  'security-core@1',
+  'supply-chain@1',
+  'delivery-safety@1',
+] as const;
+
 export const approvedCommandSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/),
@@ -52,6 +64,7 @@ export const repositoryConfigSchema = z
       .array(z.enum(['VERIFIED', 'SUPPORTED']))
       .min(1)
       .max(2),
+    policyPacks: z.array(policyPackIdSchema).max(8).optional(),
     commandApprovalPolicy: z.enum(['prompt', 'trusted_config']),
     premiumEnabled: z.literal(false),
     spendingLimitUsd: z.literal(0),
@@ -80,9 +93,21 @@ export const repositoryConfigSchema = z
         path: ['blockingEvidenceLevels'],
       });
     }
+
+    if (
+      config.policyPacks !== undefined &&
+      new Set(config.policyPacks).size !== config.policyPacks.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Policy pack ids must be unique.',
+        path: ['policyPacks'],
+      });
+    }
   });
 
 export type EvidenceLevel = z.infer<typeof evidenceLevelSchema>;
+export type PolicyPackId = z.infer<typeof policyPackIdSchema>;
 export type ApprovedCommand = z.infer<typeof approvedCommandSchema>;
 export type RepositoryConfig = z.infer<typeof repositoryConfigSchema>;
 
@@ -119,6 +144,7 @@ export function createDefaultWalkzConfig(
     },
     triggerPolicy: 'manual',
     blockingEvidenceLevels: ['VERIFIED'],
+    policyPacks: [...DEFAULT_POLICY_PACK_IDS],
     commandApprovalPolicy: 'prompt',
     premiumEnabled: false,
     spendingLimitUsd: 0,

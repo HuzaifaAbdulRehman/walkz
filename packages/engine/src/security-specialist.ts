@@ -9,6 +9,7 @@ import type {
 import type { ReviewContext } from '@walkz/git';
 
 import { normalizeProviderFindings } from './evidence.js';
+import type { ResolvedPolicyPacks } from './policy-packs.js';
 import { buildReviewPrompt } from './prompt.js';
 import {
   NO_PROVIDER,
@@ -16,20 +17,16 @@ import {
   type ProviderStepFailureCode,
 } from './provider-review.js';
 
-const SECURITY_RISK_REASONS = new Set([
-  'security-sensitive path',
-  'dependency or package metadata',
-  'delivery or data migration path',
-  'configuration or executable change',
-]);
-
 export const NO_SECURITY_SPECIALIST: ProviderReviewStep = {
   ...NO_PROVIDER,
 };
 
-export function requiresSecuritySpecialist(context: ReviewContext): boolean {
+export function requiresSecuritySpecialist(
+  context: ReviewContext,
+  policies: ResolvedPolicyPacks,
+): boolean {
   return Object.values(context.risks).some((risk) =>
-    risk.reasons.some((reason) => SECURITY_RISK_REASONS.has(reason)));
+    risk.reasons.some((reason) => policies.securityRiskReasons.has(reason)));
 }
 
 function incomplete(
@@ -64,6 +61,7 @@ export async function runSecuritySpecialist(input: {
   findings: readonly Finding[];
   context: ReviewContext;
   checks: DeterministicCheckRun;
+  policies: ResolvedPolicyPacks;
   budget: LocalReviewBudget;
   usedModelTokens: number;
   access: ProviderAccessResult;
@@ -71,7 +69,7 @@ export async function runSecuritySpecialist(input: {
   signal: AbortSignal;
   recordedAt: string;
 }): Promise<{ step: ProviderReviewStep; findings: Finding[]; cancelled: boolean }> {
-  if (!requiresSecuritySpecialist(input.context)) {
+  if (!requiresSecuritySpecialist(input.context, input.policies)) {
     return {
       step: { ...NO_SECURITY_SPECIALIST },
       findings: [...input.findings],

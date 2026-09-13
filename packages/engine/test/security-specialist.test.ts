@@ -2,12 +2,14 @@ import type {
   DeterministicCheckRun,
   ProviderAccessResult,
 } from '@walkz/contracts';
+import { createDefaultWalkzConfig } from '@walkz/contracts';
 import type { ReviewContext } from '@walkz/git';
 import { createMockProvider } from '@walkz/providers';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   requiresSecuritySpecialist,
+  resolvePolicyPacks,
   runSecuritySpecialist,
 } from '../src/index.js';
 
@@ -36,6 +38,7 @@ const budget = {
   maxProofAttempts: 0,
   deadlineMs: Date.now() + 30_000,
 };
+const policies = resolvePolicyPacks(createDefaultWalkzConfig());
 
 function context(reason = 'security-sensitive path'): ReviewContext {
   const diff = 'diff --git a/src/auth.ts b/src/auth.ts\n@@ -1 +1 @@\n-old\n+new\n';
@@ -79,8 +82,8 @@ function finding(category: 'security' | 'correctness' = 'security') {
 
 describe('security specialist', () => {
   it('runs only for deterministic security-sensitive risk reasons', () => {
-    expect(requiresSecuritySpecialist(context())).toBe(true);
-    expect(requiresSecuritySpecialist(context('source change'))).toBe(false);
+    expect(requiresSecuritySpecialist(context(), policies)).toBe(true);
+    expect(requiresSecuritySpecialist(context('source change'), policies)).toBe(false);
   });
 
   it('adds a changed-line security finding through the normal evidence boundary', async () => {
@@ -97,6 +100,7 @@ describe('security specialist', () => {
       findings: [],
       context: context(),
       checks,
+      policies,
       budget,
       usedModelTokens: 100,
       access,
@@ -131,6 +135,7 @@ describe('security specialist', () => {
       findings: [],
       context: context('source change'),
       checks,
+      policies,
       budget,
       usedModelTokens: 100,
       access,
@@ -155,6 +160,7 @@ describe('security specialist', () => {
         findings: [],
         context: context(),
         checks,
+        policies,
         budget,
         usedModelTokens: 100,
         access,
@@ -182,6 +188,7 @@ describe('security specialist', () => {
       findings: [],
       context: context(),
       checks,
+      policies,
       budget,
       usedModelTokens: budget.maxModelTokens,
       access,

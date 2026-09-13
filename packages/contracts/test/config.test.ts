@@ -19,6 +19,11 @@ describe('repository configuration', () => {
         model: 'auto',
       },
       blockingEvidenceLevels: ['VERIFIED'],
+      policyPacks: [
+        'security-core@1',
+        'supply-chain@1',
+        'delivery-safety@1',
+      ],
       commandApprovalPolicy: 'prompt',
       premiumEnabled: false,
       spendingLimitUsd: 0,
@@ -51,6 +56,25 @@ describe('repository configuration', () => {
         blockingEvidenceLevels: ['UNVERIFIED'],
       }),
     ).toThrow(ZodError);
+    expect(() =>
+      parseWalkzConfig({
+        ...base,
+        policyPacks: ['unknown@1'],
+      }),
+    ).toThrow(ZodError);
+    expect(() =>
+      parseWalkzConfig({
+        ...base,
+        policyPacks: ['security-core@1', 'security-core@1'],
+      }),
+    ).toThrow(/unique/i);
+  });
+
+  it('preserves legacy configuration hashes by leaving packs optional', () => {
+    const current = createDefaultWalkzConfig();
+    const { policyPacks: _policyPacks, ...legacy } = current;
+
+    expect(parseWalkzConfig(legacy)).not.toHaveProperty('policyPacks');
   });
 
   it('merges allowed CLI overrides without mutating the source config', () => {

@@ -81,15 +81,18 @@ export type {
 export {
   approvedCommandSchema,
   createDefaultWalkzConfig,
+  DEFAULT_POLICY_PACK_IDS,
   evidenceLevelSchema,
   mergeCliOverrides,
   parseWalkzConfig,
+  policyPackIdSchema,
   repositoryConfigSchema,
 } from './config.js';
 
 export type {
   ApprovedCommand,
   EvidenceLevel,
+  PolicyPackId,
   RepositoryConfig,
   WalkzCliOverrides,
 } from './config.js';

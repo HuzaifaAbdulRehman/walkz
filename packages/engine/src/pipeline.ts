@@ -47,6 +47,7 @@ import {
   createLocalReviewRun,
   type CreateLocalReviewRunOptions,
 } from './run.js';
+import { resolvePolicyPacks } from './policy-packs.js';
 import { adjudicateLocalVerdict } from './verdict.js';
 
 export type {
@@ -362,6 +363,7 @@ export async function runLocalReviewPipeline(
     }
 
     const recordedAt = (input.clock?.() ?? new Date()).toISOString();
+    const policies = resolvePolicyPacks(run.config);
     const providerReview = await reviewWithProvider(
       run,
       context,
@@ -391,6 +393,7 @@ export async function runLocalReviewPipeline(
         findings: run.findings,
         context,
         checks,
+        policies,
         budget,
         usedModelTokens: providerReview.step.usage.totalTokens,
         access: providerReview.access,
