@@ -67,7 +67,10 @@ export type {
   ProofVerdictBinding,
 } from './proof-evidence.js';
 export { runLocalReviewPipeline } from './pipeline.js';
-export { evaluateGoldenProofs } from './golden-evaluation.js';
+export {
+  compareGoldenProofBaseline,
+  evaluateGoldenProofs,
+} from './golden-evaluation.js';
 export {
   buildPatchPrompt,
   generatePatchCandidate,
@@ -122,6 +125,8 @@ export type {
   ProviderStepFailureCode,
 } from './pipeline.js';
 export type {
+  GoldenProofBaselineComparison,
+  GoldenProofCaseRegression,
   GoldenProofEvaluation,
   GoldenProofMetrics,
 } from './golden-evaluation.js';

@@ -189,13 +189,16 @@ export {
   goldenProofClassificationSchema,
   goldenProofExpectationSchema,
   goldenProofFixtureManifestSchema,
+  goldenProofBaselineSchema,
   goldenProofRecordSchema,
   goldenProofRecordsSchema,
   parseGoldenProofFixtureManifest,
+  parseGoldenProofBaseline,
   parseGoldenProofRecords,
 } from './golden.js';
 
 export type {
+  GoldenProofBaseline,
   GoldenProofClassification,
   GoldenProofExpectation,
   GoldenProofFixtureManifest,

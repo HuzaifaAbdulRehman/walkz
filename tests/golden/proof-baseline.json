@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "counterfactual-proof-v1",
+  "behaviorFingerprint": "386ab4bc8a25c13044c9eb2141fb7b86297c08b0289b54cbf1345f95fc37a813",
+  "cases": [
+    {
+      "id": "broken-boundary",
+      "expected": "verified",
+      "classification": "verified"
+    },
+    {
+      "id": "clean-positive-value",
+      "expected": "not_verified",
+      "classification": "not_verified"
+    }
+  ],
+  "thresholds": {
+    "maxCaseRegressions": 0
+  }
+}

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateGoldenProofs } from '../src/index.js';
+import {
+  compareGoldenProofBaseline,
+  evaluateGoldenProofs,
+} from '../src/index.js';
 
 function record(
   overrides: Record<string, unknown> = {},
@@ -100,5 +103,75 @@ describe('evaluateGoldenProofs', () => {
       totalCompletionTokens: 3,
       totalModelLatencyMs: 9,
     });
+  });
+});
+
+describe('compareGoldenProofBaseline', () => {
+  function baseline() {
+    return {
+      schemaVersion: 1,
+      suiteId: 'counterfactual-proof-v1',
+      behaviorFingerprint: 'a'.repeat(64),
+      cases: [
+        {
+          id: 'broken-boundary',
+          expected: 'verified',
+          classification: 'verified',
+        },
+      ],
+      thresholds: { maxCaseRegressions: 0 },
+    };
+  }
+
+  it('passes when every deterministic case matches', () => {
+    const comparison = compareGoldenProofBaseline(
+      baseline(),
+      evaluateGoldenProofs([record()]),
+    );
+
+    expect(comparison).toEqual({
+      baselineFingerprint: 'a'.repeat(64),
+      caseRegressions: [],
+      threshold: 0,
+      passed: true,
+    });
+  });
+
+  it('fails when a classification changes', () => {
+    const comparison = compareGoldenProofBaseline(
+      baseline(),
+      evaluateGoldenProofs([record({ classification: 'not_verified' })]),
+    );
+
+    expect(comparison).toMatchObject({
+      caseRegressions: [
+        {
+          id: 'broken-boundary',
+          kind: 'changed',
+          baselineClassification: 'verified',
+          currentClassification: 'not_verified',
+        },
+      ],
+      passed: false,
+    });
+  });
+
+  it('reports missing and unexpected cases', () => {
+    const comparison = compareGoldenProofBaseline(
+      baseline(),
+      evaluateGoldenProofs([
+        record({
+          id: 'new-case',
+          baseSha: '3'.repeat(40),
+          headSha: '4'.repeat(40),
+        }),
+      ]),
+    );
+
+    expect(comparison.caseRegressions).toEqual([
+      expect.objectContaining({ id: 'broken-boundary', kind: 'missing' }),
+      expect.objectContaining({ id: 'new-case', kind: 'unexpected' }),
+    ]);
+    expect(comparison.passed).toBe(false);
   });
 });

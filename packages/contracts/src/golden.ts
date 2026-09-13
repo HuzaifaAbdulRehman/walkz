@@ -91,6 +91,47 @@ export const goldenProofRecordsSchema = z
     });
   });
 
+export const goldenProofBaselineSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    suiteId: identifierSchema,
+    behaviorFingerprint: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i)
+      .transform((value) => value.toLowerCase()),
+    cases: z
+      .array(
+        z
+          .object({
+            id: identifierSchema,
+            expected: goldenProofExpectationSchema,
+            classification: goldenProofClassificationSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+    thresholds: z
+      .object({
+        maxCaseRegressions: z.number().int().nonnegative().max(100),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((baseline, context) => {
+    const ids = new Set<string>();
+    baseline.cases.forEach((record, index) => {
+      if (ids.has(record.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Golden proof baseline case IDs must be unique.',
+          path: ['cases', index, 'id'],
+        });
+      }
+      ids.add(record.id);
+    });
+  });
+
 export const goldenProofFixtureManifestSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -134,6 +175,7 @@ export type GoldenProofRecord = z.infer<typeof goldenProofRecordSchema>;
 export type GoldenProofFixtureManifest = z.infer<
   typeof goldenProofFixtureManifestSchema
 >;
+export type GoldenProofBaseline = z.infer<typeof goldenProofBaselineSchema>;
 
 export function parseGoldenProofRecords(
   input: unknown,
@@ -145,4 +187,8 @@ export function parseGoldenProofFixtureManifest(
   input: unknown,
 ): GoldenProofFixtureManifest {
   return goldenProofFixtureManifestSchema.parse(input);
+}
+
+export function parseGoldenProofBaseline(input: unknown): GoldenProofBaseline {
+  return goldenProofBaselineSchema.parse(input);
 }

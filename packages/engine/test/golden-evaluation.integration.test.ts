@@ -27,10 +27,28 @@ dockerTest(
       },
     );
     const report = JSON.parse(result.stdout) as {
+      behavior: {
+        codeRevision: string;
+        containerImage: string;
+        provider: null;
+      };
+      behaviorFingerprint: string;
       records: Array<{ id: string; classification: string }>;
       metrics: Record<string, number>;
+      comparison: {
+        baselineFingerprint: string;
+        caseRegressions: unknown[];
+        threshold: number;
+        passed: boolean;
+      };
     };
 
+    expect(report.behavior).toMatchObject({
+      codeRevision: expect.stringMatching(/^[a-f0-9]{40}$/),
+      containerImage: image,
+      provider: null,
+    });
+    expect(report.behaviorFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(report.records).toEqual([
       expect.objectContaining({
         id: 'broken-boundary',
@@ -48,6 +66,13 @@ dockerTest(
       falseNegatives: 0,
       proofRate: 0.5,
       modelInvocationCount: 0,
+    });
+    expect(report.comparison).toEqual({
+      baselineFingerprint:
+        '386ab4bc8a25c13044c9eb2141fb7b86297c08b0289b54cbf1345f95fc37a813',
+      caseRegressions: [],
+      threshold: 0,
+      passed: true,
     });
   },
   60_000,

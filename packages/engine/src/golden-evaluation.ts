@@ -1,5 +1,9 @@
 import {
+  parseGoldenProofBaseline,
   parseGoldenProofRecords,
+  type GoldenProofBaseline,
+  type GoldenProofClassification,
+  type GoldenProofExpectation,
   type GoldenProofRecord,
 } from '@walkz/contracts';
 
@@ -27,6 +31,22 @@ export interface GoldenProofMetrics {
 export interface GoldenProofEvaluation {
   records: GoldenProofRecord[];
   metrics: GoldenProofMetrics;
+}
+
+export interface GoldenProofCaseRegression {
+  id: string;
+  kind: 'missing' | 'unexpected' | 'changed';
+  baselineExpected: GoldenProofExpectation | null;
+  baselineClassification: GoldenProofClassification | null;
+  currentExpected: GoldenProofExpectation | null;
+  currentClassification: GoldenProofClassification | null;
+}
+
+export interface GoldenProofBaselineComparison {
+  baselineFingerprint: string;
+  caseRegressions: GoldenProofCaseRegression[];
+  threshold: number;
+  passed: boolean;
 }
 
 function rate(numerator: number, denominator: number): number | null {
@@ -92,5 +112,66 @@ export function evaluateGoldenProofs(input: unknown): GoldenProofEvaluation {
       totalCompletionTokens,
       totalModelLatencyMs,
     },
+  };
+}
+
+export function compareGoldenProofBaseline(
+  input: unknown,
+  evaluation: GoldenProofEvaluation,
+): GoldenProofBaselineComparison {
+  const baseline: GoldenProofBaseline = parseGoldenProofBaseline(input);
+  const currentById = new Map(
+    evaluation.records.map((record) => [record.id, record]),
+  );
+  const baselineIds = new Set(baseline.cases.map((record) => record.id));
+  const caseRegressions: GoldenProofCaseRegression[] = [];
+
+  for (const expected of baseline.cases) {
+    const current = currentById.get(expected.id);
+    if (current === undefined) {
+      caseRegressions.push({
+        id: expected.id,
+        kind: 'missing',
+        baselineExpected: expected.expected,
+        baselineClassification: expected.classification,
+        currentExpected: null,
+        currentClassification: null,
+      });
+      continue;
+    }
+    if (
+      current.expected !== expected.expected ||
+      current.classification !== expected.classification
+    ) {
+      caseRegressions.push({
+        id: expected.id,
+        kind: 'changed',
+        baselineExpected: expected.expected,
+        baselineClassification: expected.classification,
+        currentExpected: current.expected,
+        currentClassification: current.classification,
+      });
+    }
+  }
+
+  for (const current of evaluation.records) {
+    if (!baselineIds.has(current.id)) {
+      caseRegressions.push({
+        id: current.id,
+        kind: 'unexpected',
+        baselineExpected: null,
+        baselineClassification: null,
+        currentExpected: current.expected,
+        currentClassification: current.classification,
+      });
+    }
+  }
+
+  const threshold = baseline.thresholds.maxCaseRegressions;
+  return {
+    baselineFingerprint: baseline.behaviorFingerprint,
+    caseRegressions,
+    threshold,
+    passed: caseRegressions.length <= threshold,
   };
 }

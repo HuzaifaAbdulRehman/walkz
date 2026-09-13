@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parseGoldenProofBaseline,
   parseGoldenProofFixtureManifest,
   parseGoldenProofRecords,
 } from '../src/index.js';
@@ -67,5 +68,37 @@ describe('parseGoldenProofRecords', () => {
         ],
       }),
     ).toMatchObject({ cases: [{ id: 'broken-boundary' }] });
+  });
+});
+
+describe('parseGoldenProofBaseline', () => {
+  const baseline = {
+    schemaVersion: 1,
+    suiteId: 'counterfactual-proof-v1',
+    behaviorFingerprint: 'A'.repeat(64),
+    cases: [
+      {
+        id: 'broken-boundary',
+        expected: 'verified',
+        classification: 'verified',
+      },
+    ],
+    thresholds: { maxCaseRegressions: 0 },
+  };
+
+  it('normalizes a versioned baseline', () => {
+    expect(parseGoldenProofBaseline(baseline)).toMatchObject({
+      behaviorFingerprint: 'a'.repeat(64),
+      cases: [{ id: 'broken-boundary' }],
+    });
+  });
+
+  it('rejects duplicate case IDs', () => {
+    expect(() =>
+      parseGoldenProofBaseline({
+        ...baseline,
+        cases: [baseline.cases[0], baseline.cases[0]],
+      }),
+    ).toThrow(/unique/i);
   });
 });

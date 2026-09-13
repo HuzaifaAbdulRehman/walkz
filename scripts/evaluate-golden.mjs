@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFile,
   mkdir,
@@ -13,8 +14,10 @@ import { fileURLToPath } from 'node:url';
 
 import {
   parseGoldenProofFixtureManifest,
+  parseGoldenProofBaseline,
 } from '../packages/contracts/dist/index.js';
 import {
+  compareGoldenProofBaseline,
   createProofPlan,
   digestProofCommand,
   evaluateGoldenProofs,
@@ -24,9 +27,11 @@ import {
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const goldenRoot = join(projectRoot, 'tests', 'golden');
-const manifest = parseGoldenProofFixtureManifest(
-  JSON.parse(await readFile(join(goldenRoot, 'proof-manifest.json'), 'utf8')),
-);
+const manifestBytes = await readFile(join(goldenRoot, 'proof-manifest.json'), 'utf8');
+const manifest = parseGoldenProofFixtureManifest(JSON.parse(manifestBytes));
+const baseline = parseGoldenProofBaseline(JSON.parse(
+  await readFile(join(goldenRoot, 'proof-baseline.json'), 'utf8'),
+));
 const image =
   process.env.WALKZ_DOCKER_TEST_IMAGE ??
   'node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf';
@@ -43,18 +48,48 @@ const limits = {
   pidsLimit: 64,
   maxWritableBytes: 1024 * 1_024,
 };
-const budget = {
+const proofBudget = {
   maxAttempts: 1,
   maxTotalDurationMs: 30_000,
   maxAttemptDurationMs: 10_000,
   maxOutputBytesPerStream: 16_384,
   maxArtifactBytes: 1024 * 1_024,
+};
+const budget = {
+  ...proofBudget,
   deadlineMs: Date.now() + 60_000,
 };
+const workspaceLimits = { maxFiles: 100, maxBytes: 1024 * 1_024 };
+const commandDigest = digestProofCommand(command);
 const authorization = {
-  authorizedCommandDigests: new Set([digestProofCommand(command)]),
+  authorizedCommandDigests: new Set([commandDigest]),
 };
 const temporaryRepositories = new Set();
+
+function canonicalJson(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error('Cannot hash a non-finite number.');
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return '[' + value.map(canonicalJson).join(',') + ']';
+  }
+  if (typeof value === 'object') {
+    return '{' + Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .sort()
+      .map((key) => JSON.stringify(key) + ':' + canonicalJson(value[key]))
+      .join(',') + '}';
+  }
+  throw new Error('Cannot hash an unsupported value.');
+}
+
+function sha256(value) {
+  return createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
+}
 
 function git(repository, ...args) {
   return execFileSync('git', args, {
@@ -136,7 +171,7 @@ async function evaluate() {
       repositoryRoot: repository,
       authorization,
       budget,
-      workspaceLimits: { maxFiles: 100, maxBytes: 1024 * 1_024 },
+      workspaceLimits,
     });
     records.push({
       id: fixture.id,
@@ -158,8 +193,27 @@ async function evaluate() {
 try {
   const evaluation = await evaluate();
   const metrics = evaluation.metrics;
+  const codeRevision = git(projectRoot, 'rev-parse', 'HEAD');
+  const behavior = {
+    schemaVersion: 1,
+    suiteId: baseline.suiteId,
+    codeRevision,
+    fixtureManifestHash: sha256(manifest),
+    containerImage: image,
+    command,
+    commandDigest,
+    limits,
+    proofBudget,
+    workspaceLimits,
+    provider: null,
+    model: null,
+    promptVersion: null,
+  };
+  const behaviorFingerprint = sha256(behavior);
+  const comparison = compareGoldenProofBaseline(baseline, evaluation);
+  const report = { behavior, behaviorFingerprint, ...evaluation, comparison };
   if (process.argv.includes('--json')) {
-    process.stdout.write(JSON.stringify(evaluation, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   } else {
     process.stdout.write(
       [
@@ -176,7 +230,8 @@ try {
   if (
     metrics.falsePositives !== 0 ||
     metrics.falseNegatives !== 0 ||
-    metrics.incompleteCount !== 0
+    metrics.incompleteCount !== 0 ||
+    !comparison.passed
   ) {
     process.exitCode = 1;
   }
