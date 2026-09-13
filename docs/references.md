@@ -326,3 +326,18 @@ Each explicit adapter owns file extensions, trusted review guidance, its proof
 command, and reproducer path. Findings, evidence, budgets, and verdicts remain
 language-neutral. Python package installation and automatic discovery of
 third-party tools are deliberately outside this phase.
+
+## Single-host release readiness
+
+We checked Docker's official [production Compose guide](https://docs.docker.com/compose/how-tos/production/)
+and [volume backup guide](https://docs.docker.com/engine/storage/volumes/) on 13
+September 2026. Docker recommends a production-specific Compose override and
+documents backup and restore as explicit volume operations. Walkz will keep its
+local stack intact, add a separate single-host release contract, and prove
+recovery with disposable data before calling that path ready.
+
+GitHub's [artifact attestation guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
+says attestations on GitHub Free are limited to public repositories. Walkz will
+not change repository visibility or require an Enterprise plan for this
+milestone. Phase 7.1 starts with local image identities and a release manifest;
+registry publication and hosted attestations remain separate decisions.

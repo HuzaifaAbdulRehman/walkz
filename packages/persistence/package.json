@@ -1,6 +1,6 @@
 {
   "name": "@walkz/persistence",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -13,7 +13,7 @@
     "dist"
   ],
   "dependencies": {
-    "@walkz/contracts": "0.0.0",
+    "@walkz/contracts": "0.1.0",
     "pg": "8.23.0",
     "zod": "4.5.4"
   }
