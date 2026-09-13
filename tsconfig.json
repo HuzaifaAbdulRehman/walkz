@@ -23,6 +23,9 @@
       "path": "./packages/github"
     },
     {
+      "path": "./packages/mcp"
+    },
+    {
       "path": "./apps/cli"
     },
     {

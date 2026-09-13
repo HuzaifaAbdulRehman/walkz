@@ -270,6 +270,28 @@ export type {
 } from './patch-fix.js';
 
 export {
+  WALKZ_MCP_GRANT_MAX_TTL_MS,
+  walkzMcpCapabilitySchema,
+  walkzMcpFixInputSchema,
+  walkzMcpFixOutputSchema,
+  walkzMcpGrantSchema,
+  walkzMcpProveInputSchema,
+  walkzMcpProveOutputSchema,
+  walkzMcpReadInputSchema,
+  walkzMcpReadOutputSchema,
+} from './mcp.js';
+export type {
+  WalkzMcpCapability,
+  WalkzMcpFixInput,
+  WalkzMcpFixOutput,
+  WalkzMcpGrant,
+  WalkzMcpProveInput,
+  WalkzMcpProveOutput,
+  WalkzMcpReadInput,
+  WalkzMcpReadOutput,
+} from './mcp.js';
+
+export {
   parsePatchReproofResult,
   patchReproofCheckSchema,
   patchReproofResultSchema,

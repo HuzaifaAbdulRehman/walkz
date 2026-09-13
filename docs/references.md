@@ -288,3 +288,19 @@ and `delivery-safety@1` in new repository configurations. The registry accepts
 only built-in packs. Packs cannot download code, define commands, or grant model
 tools. Older configurations retain their existing hash and resolve to the same
 versioned defaults. An explicit empty list stays empty.
+
+## MCP capability boundary
+
+We checked the MCP [tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools),
+[authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization),
+and the official TypeScript SDK at commit
+[`b654261`](https://github.com/modelcontextprotocol/typescript-sdk/commit/b65426158ed9f29aea8ef3dc09ca22d7d9d6f970)
+on 13 September 2026. The SDK snapshot is version 2.0.0 and supports the
+2026-07-28 protocol revision.
+
+Walkz uses the SDK's schema validation and tool annotations, but annotations are
+descriptive rather than an authorization control. Trusted server code injects a
+short-lived grant with one subject, repository, audience, and capability list.
+Tool arguments cannot replace those values. The fix tool can prepare a hashed
+proposal, but approval, publication, pushing, and merging remain outside its
+authority.
