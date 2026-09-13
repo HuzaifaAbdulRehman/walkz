@@ -102,6 +102,18 @@ export {
   validateReviewRequest,
 } from './review.js';
 
+export {
+  modelChallengeDecisionSchema,
+  modelChallengeResponseSchema,
+  modelChallengeVerdictSchema,
+  parseModelChallengeResponse,
+} from './challenge.js';
+export type {
+  ModelChallengeDecision,
+  ModelChallengeResponse,
+  ModelChallengeVerdict,
+} from './challenge.js';
+
 export type {
   ModelFinding,
   ModelReviewResponse,
@@ -118,6 +130,8 @@ export type {
   ProviderUsage,
   StructuredReviewRequest,
   StructuredReviewResult,
+  StructuredChallengeRequest,
+  StructuredChallengeResult,
   StructuredPatchRequest,
   StructuredPatchResult,
 } from './provider.js';

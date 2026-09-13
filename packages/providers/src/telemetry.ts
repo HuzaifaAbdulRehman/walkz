@@ -5,6 +5,8 @@ import {
   type ModelInvocationEvent,
   type ModelInvocationStage,
   type ProviderAdapter,
+  type StructuredChallengeRequest,
+  type StructuredChallengeResult,
   type StructuredPatchRequest,
   type StructuredPatchResult,
   type StructuredReviewRequest,
@@ -70,9 +72,12 @@ function invocationKey(operationId: string, stage: ModelInvocationStage): string
   return digest({ operationId, stage });
 }
 
-async function observeRequest<Result extends StructuredReviewResult | StructuredPatchResult>(
+async function observeRequest<Result extends
+  | StructuredReviewResult
+  | StructuredPatchResult
+  | StructuredChallengeResult>(
   provider: ProviderAdapter,
-  stage: 'review' | 'patch',
+  stage: 'review' | 'patch' | 'challenger',
   operationId: string,
   request: StructuredReviewRequest,
   perform: () => Promise<Result>,
@@ -106,7 +111,9 @@ async function observeRequest<Result extends StructuredReviewResult | Structured
   }
   const response = 'review' in result
     ? { schemaVersion: result.schemaVersion, review: result.review }
-    : { schemaVersion: result.schemaVersion, patch: result.patch };
+    : 'challenge' in result
+      ? { schemaVersion: result.schemaVersion, challenge: result.challenge }
+      : { schemaVersion: result.schemaVersion, patch: result.patch };
   await record(parseModelInvocationEvent({
     ...common,
     status: 'succeeded',
@@ -142,6 +149,24 @@ export function withModelInvocationTelemetry(
       options.record,
       now,
     ),
+    ...(provider.requestStructuredChallenge === undefined
+      ? {}
+      : {
+          requestStructuredChallenge: (
+            request: StructuredChallengeRequest,
+            requestOptions?: Parameters<NonNullable<
+              ProviderAdapter['requestStructuredChallenge']
+            >>[1],
+          ) => observeRequest(
+            provider,
+            'challenger',
+            parsed.operationId,
+            request,
+            () => provider.requestStructuredChallenge!(request, requestOptions),
+            options.record,
+            now,
+          ),
+        }),
     ...(provider.requestStructuredPatch === undefined
       ? {}
       : {

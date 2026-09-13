@@ -18,9 +18,11 @@ export {
   discoverGroqModels,
   GROQ_STRICT_MODEL_PREFERENCE,
   requestStructuredPatch,
+  requestStructuredChallenge,
   requestStructuredReview,
   validateProviderAccess,
   WALKZ_PATCH_SCHEMA_VERSION,
+  WALKZ_CHALLENGE_SCHEMA_VERSION,
   WALKZ_REVIEW_SCHEMA_VERSION,
 } from './groq.js';
 export type {

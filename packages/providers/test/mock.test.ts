@@ -14,6 +14,13 @@ const request: StructuredReviewRequest = {
   promptVersion: 'review-v1',
 };
 const cleanReview = { findings: [] };
+const challenge = {
+  decisions: [{
+    findingFingerprint: 'a'.repeat(64),
+    verdict: 'uphold',
+    rationale: 'The evidence supports the claim.',
+  }],
+} as const;
 const patchRequest: StructuredPatchRequest = {
   ...request,
   promptVersion: 'walkz-patch-v1',
@@ -96,6 +103,22 @@ describe('createMockProvider', () => {
     await expect(
       provider.requestStructuredPatch?.(patchRequest),
     ).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('returns a separately typed challenge outcome', async () => {
+    const provider = createMockProvider({
+      outcomes: [{ type: 'challenge', challenge }],
+    });
+
+    await expect(
+      provider.requestStructuredChallenge?.({
+        ...request,
+        promptVersion: 'walkz-challenge-v1',
+      }),
+    ).resolves.toMatchObject({
+      schemaVersion: 'walkz-challenge-v1',
+      challenge,
+    });
   });
 
   it('rejects malformed queued output instead of repairing it', async () => {

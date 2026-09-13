@@ -1,5 +1,6 @@
 import type {
   ProviderAdapter,
+  StructuredChallengeRequest,
   StructuredPatchRequest,
   StructuredReviewRequest,
 } from '@walkz/contracts';
@@ -21,6 +22,10 @@ const patchRequest: StructuredPatchRequest = {
   ...reviewRequest,
   promptVersion: 'patch-v1',
 };
+const challengeRequest: StructuredChallengeRequest = {
+  ...reviewRequest,
+  promptVersion: 'challenge-v1',
+};
 
 function provider(): ProviderAdapter {
   return {
@@ -41,6 +46,21 @@ function provider(): ProviderAdapter {
       review: { findings: [] },
       usage: usage(),
       requestId: 'review-request',
+    }),
+    requestStructuredChallenge: vi.fn().mockResolvedValue({
+      provider: 'mock',
+      model: 'model-1',
+      promptVersion: 'challenge-v1',
+      schemaVersion: 'challenge-schema-v1',
+      challenge: {
+        decisions: [{
+          findingFingerprint: 'a'.repeat(64),
+          verdict: 'uphold',
+          rationale: 'The failure mechanism still applies.',
+        }],
+      },
+      usage: usage(),
+      requestId: 'challenge-request',
     }),
     requestStructuredPatch: vi.fn().mockResolvedValue({
       provider: 'mock',
@@ -131,6 +151,27 @@ describe('model invocation telemetry', () => {
     }));
     expect(record.mock.calls[0]?.[0].invocationKey)
       .not.toBe(record.mock.calls[1]?.[0].invocationKey);
+  });
+
+  it('records challenges under a distinct logical stage', async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const observed = withModelInvocationTelemetry(provider(), {
+      operationId: 'review:run-1',
+      record,
+      now: clock(100, 130),
+    });
+
+    await observed.requestStructuredChallenge!(challengeRequest);
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      stage: 'challenger',
+      status: 'succeeded',
+      requestId: 'challenge-request',
+      durationMs: 30,
+    }));
+    const serialized = JSON.stringify(record.mock.calls[0]?.[0]);
+    expect(serialized).not.toContain('private source code');
+    expect(serialized).not.toContain('The failure mechanism still applies.');
   });
 
   it('records normalized failures and preserves the provider error', async () => {

@@ -1,5 +1,6 @@
 import type { ModelReviewResponse } from './review.js';
 import type { ModelPatchResponse } from './patch-generation.js';
+import type { ModelChallengeResponse } from './challenge.js';
 
 export type ProviderName = 'groq' | 'mock';
 
@@ -55,12 +56,24 @@ export interface StructuredReviewResult {
 
 export type StructuredPatchRequest = StructuredReviewRequest;
 
+export type StructuredChallengeRequest = StructuredReviewRequest;
+
 export interface StructuredPatchResult {
   provider: ProviderName;
   model: string;
   promptVersion: string;
   schemaVersion: string;
   patch: ModelPatchResponse;
+  usage: ProviderUsage;
+  requestId: string | null;
+}
+
+export interface StructuredChallengeResult {
+  provider: ProviderName;
+  model: string;
+  promptVersion: string;
+  schemaVersion: string;
+  challenge: ModelChallengeResponse;
   usage: ProviderUsage;
   requestId: string | null;
 }
@@ -80,6 +93,10 @@ export interface ProviderAdapter {
     request: StructuredReviewRequest,
     options?: ProviderRequestOptions,
   ): Promise<StructuredReviewResult>;
+  requestStructuredChallenge?(
+    request: StructuredChallengeRequest,
+    options?: ProviderRequestOptions,
+  ): Promise<StructuredChallengeResult>;
   requestStructuredPatch?(
     request: StructuredPatchRequest,
     options?: ProviderRequestOptions,

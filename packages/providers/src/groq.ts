@@ -4,12 +4,15 @@ import type {
   ProviderModel,
   ProviderRequestOptions,
   ProviderRateLimit,
+  StructuredChallengeRequest,
+  StructuredChallengeResult,
   StructuredPatchRequest,
   StructuredPatchResult,
   StructuredReviewRequest,
   StructuredReviewResult,
 } from '@walkz/contracts';
 import {
+  parseModelChallengeResponse,
   parseModelPatchResponse,
   parseModelReviewResponse,
 } from '@walkz/contracts';
@@ -31,6 +34,7 @@ import { calculateRetryDelay } from './retry.js';
 const GROQ_DATA_CONTROLS_URL = 'https://console.groq.com/settings/data-controls';
 export const WALKZ_REVIEW_SCHEMA_VERSION = 'walkz-review-v1';
 export const WALKZ_PATCH_SCHEMA_VERSION = 'walkz-patch-v1';
+export const WALKZ_CHALLENGE_SCHEMA_VERSION = 'walkz-challenge-v1';
 const GROQ_PRIVACY_NOTICE =
   'Walkz sends bounded repository context to Groq for review. Groq says inference inputs and outputs are not retained by default, but temporary logging may apply unless Zero Data Retention is enabled. Check Groq Data Controls before reviewing private code.';
 
@@ -96,6 +100,19 @@ const groqStructuredPatchSchema = z
     endLine: z.number().int(),
     replacement: z.string(),
     approvalRequired: z.boolean(),
+  })
+  .strict();
+const groqStructuredChallengeSchema = z
+  .object({
+    decisions: z.array(
+      z
+        .object({
+          findingFingerprint: z.string(),
+          rationale: z.string(),
+          verdict: z.enum(['uphold', 'dispute', 'needs_human']),
+        })
+        .strict(),
+    ),
   })
   .strict();
 const groqChatResponseSchema = z
@@ -197,6 +214,30 @@ const GROQ_PATCH_JSON_SCHEMA = {
     'replacement',
     'approvalRequired',
   ],
+  additionalProperties: false,
+} as const;
+
+const GROQ_CHALLENGE_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    decisions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          findingFingerprint: { type: 'string' },
+          rationale: { type: 'string' },
+          verdict: {
+            type: 'string',
+            enum: ['uphold', 'dispute', 'needs_human'],
+          },
+        },
+        required: ['findingFingerprint', 'rationale', 'verdict'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['decisions'],
   additionalProperties: false,
 } as const;
 
@@ -465,6 +506,29 @@ function createPatchRequestBody(request: StructuredPatchRequest): string {
   });
 }
 
+function createChallengeRequestBody(
+  request: StructuredChallengeRequest,
+): string {
+  return JSON.stringify({
+    model: request.model,
+    messages: [
+      { role: 'system', content: request.systemPrompt },
+      { role: 'user', content: request.userPrompt },
+    ],
+    stream: false,
+    n: 1,
+    max_completion_tokens: request.maxOutputTokens,
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: WALKZ_CHALLENGE_SCHEMA_VERSION.replaceAll('-', '_'),
+        strict: true,
+        schema: GROQ_CHALLENGE_JSON_SCHEMA,
+      },
+    },
+  });
+}
+
 function connectionOptions(
   options: GroqProviderOptions,
   signal: AbortSignal | undefined,
@@ -542,6 +606,66 @@ function parseStructuredPatch(content: string) {
   } catch {
     throw responseFailure('Groq returned an invalid structured patch.');
   }
+}
+
+function parseStructuredChallenge(content: string) {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(content);
+  } catch {
+    throw responseFailure('Groq returned malformed structured challenge JSON.');
+  }
+  try {
+    return parseModelChallengeResponse(
+      groqStructuredChallengeSchema.parse(decoded),
+    );
+  } catch {
+    throw responseFailure('Groq returned an invalid structured challenge.');
+  }
+}
+
+async function requestStructuredChallengeOnce(
+  request: StructuredChallengeRequest,
+  options: GroqProviderOptions,
+  signal: AbortSignal | undefined,
+): Promise<StructuredChallengeResult> {
+  const response = await requestGroqJson(
+    {
+      method: 'POST',
+      path: '/openai/v1/chat/completions',
+      body: createChallengeRequestBody(request),
+    },
+    connectionOptions(options, signal),
+  );
+  let envelope: z.infer<typeof groqChatResponseSchema>;
+  try {
+    envelope = groqChatResponseSchema.parse(response.data);
+  } catch {
+    throw responseFailure('Groq returned an invalid chat completion.');
+  }
+  if (envelope.model !== request.model) {
+    throw responseFailure('Groq returned a response from an unexpected model.');
+  }
+  const choice = envelope.choices[0];
+  if (choice === undefined || choice.finish_reason !== 'stop') {
+    throw responseFailure('Groq did not finish the structured challenge cleanly.');
+  }
+  const headerRequestId = parseHeaderText(response.headers, 'x-request-id');
+  return {
+    provider: 'groq',
+    model: envelope.model,
+    promptVersion: request.promptVersion,
+    schemaVersion: WALKZ_CHALLENGE_SCHEMA_VERSION,
+    challenge: parseStructuredChallenge(choice.message.content),
+    usage: {
+      promptTokens: envelope.usage.prompt_tokens,
+      completionTokens: envelope.usage.completion_tokens,
+      totalTokens: envelope.usage.total_tokens,
+      latencyMs: 0,
+      rateLimit: rateLimitFrom(response.headers),
+    },
+    requestId: headerRequestId ?? envelope.x_groq?.id ?? envelope.id,
+  };
 }
 
 async function requestStructuredPatchOnce(
@@ -695,6 +819,19 @@ export async function requestStructuredPatch(
   );
 }
 
+export async function requestStructuredChallenge(
+  request: StructuredChallengeRequest,
+  options: GroqProviderOptions,
+  requestOptions: ProviderRequestOptions = {},
+): Promise<StructuredChallengeResult> {
+  return requestStructuredWithRetry(
+    request,
+    options,
+    requestOptions,
+    requestStructuredChallengeOnce,
+  );
+}
+
 export function createGroqProvider(
   options: GroqProviderOptions,
 ): ProviderAdapter {
@@ -717,6 +854,8 @@ export function createGroqProvider(
       }),
     requestStructuredReview: (request, requestOptions = {}) =>
       requestStructuredReview(request, options, requestOptions),
+    requestStructuredChallenge: (request, requestOptions = {}) =>
+      requestStructuredChallenge(request, options, requestOptions),
     requestStructuredPatch: (request, requestOptions = {}) =>
       requestStructuredPatch(request, options, requestOptions),
   };

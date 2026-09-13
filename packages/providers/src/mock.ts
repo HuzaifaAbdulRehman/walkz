@@ -1,4 +1,5 @@
 import {
+  parseModelChallengeResponse,
   parseModelPatchResponse,
   parseModelReviewResponse,
   type ProviderAccessResult,
@@ -6,6 +7,8 @@ import {
   type ProviderModel,
   type ProviderRequestOptions,
   type ProviderUsage,
+  type StructuredChallengeRequest,
+  type StructuredChallengeResult,
   type StructuredPatchRequest,
   type StructuredPatchResult,
   type StructuredReviewRequest,
@@ -18,7 +21,10 @@ import {
   toProviderError,
   type ProviderFailure,
 } from './errors.js';
-import { WALKZ_REVIEW_SCHEMA_VERSION } from './groq.js';
+import {
+  WALKZ_CHALLENGE_SCHEMA_VERSION,
+  WALKZ_REVIEW_SCHEMA_VERSION,
+} from './groq.js';
 
 const MOCK_PRIVACY_NOTICE =
   'The mock provider runs in this process and sends no data over the network.';
@@ -47,6 +53,12 @@ export type MockProviderOutcome =
   | {
       type: 'review';
       review: unknown;
+      usage?: ProviderUsage;
+      requestId?: string | null;
+    }
+  | {
+      type: 'challenge';
+      challenge: unknown;
       usage?: ProviderUsage;
       requestId?: string | null;
     }
@@ -188,6 +200,43 @@ export function createMockProvider(
     };
   };
 
+  const requestStructuredChallenge = async (
+    request: StructuredChallengeRequest,
+    requestOptions: ProviderRequestOptions = {},
+  ): Promise<StructuredChallengeResult> => {
+    cancelled(requestOptions.signal);
+    const model = selectModel(models, request.model);
+    const outcome = outcomes.shift();
+    if (outcome === undefined) {
+      throw invalidResponse('No mock provider outcome is queued.');
+    }
+    if (outcome.type === 'error') {
+      throw new ProviderError(outcome.failure);
+    }
+    if (outcome.type !== 'challenge') {
+      throw invalidResponse('The queued mock outcome is not a challenge.');
+    }
+
+    let challenge;
+    try {
+      challenge = parseModelChallengeResponse(outcome.challenge);
+    } catch {
+      throw invalidResponse('The queued mock challenge is invalid.');
+    }
+    requestNumber += 1;
+    return {
+      provider: 'mock',
+      model,
+      promptVersion: request.promptVersion,
+      schemaVersion: WALKZ_CHALLENGE_SCHEMA_VERSION,
+      challenge,
+      usage: cloneUsage(outcome.usage ?? EMPTY_USAGE),
+      requestId: outcome.requestId === undefined
+        ? 'mock-request-' + requestNumber
+        : outcome.requestId,
+    };
+  };
+
   const requestStructuredPatch = async (
     request: StructuredPatchRequest,
     requestOptions: ProviderRequestOptions = {},
@@ -230,6 +279,7 @@ export function createMockProvider(
     listModels,
     validateAccess,
     requestStructuredReview,
+    requestStructuredChallenge,
     requestStructuredPatch,
   };
 }
