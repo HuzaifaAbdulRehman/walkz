@@ -223,6 +223,12 @@ export type {
 } from './golden.js';
 
 export {
+  parseReviewEvaluationSnapshot,
+  reviewEvaluationSnapshotSchema,
+} from './review-evaluation.js';
+export type { ReviewEvaluationSnapshot } from './review-evaluation.js';
+
+export {
   canTransitionReviewRun,
   isTerminalReviewRunStatus,
   parseGithubId,

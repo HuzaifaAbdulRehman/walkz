@@ -90,6 +90,7 @@ export {
   compareGoldenProofBaseline,
   evaluateGoldenProofs,
 } from './golden-evaluation.js';
+export { evaluateReviewSnapshot } from './review-evaluation.js';
 export {
   buildPatchPrompt,
   generatePatchCandidate,
@@ -149,3 +150,8 @@ export type {
   GoldenProofEvaluation,
   GoldenProofMetrics,
 } from './golden-evaluation.js';
+export type {
+  ReviewEvaluation,
+  ReviewEvaluationCandidate,
+  ReviewEvaluationMetrics,
+} from './review-evaluation.js';

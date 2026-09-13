@@ -184,6 +184,17 @@ replacement as a GitHub suggestion.
 npm run verify
 ```
 
+Score a bounded, metadata-only review snapshot by exact configuration, provider,
+model, and prompt version:
+
+```powershell
+npm run evaluate:reviews -- --input tests/golden/review-evaluation-snapshot.json
+```
+
+The report uses labeled findings to measure false positives and proof attempts
+to measure proof rate. It does not claim recall from production feedback because
+that data cannot reveal defects Walkz never reported.
+
 ## Roadmap
 
 Milestones 1 through 5 are complete. The current hosted path covers the GitHub
