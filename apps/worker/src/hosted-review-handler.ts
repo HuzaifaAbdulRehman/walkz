@@ -1,6 +1,7 @@
 import type {
   Evidence,
   Finding,
+  ModelInvocationEvent,
   ProviderAdapter,
   ReviewVerdict,
 } from '@walkz/contracts';
@@ -25,7 +26,10 @@ import type {
   ClaimedHostedReviewRun,
   CompletedHostedReviewRun,
 } from '@walkz/persistence';
-import { createGroqProvider } from '@walkz/providers';
+import {
+  createGroqProvider,
+  withModelInvocationTelemetry,
+} from '@walkz/providers';
 import type { DockerWorkspaceVolume } from '@walkz/sandbox';
 import { z } from 'zod';
 
@@ -81,6 +85,10 @@ export interface HostedReviewStore {
     repositoryId: string;
     provider: string;
   }): Promise<string | null>;
+  recordModelInvocation(input: {
+    reviewRunId: string;
+    event: ModelInvocationEvent;
+  }): Promise<void>;
   complete(input: {
     reviewRunId: string;
     workerId: string;
@@ -292,7 +300,15 @@ export function createHostedReviewJobHandler(
             provider: run.provider,
           }),
         ]);
-        const provider = credential === null ? undefined : createProvider(credential);
+        const provider = credential === null
+          ? undefined
+          : withModelInvocationTelemetry(createProvider(credential), {
+              operationId: run.reviewRunId,
+              record: (event) => input.store.recordModelInvocation({
+                reviewRunId: run.reviewRunId,
+                event,
+              }),
+            });
         result = await checkout({
           owner: run.owner,
           repository: run.repository,

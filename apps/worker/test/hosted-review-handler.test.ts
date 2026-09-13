@@ -1,4 +1,4 @@
-import type { Evidence, Finding } from '@walkz/contracts';
+import type { Evidence, Finding, ProviderAdapter } from '@walkz/contracts';
 import { createDefaultWalkzConfig } from '@walkz/contracts';
 import { digestProofCommand, hashWalkzConfig } from '@walkz/engine';
 import { describe, expect, it, vi } from 'vitest';
@@ -40,6 +40,7 @@ function store(overrides: Partial<HostedReviewStore> = {}): HostedReviewStore {
     claim: vi.fn().mockResolvedValue(claimed),
     renew: vi.fn().mockResolvedValue(true),
     loadCredential: vi.fn().mockResolvedValue('groq-key'),
+    recordModelInvocation: vi.fn().mockResolvedValue(undefined),
     complete: vi.fn().mockResolvedValue({
       reviewRunId,
       outboxEventId: repositoryId,
@@ -113,6 +114,54 @@ function finding(evidenceItems: Evidence[]): Finding {
   };
 }
 
+function telemetryProvider(): ProviderAdapter {
+  return {
+    name: 'groq',
+    listModels: vi.fn().mockResolvedValue([]),
+    validateAccess: vi.fn().mockResolvedValue({
+      provider: 'groq',
+      selectedModel: 'model',
+      models: [],
+      privacyNotice: 'Test provider.',
+      dataControlsUrl: null,
+    }),
+    requestStructuredReview: vi.fn().mockResolvedValue({
+      provider: 'groq',
+      model: 'model',
+      promptVersion: 'walkz-review-v1',
+      schemaVersion: 'walkz-review-v1',
+      review: { findings: [] },
+      usage: {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+        latencyMs: 20,
+        rateLimit: {
+          retryAfterMs: null,
+          remainingRequests: null,
+          remainingTokens: null,
+          resetRequests: null,
+          resetTokens: null,
+        },
+      },
+      requestId: 'request-1',
+    }),
+  };
+}
+
+function pipelineThatCallsProvider() {
+  return vi.fn().mockImplementation(async (pipelineInput) => {
+    await pipelineInput.provider.requestStructuredReview({
+      model: 'model',
+      systemPrompt: 'private system prompt',
+      userPrompt: 'private source code',
+      maxOutputTokens: 1_000,
+      promptVersion: 'walkz-review-v1',
+    });
+    return pipelineResult();
+  });
+}
+
 describe('hosted review job handler', () => {
   it('reviews exact revisions and stores the terminal outcome', async () => {
     const reviewStore = store();
@@ -167,8 +216,9 @@ describe('hosted review job handler', () => {
           canWriteFiles: false,
         },
       }),
-      provider,
+      provider: expect.objectContaining({ name: 'groq' }),
     }));
+    expect(runPipeline.mock.calls[0]?.[0].provider).not.toBe(provider);
     const pipelineInput = runPipeline.mock.calls[0]?.[0];
     const dependencies = pipelineInput?.dependencies;
     await dependencies?.resolveReferences?.('C:/temp/repo', { staged: false });
@@ -193,6 +243,72 @@ describe('hosted review job handler', () => {
       verdict: 'SHIP',
       baseSha,
       headSha,
+    }));
+  });
+
+  it('records hosted provider calls without their prompt content', async () => {
+    const reviewStore = store();
+    const runPipeline = pipelineThatCallsProvider();
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      createProvider: () => telemetryProvider(),
+      runPipeline,
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.recordModelInvocation).toHaveBeenCalledWith({
+      reviewRunId,
+      event: expect.objectContaining({
+        stage: 'review',
+        status: 'succeeded',
+        requestId: 'request-1',
+      }),
+    });
+    const recorded = JSON.stringify(
+      vi.mocked(reviewStore.recordModelInvocation).mock.calls[0]?.[0],
+    );
+    expect(recorded).not.toContain('private system prompt');
+    expect(recorded).not.toContain('private source code');
+  });
+
+  it('does not complete successfully when invocation recording fails', async () => {
+    const reviewStore = store({
+      recordModelInvocation: vi.fn().mockRejectedValue(
+        new Error('database unavailable'),
+      ),
+    });
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      createProvider: () => telemetryProvider(),
+      runPipeline: pipelineThatCallsProvider(),
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(reviewStore.complete).toHaveBeenCalledWith(expect.objectContaining({
+      verdict: 'ERROR',
+      findings: [],
     }));
   });
 

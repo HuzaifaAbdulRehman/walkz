@@ -36,6 +36,7 @@ import {
   loadClaimedPatchFixTarget,
   loadProviderCredential,
   queueManualReview,
+  recordModelInvocation,
   recordPatchReproofResult,
   releaseGitHubCommentCommand,
   releasePatchFixJob,
@@ -43,7 +44,10 @@ import {
   renewPatchFixJobLease,
   renewHostedReviewRunLease,
 } from '@walkz/persistence';
-import { createGroqProvider } from '@walkz/providers';
+import {
+  createGroqProvider,
+  withModelInvocationTelemetry,
+} from '@walkz/providers';
 import { z } from 'zod';
 
 import {
@@ -257,6 +261,9 @@ export function createHostedWorkerFromEnvironment(
     renew: (lease) => renewHostedReviewRunLease(pool, lease),
     loadCredential: (binding) =>
       loadProviderCredential(pool, config.credentialVault, binding),
+    recordModelInvocation: async ({ reviewRunId, event }) => {
+      await recordModelInvocation(pool, { reviewRunId, ...event });
+    },
     complete: (result) => completeHostedReviewRun(pool, result),
   };
   const outboxQueue = createOutboxQueue(config.redis);
@@ -332,7 +339,18 @@ export function createHostedWorkerFromEnvironment(
                 path: target.path,
               });
             },
-            createProvider: (apiKey) => createGroqProvider({ apiKey }),
+            createProvider: (apiKey) => withModelInvocationTelemetry(
+              createGroqProvider({ apiKey }),
+              {
+                operationId: `${source.reviewRunId}:${source.findingId}:${source.headSha}`,
+                record: async (event) => {
+                  await recordModelInvocation(pool, {
+                    reviewRunId: source.reviewRunId,
+                    ...event,
+                  });
+                },
+              },
+            ),
             createProposal: (proposal) =>
               createPatchFixProposalForCommentCommand(pool, {
                 ...proposal,

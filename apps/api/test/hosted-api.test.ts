@@ -40,7 +40,8 @@ describe('hosted API composition', () => {
       patchFixes: {
         authenticator,
         store: {
-          loadSource: vi.fn(), loadCredential: vi.fn(), create: vi.fn(),
+          loadSource: vi.fn(), loadCredential: vi.fn(),
+          recordModelInvocation: vi.fn(), create: vi.fn(),
           decide: vi.fn(), list: vi.fn(),
         },
         github: { forInstallation: vi.fn() },
@@ -161,7 +162,8 @@ describe('hosted API composition', () => {
       patchFixes: {
         authenticator,
         store: {
-          loadSource: vi.fn(), loadCredential: vi.fn(), create: vi.fn(),
+          loadSource: vi.fn(), loadCredential: vi.fn(),
+          recordModelInvocation: vi.fn(), create: vi.fn(),
           decide: vi.fn(), list: vi.fn(),
         },
         github: { forInstallation: vi.fn() },

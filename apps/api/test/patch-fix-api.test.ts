@@ -139,6 +139,7 @@ function setup(identity: object | null = { userId, repositoryIds: [repositoryId]
   const store = {
     loadSource: vi.fn().mockResolvedValue(selectedSource),
     loadCredential: vi.fn().mockResolvedValue('secret'),
+    recordModelInvocation: vi.fn().mockResolvedValue(undefined),
     create: vi.fn().mockImplementation(async (input) => {
       const now = new Date('2026-09-11T10:01:00.000Z');
       return {
@@ -225,6 +226,16 @@ describe('hosted patch fix API', () => {
     const stored = store.create.mock.calls[0]?.[0];
     expect(stored.proposal.patchHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(JSON.stringify(stored)).not.toContain('return input ?? fallback');
+    expect(store.recordModelInvocation).toHaveBeenCalledWith({
+      reviewRunId,
+      event: expect.objectContaining({
+        stage: 'patch',
+        status: 'succeeded',
+        requestId: 'request-1',
+      }),
+    });
+    expect(JSON.stringify(store.recordModelInvocation.mock.calls[0]?.[0]))
+      .not.toContain('return input ?? fallback');
     expect(loadHeadFile).toHaveBeenCalledWith({
       owner: selectedSource.owner,
       repository: selectedSource.repository,
@@ -232,6 +243,20 @@ describe('hosted patch fix API', () => {
       headSha,
       path: 'src/value.ts',
     });
+  });
+
+  it('does not store a patch when invocation recording fails', async () => {
+    const { app, store } = setup();
+    store.recordModelInvocation.mockRejectedValue(new Error('database unavailable'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/repositories/${repositoryId}/reviews/${reviewRunId}/findings/${findingId}/patch-proposals`,
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: 'patch_generation_unavailable' });
+    expect(store.create).not.toHaveBeenCalled();
   });
 
   it('authenticates before parsing an approval body', async () => {

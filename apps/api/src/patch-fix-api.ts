@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
-import type { ProviderAdapter } from '@walkz/contracts';
+import type { ModelInvocationEvent, ProviderAdapter } from '@walkz/contracts';
 import {
   PatchGenerationError,
   PatchProposalPreparationError,
@@ -14,7 +14,10 @@ import type {
   PatchFixListItem,
   VerifiedPatchFixSource,
 } from '@walkz/persistence';
-import { createGroqProvider } from '@walkz/providers';
+import {
+  createGroqProvider,
+  withModelInvocationTelemetry,
+} from '@walkz/providers';
 import { z } from 'zod';
 
 const createParamsSchema = z.object({
@@ -54,6 +57,10 @@ export interface PatchFixStore {
     repositoryId: string;
     provider: string;
   }): Promise<string | null>;
+  recordModelInvocation(input: {
+    reviewRunId: string;
+    event: ModelInvocationEvent;
+  }): Promise<void>;
   create(input: {
     proposal: {
       reviewRunId: string;
@@ -148,7 +155,16 @@ export function registerPatchFixRoutes(
                 path: input.path,
               });
             },
-            createProvider,
+            createProvider: (apiKey) => withModelInvocationTelemetry(
+              createProvider(apiKey),
+              {
+                operationId: `${source.reviewRunId}:${source.findingId}:${source.headSha}`,
+                record: (event) => options.store.recordModelInvocation({
+                  reviewRunId: source.reviewRunId,
+                  event,
+                }),
+              },
+            ),
             createProposal: options.store.create,
           },
         );

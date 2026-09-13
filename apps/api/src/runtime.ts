@@ -21,6 +21,7 @@ import {
   loadProviderCredential,
   loadVerifiedPatchFixSource,
   preparePatchSuggestionPublication,
+  recordModelInvocation,
   recordPatchSuggestionPublication,
   releasePatchSuggestionPublication,
   storeOAuthState,
@@ -200,6 +201,9 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
         loadSource: (source) => loadVerifiedPatchFixSource(pool, source),
         loadCredential: (binding) =>
           loadProviderCredential(pool, config.credentialVault, binding),
+        recordModelInvocation: async ({ reviewRunId, event }) => {
+          await recordModelInvocation(pool, { reviewRunId, ...event });
+        },
         create: (proposal) => createPatchFixProposal(pool, proposal),
         decide: (decision) => decidePatchFixProposal(pool, decision),
         list: (query) => listPatchFixes(pool, query),
