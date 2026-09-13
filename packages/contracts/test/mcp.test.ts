@@ -11,6 +11,7 @@ const grant = {
   subjectId: '22222222-2222-4222-8222-222222222222',
   repositoryId: '33333333-3333-4333-8333-333333333333',
   capabilities: ['read', 'prove', 'fix'],
+  callLimits: { read: 20, prove: 5, fix: 2 },
   issuedAt: '2026-09-13T12:00:00.000Z',
   expiresAt: '2026-09-13T12:15:00.000Z',
 };
@@ -33,6 +34,17 @@ describe('Walkz MCP contracts', () => {
       ...grant,
       audience: 'another-service',
     })).toThrow();
+  });
+
+  it('requires call limits to match the granted capabilities', () => {
+    expect(() => walkzMcpGrantSchema.parse({
+      ...grant,
+      capabilities: ['read'],
+    })).toThrow(/call limits/i);
+    expect(() => walkzMcpGrantSchema.parse({
+      ...grant,
+      callLimits: { read: 20, prove: 5, fix: 0 },
+    })).toThrow(/call limits/i);
   });
 
   it('does not accept identity, repository, approval, or patch text as fix input', () => {

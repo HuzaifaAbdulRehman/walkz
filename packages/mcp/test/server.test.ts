@@ -28,6 +28,7 @@ const grant = {
   subjectId: ids.subject,
   repositoryId: ids.repository,
   capabilities: ['read', 'prove', 'fix'],
+  callLimits: { read: 20, prove: 5, fix: 2 },
   issuedAt: '2026-09-13T12:00:00.000Z',
   expiresAt: '2026-09-13T12:15:00.000Z',
 };
@@ -84,10 +85,11 @@ async function connect(
   capabilities = grant.capabilities,
   selectedService = service(),
   now = () => new Date('2026-09-13T12:05:00.000Z'),
+  callLimits = grant.callLimits,
 ) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const server = createWalkzMcpServer({
-    grant: { ...grant, capabilities },
+    grant: { ...grant, capabilities, callLimits },
     service: selectedService,
     now,
   });
@@ -102,7 +104,12 @@ async function connect(
 describe('Walkz MCP server', () => {
   it('advertises only granted tools with cautious annotations', async () => {
     const selectedService = service();
-    const { client } = await connect(['read'], selectedService);
+    const { client } = await connect(
+      ['read'],
+      selectedService,
+      undefined,
+      { read: 20, prove: 0, fix: 0 },
+    );
 
     const listed = await client.listTools();
     expect(listed.tools).toHaveLength(1);
@@ -220,6 +227,34 @@ describe('Walkz MCP server', () => {
     expect(selectedService.readReview).not.toHaveBeenCalled();
   });
 
+  it('enforces server-side call limits', async () => {
+    const selectedService = service();
+    const { client } = await connect(
+      ['read'],
+      selectedService,
+      undefined,
+      { read: 1, prove: 0, fix: 0 },
+    );
+
+    await client.callTool({
+      name: WALKZ_MCP_TOOL_NAMES.read,
+      arguments: { reviewRunId: ids.review },
+    });
+    const exhausted = await client.callTool({
+      name: WALKZ_MCP_TOOL_NAMES.read,
+      arguments: { reviewRunId: ids.review },
+    });
+
+    expect(exhausted).toMatchObject({
+      isError: true,
+      content: [{
+        type: 'text',
+        text: 'grant_exhausted: The Walkz MCP call limit has been reached.',
+      }],
+    });
+    expect(selectedService.readReview).toHaveBeenCalledTimes(1);
+  });
+
   it('returns only approval-gated fix metadata', async () => {
     const selectedService = service();
     const { client } = await connect(grant.capabilities, selectedService);
@@ -275,6 +310,33 @@ describe('Walkz MCP server', () => {
     const result = await client.callTool({
       name: WALKZ_MCP_TOOL_NAMES.read,
       arguments: { reviewRunId: ids.review },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('unavailable');
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it('rejects valid output that is not bound to the request', async () => {
+    const selectedService = service();
+    vi.mocked(selectedService.requestProof).mockResolvedValue({
+      operationId: ids.operation,
+      requestId: ids.request,
+      reviewRunId: ids.review,
+      findingId: ids.finding,
+      headSha: 'c'.repeat(40),
+      status: 'queued',
+    });
+    const { client } = await connect(grant.capabilities, selectedService);
+
+    const result = await client.callTool({
+      name: WALKZ_MCP_TOOL_NAMES.prove,
+      arguments: {
+        requestId: ids.request,
+        reviewRunId: ids.review,
+        findingId: ids.finding,
+        expectedHeadSha: headSha,
+      },
     });
 
     expect(result.isError).toBe(true);

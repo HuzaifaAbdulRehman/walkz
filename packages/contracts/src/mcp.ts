@@ -10,12 +10,19 @@ export const WALKZ_MCP_GRANT_MAX_TTL_MS = 15 * 60 * 1_000;
 
 export const walkzMcpCapabilitySchema = z.enum(['read', 'prove', 'fix']);
 
+export const walkzMcpCallLimitsSchema = z.object({
+  read: z.number().int().min(0).max(100),
+  prove: z.number().int().min(0).max(20),
+  fix: z.number().int().min(0).max(5),
+}).strict();
+
 export const walkzMcpGrantSchema = z.object({
   grantId: z.uuid(),
   audience: z.literal('walkz-mcp'),
   subjectId: z.uuid(),
   repositoryId: z.uuid(),
   capabilities: z.array(walkzMcpCapabilitySchema).min(1).max(3),
+  callLimits: walkzMcpCallLimitsSchema,
   issuedAt: timestampSchema,
   expiresAt: timestampSchema,
 }).strict().superRefine((grant, context) => {
@@ -25,6 +32,17 @@ export const walkzMcpGrantSchema = z.object({
       message: 'MCP capabilities must be unique.',
       path: ['capabilities'],
     });
+  }
+  for (const capability of walkzMcpCapabilitySchema.options) {
+    const granted = grant.capabilities.includes(capability);
+    const limit = grant.callLimits[capability];
+    if ((granted && limit === 0) || (!granted && limit !== 0)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'MCP call limits must match the granted capabilities.',
+        path: ['callLimits', capability],
+      });
+    }
   }
   const issuedAt = Date.parse(grant.issuedAt);
   const expiresAt = Date.parse(grant.expiresAt);
@@ -107,6 +125,7 @@ export const walkzMcpFixOutputSchema = z.object({
 }).strict();
 
 export type WalkzMcpCapability = z.infer<typeof walkzMcpCapabilitySchema>;
+export type WalkzMcpCallLimits = z.infer<typeof walkzMcpCallLimitsSchema>;
 export type WalkzMcpGrant = z.infer<typeof walkzMcpGrantSchema>;
 export type WalkzMcpReadInput = z.infer<typeof walkzMcpReadInputSchema>;
 export type WalkzMcpProveInput = z.infer<typeof walkzMcpProveInputSchema>;

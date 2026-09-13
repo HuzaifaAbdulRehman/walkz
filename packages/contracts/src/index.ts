@@ -271,6 +271,7 @@ export type {
 
 export {
   WALKZ_MCP_GRANT_MAX_TTL_MS,
+  walkzMcpCallLimitsSchema,
   walkzMcpCapabilitySchema,
   walkzMcpFixInputSchema,
   walkzMcpFixOutputSchema,
@@ -282,6 +283,7 @@ export {
 } from './mcp.js';
 export type {
   WalkzMcpCapability,
+  WalkzMcpCallLimits,
   WalkzMcpFixInput,
   WalkzMcpFixOutput,
   WalkzMcpGrant,

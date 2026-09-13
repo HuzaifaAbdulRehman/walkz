@@ -300,7 +300,8 @@ on 13 September 2026. The SDK snapshot is version 2.0.0 and supports the
 
 Walkz uses the SDK's schema validation and tool annotations, but annotations are
 descriptive rather than an authorization control. Trusted server code injects a
-short-lived grant with one subject, repository, audience, and capability list.
-Tool arguments cannot replace those values. The fix tool can prepare a hashed
-proposal, but approval, publication, pushing, and merging remain outside its
-authority.
+short-lived grant with one subject, repository, audience, capability list, and
+per-tool call limits. Tool arguments cannot replace those values. Responses
+must match the requested record and head revision. The fix tool can prepare a
+hashed proposal, but approval, publication, pushing, and merging remain outside
+its authority.
