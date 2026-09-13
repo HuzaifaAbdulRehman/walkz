@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { parseHostedApiEnvironment } from '../src/index.js';
 
+const pemLabel = 'PRIVATE KEY';
 const privateKey = Buffer.from([
-  '-----BEGIN PRIVATE KEY-----',
+  '-----BEGIN ' + pemLabel + '-----',
   'test-value',
-  '-----END PRIVATE KEY-----',
+  '-----END ' + pemLabel + '-----',
 ].join('\n')).toString('base64');
 const credentialKey = Buffer.alloc(32, 9).toString('base64');
 

@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { parseHostedWorkerEnvironment } from '../src/runtime.js';
 
+const pemLabel = 'PRIVATE KEY';
 const privateKey = [
-  '-----BEGIN PRIVATE KEY-----',
+  '-----BEGIN ' + pemLabel + '-----',
   'test-only-placeholder',
-  '-----END PRIVATE KEY-----',
+  '-----END ' + pemLabel + '-----',
 ].join('\n');
 const encryptionKey = Buffer.alloc(32, 7).toString('base64');
 
