@@ -6,6 +6,7 @@ import {
   patchProposalPath,
   repositoryReviewsPath,
   reviewFindingsPath,
+  findingFeedbackPath,
 } from './repository-api-paths.js';
 
 describe('repository API paths', () => {
@@ -22,6 +23,12 @@ describe('repository API paths', () => {
     );
     expect(patchDecisionPath('repo/id', 'proposal/id')).toBe(
       '/api/repositories/repo%2Fid/patch-proposals/proposal%2Fid/decision',
+    );
+  });
+
+  it('builds an encoded finding feedback path', () => {
+    expect(findingFeedbackPath('repo/id', 'run/id', 'finding/id')).toBe(
+      '/api/repositories/repo%2Fid/reviews/run%2Fid/findings/finding%2Fid/feedback',
     );
   });
 });

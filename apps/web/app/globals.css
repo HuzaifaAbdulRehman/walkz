@@ -85,6 +85,11 @@ h3 { font-size: 20px; margin: 0 0 8px; }
 .finding-item h4 { font-size: 16px; line-height: 1.4; margin: 14px 0 8px; overflow-wrap: anywhere; }
 .finding-item p { color: #c4d0df; line-height: 1.5; margin: 8px 0 0; overflow-wrap: anywhere; }
 .finding-location { color: #91a4bf; font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.finding-feedback-controls { border-top: 1px solid #23334c; display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; }
+.finding-feedback-controls p { margin: 0; }
+.finding-feedback-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.finding-feedback-message { color: #91a4bf; margin-top: 16px; }
+.finding-feedback-error { color: #ff9b9b; }
 .patch-fix-controls { border-top: 1px solid #23334c; display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; }
 .patch-fix-status { background: #101c30; border: 1px solid #385276; border-radius: 8px; padding: 12px; }
 .patch-fix-status p { margin: 0; }

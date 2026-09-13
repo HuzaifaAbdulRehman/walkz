@@ -8,6 +8,7 @@ import {
 } from './lib/reviews';
 import { reviewFindingsPath } from './lib/repository-api-paths';
 import { PatchFixControls } from './patch-fix-controls';
+import { FindingFeedbackControls } from './finding-feedback-controls';
 
 interface ReviewFindingsProps {
   repositoryId: string;
@@ -111,6 +112,11 @@ export function ReviewFindings({ repositoryId, reviewRunId }: ReviewFindingsProp
                   {finding.suggestedProof === null ? null : (
                     <p><strong>How to check it.</strong> {finding.suggestedProof}</p>
                   )}
+                  <FindingFeedbackControls
+                    findingId={finding.id}
+                    repositoryId={repositoryId}
+                    reviewRunId={reviewRunId}
+                  />
                   {finding.lifecycleStatus === 'verified' &&
                     finding.evidenceLevel === 'VERIFIED' &&
                     finding.path !== null && finding.startLine !== null ? (
