@@ -137,6 +137,9 @@ export type {
   RecordFindingFeedbackResult,
 } from './finding-feedback.js';
 
+export { exportReviewEvaluationSnapshot } from './review-evaluation.js';
+export type { ReviewEvaluationExportInput } from './review-evaluation.js';
+
 export {
   createPatchProposal,
   createPatchProposalInTransaction,

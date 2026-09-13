@@ -191,6 +191,14 @@ model, and prompt version:
 npm run evaluate:reviews -- --input tests/golden/review-evaluation-snapshot.json
 ```
 
+Authorized operators can export hosted metadata first. Set `DATABASE_URL`, then
+replace the UUID placeholders with the matching `users.id` and `repositories.id`
+values. The output path must not exist yet.
+
+```text
+npm run export:reviews -- --actor-user <uuid> --repository <uuid> --cohort september-2026 --after 2026-09-01T00:00:00Z --before 2026-10-01T00:00:00Z --output review-snapshot.json
+```
+
 The report uses labeled findings to measure false positives and proof attempts
 to measure proof rate. It does not claim recall from production feedback because
 that data cannot reveal defects Walkz never reported.

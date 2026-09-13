@@ -17,6 +17,7 @@
     "demo:proof": "npm run build --silent && node scripts/evaluate-golden.mjs",
     "evaluate:golden": "npm run build --silent && node scripts/evaluate-golden.mjs --json",
     "evaluate:reviews": "npm run build --silent && node scripts/evaluate-review-snapshot.mjs",
+    "export:reviews": "npm run build --silent && node scripts/export-review-snapshot.mjs",
     "hosted:init": "node scripts/init-hosted-env.mjs",
     "migrate:up": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir migrations --migrations-table walkz_migrations --advisory-lock-mode fail --no-single-transaction up",
     "test": "vitest run",
