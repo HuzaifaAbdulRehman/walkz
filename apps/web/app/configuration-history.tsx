@@ -45,6 +45,7 @@ export function ConfigurationHistory({
         <dl className="configuration-facts">
           <div><dt>Trigger</dt><dd>{formatTrigger(latest.triggerPolicy)}</dd></div>
           <div><dt>Evidence blocks</dt><dd>{latest.blockingEvidenceLevels.join(', ')}</dd></div>
+          <div><dt>Policy packs</dt><dd>{latest.policyPacks.join(', ') || 'None'}</dd></div>
           <div><dt>Review budget</dt><dd>{formatBytes(latest.budget.diffBytes)}, {latest.budget.files} files, {formatInteger(latest.budget.tokens)} tokens</dd></div>
           <div><dt>Checks</dt><dd>{latest.requiredCommandCount} required of {latest.commandCount}</dd></div>
           <div><dt>Approval</dt><dd>{formatApprovalPolicy(latest.commandApprovalPolicy)}</dd></div>

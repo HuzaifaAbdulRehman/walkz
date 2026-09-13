@@ -128,6 +128,11 @@ describe('walkz init', () => {
     ]);
     expect(config.premiumEnabled).toBe(false);
     expect(config.spendingLimitUsd).toBe(0);
+    expect(config.policyPacks).toEqual([
+      'security-core@1',
+      'supply-chain@1',
+      'delivery-safety@1',
+    ]);
     expect(captured.stdout.join('')).toContain(
       '2 standard npm commands were added.',
     );

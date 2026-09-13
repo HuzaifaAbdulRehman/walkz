@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
+  DEFAULT_POLICY_PACK_IDS,
   parseFindingFeedbackRequest,
   repositoryConfigSchema,
 } from '@walkz/contracts';
@@ -67,6 +68,9 @@ interface DashboardConfiguration {
   };
   triggerPolicy: 'manual' | 'ready_for_review' | 'every_push';
   blockingEvidenceLevels: Array<'VERIFIED' | 'SUPPORTED'>;
+  policyPacks: Array<
+    'security-core@1' | 'supply-chain@1' | 'delivery-safety@1'
+  >;
   commandApprovalPolicy: 'prompt' | 'trusted_config';
   commandCount: number;
   requiredCommandCount: number;
@@ -110,6 +114,9 @@ function mapDashboardConfiguration(input: unknown): DashboardConfiguration {
     },
     triggerPolicy: config.data.triggerPolicy,
     blockingEvidenceLevels: config.data.blockingEvidenceLevels,
+    policyPacks: config.data.policyPacks === undefined
+      ? [...DEFAULT_POLICY_PACK_IDS]
+      : config.data.policyPacks,
     commandApprovalPolicy: config.data.commandApprovalPolicy,
     commandCount: config.data.commands.length,
     requiredCommandCount: config.data.commands.filter((command) => command.required).length,

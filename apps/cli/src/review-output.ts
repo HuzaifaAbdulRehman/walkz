@@ -3,7 +3,10 @@ import type {
   Finding,
   ReviewVerdict,
 } from '@walkz/contracts';
-import type { LocalReviewPipelineResult } from '@walkz/engine';
+import {
+  resolvePolicyPacks,
+  type LocalReviewPipelineResult,
+} from '@walkz/engine';
 
 function outcomeLabel(outcome: CommandExecutionResult['outcome']): string {
   switch (outcome) {
@@ -53,6 +56,8 @@ export function renderTerminalReport(
     'Walkz review',
     '',
     'Verdict: ' + result.decision.verdict,
+    'Policy packs: ' +
+      (resolvePolicyPacks(result.run.config).ids.join(', ') || 'none'),
   ];
   const references = result.context?.references;
   if (references !== undefined) {
@@ -159,6 +164,7 @@ export function renderJsonReport(
         headSha: result.context?.references.headSha ?? null,
         headRef: result.context?.references.headRef ?? null,
         configHash: result.run.request.configHash,
+        policyPacks: resolvePolicyPacks(result.run.config).ids,
         coverage: result.context?.coverage ?? null,
         deterministicChecks: result.deterministicChecks,
         findings: result.run.findings,

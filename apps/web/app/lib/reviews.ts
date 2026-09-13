@@ -40,6 +40,9 @@ export interface DashboardConfiguration {
   };
   triggerPolicy: 'manual' | 'ready_for_review' | 'every_push';
   blockingEvidenceLevels: Array<'VERIFIED' | 'SUPPORTED'>;
+  policyPacks: Array<
+    'security-core@1' | 'supply-chain@1' | 'delivery-safety@1'
+  >;
   commandApprovalPolicy: 'prompt' | 'trusted_config';
   commandCount: number;
   requiredCommandCount: number;
@@ -75,6 +78,11 @@ const triggerPolicies = new Set<DashboardConfiguration['triggerPolicy']>([
 ]);
 const blockingEvidenceLevels = new Set<DashboardConfiguration['blockingEvidenceLevels'][number]>([
   'VERIFIED', 'SUPPORTED',
+]);
+const policyPackIds = new Set<DashboardConfiguration['policyPacks'][number]>([
+  'security-core@1',
+  'supply-chain@1',
+  'delivery-safety@1',
 ]);
 const commandApprovalPolicies = new Set<DashboardConfiguration['commandApprovalPolicy']>([
   'prompt', 'trusted_config',
@@ -282,6 +290,7 @@ export function parseDashboardConfigurationHistory(input: unknown): DashboardCon
     const provider = value.provider;
     const budget = value.budget;
     const evidence = value.blockingEvidenceLevels;
+    const policyPacks = value.policyPacks;
     const providerValue = provider as Record<string, unknown>;
     const budgetValue = budget as Record<string, unknown>;
     const commandCount = value.commandCount;
@@ -309,6 +318,9 @@ export function parseDashboardConfigurationHistory(input: unknown): DashboardCon
       typeof value.triggerPolicy !== 'string' || !triggerPolicies.has(value.triggerPolicy as DashboardConfiguration['triggerPolicy']) ||
       !Array.isArray(evidence) || evidence.length === 0 ||
       !evidence.every((item) => typeof item === 'string' && blockingEvidenceLevels.has(item as DashboardConfiguration['blockingEvidenceLevels'][number])) ||
+      !Array.isArray(policyPacks) || policyPacks.length > 8 ||
+      !policyPacks.every((item) => typeof item === 'string' && policyPackIds.has(item as DashboardConfiguration['policyPacks'][number])) ||
+      new Set(policyPacks).size !== policyPacks.length ||
       typeof value.commandApprovalPolicy !== 'string' || !commandApprovalPolicies.has(value.commandApprovalPolicy as DashboardConfiguration['commandApprovalPolicy']) ||
       typeof commandCount !== 'number' || !Number.isInteger(commandCount) || commandCount < 0 ||
       typeof requiredCommandCount !== 'number' || !Number.isInteger(requiredCommandCount) || requiredCommandCount < 0 || requiredCommandCount > commandCount ||
@@ -334,6 +346,7 @@ export function parseDashboardConfigurationHistory(input: unknown): DashboardCon
       },
       triggerPolicy: value.triggerPolicy as DashboardConfiguration['triggerPolicy'],
       blockingEvidenceLevels: evidence as DashboardConfiguration['blockingEvidenceLevels'],
+      policyPacks: policyPacks as DashboardConfiguration['policyPacks'],
       commandApprovalPolicy: value.commandApprovalPolicy as DashboardConfiguration['commandApprovalPolicy'],
       commandCount,
       requiredCommandCount,

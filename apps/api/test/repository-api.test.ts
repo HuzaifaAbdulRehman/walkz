@@ -24,6 +24,14 @@ afterEach(async () => {
 
 describe('authenticated repository API', () => {
   it('returns configuration history for an authorized repository', async () => {
+    const currentConfig = createDefaultWalkzConfig([{
+      id: 'typecheck',
+      executable: 'npm',
+      args: ['run', 'typecheck', 'secret-shaped-value'],
+      cwd: '.',
+      required: true,
+    }]);
+    const { policyPacks: _policyPacks, ...legacyConfig } = currentConfig;
     const app = createRepositoryApi({
       authenticator: { authenticate: vi.fn().mockResolvedValue(identity([repositoryId])) },
       configHistory: {
@@ -32,13 +40,7 @@ describe('authenticated repository API', () => {
           schemaVersion: 1,
           configHash: 'a'.repeat(64),
           createdAt: new Date('2026-09-09T12:00:00.000Z'),
-          config: createDefaultWalkzConfig([{
-            id: 'typecheck',
-            executable: 'npm',
-            args: ['run', 'typecheck', 'secret-shaped-value'],
-            cwd: '.',
-            required: true,
-          }]),
+          config: legacyConfig,
         }]),
       },
       reviewHistory: { list: vi.fn().mockResolvedValue([]) },
@@ -64,6 +66,11 @@ describe('authenticated repository API', () => {
       },
       triggerPolicy: 'manual',
       blockingEvidenceLevels: ['VERIFIED'],
+      policyPacks: [
+        'security-core@1',
+        'supply-chain@1',
+        'delivery-safety@1',
+      ],
       commandApprovalPolicy: 'prompt',
       commandCount: 1,
       requiredCommandCount: 1,

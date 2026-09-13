@@ -120,7 +120,9 @@ describe('review output', () => {
 
   it('renders a short terminal report', () => {
     expect(renderTerminalReport(result())).toBe(
-      'Walkz review\n\nVerdict: SHIP\n\nChecks:\n  none\n\n' +
+      'Walkz review\n\nVerdict: SHIP\n' +
+        'Policy packs: security-core@1, supply-chain@1, delivery-safety@1\n' +
+        '\nChecks:\n  none\n\n' +
         'Findings:\n  none\n',
     );
   });
@@ -156,9 +158,17 @@ describe('review output', () => {
       runId: 'run-1',
       verdict: 'SHIP',
       configHash: '1'.repeat(64),
+      policyPacks: [
+        'security-core@1',
+        'supply-chain@1',
+        'delivery-safety@1',
+      ],
       deterministicChecks: null,
       findings: [],
     });
+    expect(renderTerminalReport(result())).toContain(
+      'Policy packs: security-core@1, supply-chain@1, delivery-safety@1',
+    );
     expect(rendered).toMatch(/\n$/);
   });
 });

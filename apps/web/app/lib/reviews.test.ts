@@ -204,6 +204,7 @@ describe('loadDashboardConfigurations', () => {
       },
       triggerPolicy: 'manual',
       blockingEvidenceLevels: ['VERIFIED'],
+      policyPacks: ['security-core@1', 'supply-chain@1', 'delivery-safety@1'],
       commandApprovalPolicy: 'prompt',
       commandCount: 1,
       requiredCommandCount: 1,
@@ -232,6 +233,7 @@ describe('loadDashboardConfigurations', () => {
       },
       triggerPolicy: 'manual',
       blockingEvidenceLevels: ['VERIFIED'],
+      policyPacks: ['security-core@1', 'supply-chain@1', 'delivery-safety@1'],
       commandApprovalPolicy: 'prompt',
       commandCount: 1,
       requiredCommandCount: 1,
@@ -258,12 +260,34 @@ describe('loadDashboardConfigurations', () => {
       id: 'config-1', schemaVersion: 1, configHash: 'a'.repeat(64), createdAt: '2026-09-09T12:00:00.000Z',
       provider: { name: 'groq', model: 'auto' },
       budget: { diffBytes: -1, files: 100, tokens: 16_000, commandTimeoutMs: 120_000, commandOutputBytesPerStream: 262_144 },
-      triggerPolicy: 'manual', blockingEvidenceLevels: ['VERIFIED'], commandApprovalPolicy: 'prompt',
+      triggerPolicy: 'manual', blockingEvidenceLevels: ['VERIFIED'], policyPacks: ['security-core@1'], commandApprovalPolicy: 'prompt',
       commandCount: 0, requiredCommandCount: 0, premiumEnabled: false, spendingLimitUsd: 0,
     }] }), { status: 200 });
 
     await expect(loadDashboardConfigurations(
       'https://api.example.test', 'repo-1', undefined, fetcher,
     )).rejects.toThrow('Configuration history response was invalid.');
+  });
+
+  it('rejects unknown or duplicate policy packs', async () => {
+    const configuration = {
+      id: 'config-1', schemaVersion: 1, configHash: 'a'.repeat(64), createdAt: '2026-09-09T12:00:00.000Z',
+      provider: { name: 'groq', model: 'auto' },
+      budget: { diffBytes: 1, files: 1, tokens: 1, commandTimeoutMs: 1, commandOutputBytesPerStream: 1 },
+      triggerPolicy: 'manual', blockingEvidenceLevels: ['VERIFIED'], commandApprovalPolicy: 'prompt',
+      commandCount: 0, requiredCommandCount: 0, premiumEnabled: false, spendingLimitUsd: 0,
+    };
+    for (const policyPacks of [
+      ['unknown@1'],
+      ['security-core@1', 'security-core@1'],
+    ]) {
+      const fetcher = async () => new Response(JSON.stringify({
+        configurations: [{ ...configuration, policyPacks }],
+      }), { status: 200 });
+
+      await expect(loadDashboardConfigurations(
+        'https://api.example.test', 'repo-1', undefined, fetcher,
+      )).rejects.toThrow('Configuration history response was invalid.');
+    }
   });
 });

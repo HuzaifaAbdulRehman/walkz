@@ -274,3 +274,17 @@ The command boundary accepts only an exact `@walkz-review review` or
 `@walkz-review propose fix` comment from a human user. It returns bounded identity
 and repository metadata and discards the raw body. Durable intake, authorization,
 and idempotent replies remain separate steps.
+
+## Versioned repository policy packs
+
+We checked GitHub's [CodeQL pack reference](https://docs.github.com/en/code-security/reference/code-scanning/codeql/codeql-cli/codeql-query-packs)
+and OPA's [bundle documentation](https://www.openpolicyagent.org/docs/management-bundles)
+on 13 September 2026. Both attach a stable name and revision to the policy being
+run. OPA also keeps the previously active bundle when a replacement fails
+verification.
+
+Walkz records exact built-in pack IDs such as `security-core@1`, `supply-chain@1`,
+and `delivery-safety@1` in new repository configurations. The registry accepts
+only built-in packs. Packs cannot download code, define commands, or grant model
+tools. Older configurations retain their existing hash and resolve to the same
+versioned defaults. An explicit empty list stays empty.
