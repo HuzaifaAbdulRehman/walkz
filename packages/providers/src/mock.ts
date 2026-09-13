@@ -279,6 +279,7 @@ export function createMockProvider(
     listModels,
     validateAccess,
     requestStructuredReview,
+    requestStructuredSecurityReview: requestStructuredReview,
     requestStructuredChallenge,
     requestStructuredPatch,
   };

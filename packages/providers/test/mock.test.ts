@@ -89,6 +89,22 @@ describe('createMockProvider', () => {
     ).rejects.toMatchObject({ code: 'invalid_response', retryable: false });
   });
 
+  it('uses a dedicated security review entry point', async () => {
+    const provider = createMockProvider({
+      outcomes: [{ type: 'review', review: cleanReview }],
+    });
+
+    await expect(
+      provider.requestStructuredSecurityReview?.({
+        ...request,
+        promptVersion: 'walkz-security-v1',
+      }),
+    ).resolves.toMatchObject({
+      promptVersion: 'walkz-security-v1',
+      review: cleanReview,
+    });
+  });
+
   it('returns a separately typed patch outcome', async () => {
     const provider = createMockProvider({
       outcomes: [{ type: 'patch', patch }],

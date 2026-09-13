@@ -47,6 +47,15 @@ function provider(): ProviderAdapter {
       usage: usage(),
       requestId: 'review-request',
     }),
+    requestStructuredSecurityReview: vi.fn().mockResolvedValue({
+      provider: 'mock',
+      model: 'model-1',
+      promptVersion: 'security-v1',
+      schemaVersion: 'review-schema-v1',
+      review: { findings: [] },
+      usage: usage(),
+      requestId: 'security-request',
+    }),
     requestStructuredChallenge: vi.fn().mockResolvedValue({
       provider: 'mock',
       model: 'model-1',
@@ -172,6 +181,26 @@ describe('model invocation telemetry', () => {
     const serialized = JSON.stringify(record.mock.calls[0]?.[0]);
     expect(serialized).not.toContain('private source code');
     expect(serialized).not.toContain('The failure mechanism still applies.');
+  });
+
+  it('records specialist reviews under the security stage', async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const observed = withModelInvocationTelemetry(provider(), {
+      operationId: 'review:run-1',
+      record,
+      now: clock(100, 140),
+    });
+
+    await observed.requestStructuredSecurityReview!({
+      ...reviewRequest,
+      promptVersion: 'security-v1',
+    });
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      stage: 'security',
+      status: 'succeeded',
+      durationMs: 40,
+    }));
   });
 
   it('records normalized failures and preserves the provider error', async () => {

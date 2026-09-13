@@ -77,7 +77,7 @@ async function observeRequest<Result extends
   | StructuredPatchResult
   | StructuredChallengeResult>(
   provider: ProviderAdapter,
-  stage: 'review' | 'patch' | 'challenger',
+  stage: 'review' | 'patch' | 'challenger' | 'security',
   operationId: string,
   request: StructuredReviewRequest,
   perform: () => Promise<Result>,
@@ -149,6 +149,27 @@ export function withModelInvocationTelemetry(
       options.record,
       now,
     ),
+    ...(provider.requestStructuredSecurityReview === undefined
+      ? {}
+      : {
+          requestStructuredSecurityReview: (
+            request: StructuredReviewRequest,
+            requestOptions?: Parameters<NonNullable<
+              ProviderAdapter['requestStructuredSecurityReview']
+            >>[1],
+          ) => observeRequest(
+            provider,
+            'security',
+            parsed.operationId,
+            request,
+            () => provider.requestStructuredSecurityReview!(
+              request,
+              requestOptions,
+            ),
+            options.record,
+            now,
+          ),
+        }),
     ...(provider.requestStructuredChallenge === undefined
       ? {}
       : {

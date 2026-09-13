@@ -854,6 +854,8 @@ export function createGroqProvider(
       }),
     requestStructuredReview: (request, requestOptions = {}) =>
       requestStructuredReview(request, options, requestOptions),
+    requestStructuredSecurityReview: (request, requestOptions = {}) =>
+      requestStructuredReview(request, options, requestOptions),
     requestStructuredChallenge: (request, requestOptions = {}) =>
       requestStructuredChallenge(request, options, requestOptions),
     requestStructuredPatch: (request, requestOptions = {}) =>

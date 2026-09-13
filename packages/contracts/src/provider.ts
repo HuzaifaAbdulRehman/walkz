@@ -93,6 +93,10 @@ export interface ProviderAdapter {
     request: StructuredReviewRequest,
     options?: ProviderRequestOptions,
   ): Promise<StructuredReviewResult>;
+  requestStructuredSecurityReview?(
+    request: StructuredReviewRequest,
+    options?: ProviderRequestOptions,
+  ): Promise<StructuredReviewResult>;
   requestStructuredChallenge?(
     request: StructuredChallengeRequest,
     options?: ProviderRequestOptions,

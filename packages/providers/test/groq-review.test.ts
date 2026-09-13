@@ -365,5 +365,16 @@ describe('Groq structured review', () => {
     await expect(
       provider.requestStructuredReview(reviewRequest),
     ).resolves.toMatchObject({ provider: 'groq', model: MODEL });
+    await expect(
+      provider.requestStructuredSecurityReview?.({
+        ...reviewRequest,
+        promptVersion: 'walkz-security-v1',
+      }),
+    ).resolves.toMatchObject({
+      provider: 'groq',
+      model: MODEL,
+      promptVersion: 'walkz-security-v1',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
