@@ -69,7 +69,7 @@ dockerTest(
     });
     expect(report.comparison).toEqual({
       baselineFingerprint:
-        '386ab4bc8a25c13044c9eb2141fb7b86297c08b0289b54cbf1345f95fc37a813',
+        '40642cc0f8213970f56a0f1e089a2bbf93c2828d5f11146424ab55b4707b5e48',
       caseRegressions: [],
       threshold: 0,
       passed: true,
