@@ -9,4 +9,15 @@ dist
 coverage
 .vitest
 .env
+**/.env
+.env.*
+**/.env.*
+!**/.env.example
 infra/.env
+**/.npmrc
+**/.git-credentials
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+artifacts

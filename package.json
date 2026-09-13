@@ -20,6 +20,7 @@
     "export:reviews": "npm run build --silent && node scripts/export-review-snapshot.mjs",
     "hosted:init": "node scripts/init-hosted-env.mjs",
     "migrate:up": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir migrations --migrations-table walkz_migrations --advisory-lock-mode fail --no-single-transaction up",
+    "release:verify": "node scripts/build-release.mjs",
     "test": "vitest run",
     "test:types": "tsc -p tsconfig.test.json --noEmit --pretty false",
     "typecheck": "npm run build && npm run test:types",

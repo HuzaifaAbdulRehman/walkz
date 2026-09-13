@@ -4,3 +4,4 @@ coverage/
 .vitest/
 *.tsbuildinfo
 infra/.env
+/artifacts/

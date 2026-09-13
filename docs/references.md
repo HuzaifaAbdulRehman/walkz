@@ -341,3 +341,23 @@ says attestations on GitHub Free are limited to public repositories. Walkz will
 not change repository visibility or require an Enterprise plan for this
 milestone. Phase 7.1 starts with local image identities and a release manifest;
 registry publication and hosted attestations remain separate decisions.
+
+## Release artifact identity
+
+Docker's official [reproducible-build guide](https://docs.docker.com/build/ci/github-actions/reproducible-builds/)
+and [Dockerfile reference](https://docs.docker.com/reference/dockerfile) were
+checked on 14 September 2026. BuildKit supports `SOURCE_DATE_EPOCH` for image
+and layer timestamps. Docker also documents the local image ID as a SHA-256
+identifier over the image configuration and layers. Walkz uses the source
+commit timestamp, records each local image ID, and reserves registry digests
+for the later publication phase.
+
+Next.js documents using [`generateBuildId`](https://nextjs.org/docs/app/api-reference/config/next-config-js/generateBuildId)
+to give containers from the same source a consistent application build ID. Its
+[self-hosting guide](https://nextjs.org/docs/app/guides/self-hosting) also says
+one build should be promoted across instances and that Server Function
+encryption material is unique by default. Walkz binds the application build ID
+to the full Git revision but does not replace generated encryption material
+with a predictable value. The release manifest therefore records the exact
+artifact set that passed verification instead of claiming that separate builds
+are byte-for-byte identical.
