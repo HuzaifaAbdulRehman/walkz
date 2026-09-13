@@ -21,6 +21,8 @@ import {
   hashWalkzConfig,
   runLocalReviewPipeline,
   type LocalReviewPipelineDependencies,
+  WALKZ_REVIEW_PROMPT_VERSION,
+  WALKZ_SECURITY_PROMPT_VERSION,
 } from '../src/index.js';
 
 const BASE_SHA = '1'.repeat(40);
@@ -422,7 +424,7 @@ describe('runLocalReviewPipeline', () => {
       status: 'complete',
       provider: 'mock',
       model: 'mock/reviewer',
-      promptVersion: 'walkz-review-v1',
+      promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
       schemaVersion: 'walkz.review.v1',
       usage,
       requestId: 'request-1',
@@ -743,7 +745,7 @@ describe('runLocalReviewPipeline', () => {
     expect(result.security).toMatchObject({
       status: 'complete',
       model: 'mock/reviewer',
-      promptVersion: 'walkz-security-v1',
+      promptVersion: WALKZ_SECURITY_PROMPT_VERSION,
     });
     expect(result.run.findings).toEqual([
       expect.objectContaining({

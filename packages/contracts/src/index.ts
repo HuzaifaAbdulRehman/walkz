@@ -228,6 +228,9 @@ export {
 } from './review-evaluation.js';
 export type { ReviewEvaluationSnapshot } from './review-evaluation.js';
 
+export { reviewLanguageIdSchema } from './language.js';
+export type { ReviewLanguageId } from './language.js';
+
 export {
   canTransitionReviewRun,
   isTerminalReviewRunStatus,

@@ -11,6 +11,7 @@ import {
   requiresSecuritySpecialist,
   resolvePolicyPacks,
   runSecuritySpecialist,
+  WALKZ_SECURITY_PROMPT_VERSION,
 } from '../src/index.js';
 
 const checks: DeterministicCheckRun = {
@@ -112,7 +113,7 @@ describe('security specialist', () => {
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]?.[0]).toMatchObject({
       model: 'mock/reviewer',
-      promptVersion: 'walkz-security-v1',
+      promptVersion: WALKZ_SECURITY_PROMPT_VERSION,
     });
     expect(request.mock.calls[0]?.[0].systemPrompt).toContain('no tools');
     expect(result.step.status).toBe('complete');

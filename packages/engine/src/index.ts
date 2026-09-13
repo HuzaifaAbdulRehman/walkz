@@ -24,6 +24,12 @@ export type {
   BuiltReviewPrompt,
 } from './prompt.js';
 export {
+  getReviewLanguageAdapter,
+  listReviewLanguageAdapters,
+  resolveReviewLanguageAdapters,
+} from './language-adapters.js';
+export type { ReviewLanguageAdapter } from './language-adapters.js';
+export {
   allocateProofBudget,
   createProofPlan,
   digestProofCommand,

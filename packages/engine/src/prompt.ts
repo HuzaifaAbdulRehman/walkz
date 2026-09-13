@@ -7,8 +7,10 @@ import type {
 } from '@walkz/contracts';
 import type { ReviewContext } from '@walkz/git';
 
-export const WALKZ_REVIEW_PROMPT_VERSION = 'walkz-review-v1';
-export const WALKZ_SECURITY_PROMPT_VERSION = 'walkz-security-v1';
+import { resolveReviewLanguageAdapters } from './language-adapters.js';
+
+export const WALKZ_REVIEW_PROMPT_VERSION = 'walkz-review-v2';
+export const WALKZ_SECURITY_PROMPT_VERSION = 'walkz-security-v2';
 const INVISIBLE_CODEPOINTS =
   /[\u200B-\u200D\u202A-\u202E\u2060\u2066-\u2069\uFEFF\u{E0000}-\u{E007F}]/gu;
 const SYSTEM_PROMPT =
@@ -35,6 +37,10 @@ interface MutablePromptPayload {
     path: string;
     score: number;
     reasons: string[];
+  }[];
+  languages: {
+    id: string;
+    guidance: string;
   }[];
   promptTruncated: boolean;
   guidance: { path: string; content: string }[];
@@ -212,6 +218,12 @@ export function buildReviewPrompt(
       path,
       score: risk.score,
       reasons: risk.reasons,
+    })),
+    languages: resolveReviewLanguageAdapters(
+      context.changedFiles.map((file) => file.path),
+    ).map((adapter) => ({
+      id: adapter.id,
+      guidance: adapter.reviewGuidance,
     })),
     promptTruncated: false,
     guidance: context.guidance.documents.map((document) => ({

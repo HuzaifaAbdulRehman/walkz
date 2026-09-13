@@ -1,6 +1,10 @@
 import type { Evidence, Finding, ProviderAdapter } from '@walkz/contracts';
 import { createDefaultWalkzConfig } from '@walkz/contracts';
-import { digestProofCommand, hashWalkzConfig } from '@walkz/engine';
+import {
+  digestProofCommand,
+  hashWalkzConfig,
+  WALKZ_REVIEW_PROMPT_VERSION,
+} from '@walkz/engine';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -31,7 +35,7 @@ const claimed = {
   config,
   provider: 'groq',
   model: 'auto',
-  promptVersion: 'walkz-review-v1',
+  promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
   status: 'collecting_context' as const,
 };
 
@@ -150,7 +154,7 @@ function telemetryProvider(): ProviderAdapter {
     requestStructuredReview: vi.fn().mockResolvedValue({
       provider: 'groq',
       model: 'model',
-      promptVersion: 'walkz-review-v1',
+      promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
       schemaVersion: 'walkz-review-v1',
       review: { findings: [] },
       usage: {
@@ -178,7 +182,7 @@ function pipelineThatCallsProvider() {
       systemPrompt: 'private system prompt',
       userPrompt: 'private source code',
       maxOutputTokens: 1_000,
-      promptVersion: 'walkz-review-v1',
+      promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
     });
     return pipelineResult();
   });
