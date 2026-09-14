@@ -285,12 +285,28 @@ function observeWorker(
 
 async function dependencyStatus(operation: () => Promise<unknown>): Promise<DependencyStatus> {
   const startedAt = Date.now();
-  try {
-    await operation();
-    return { status: 'up', latencyMs: Math.max(0, Date.now() - startedAt) };
-  } catch {
-    return { status: 'down', latencyMs: Math.max(0, Date.now() - startedAt) };
-  }
+  return new Promise((resolve) => {
+    const finish = (status: 'up' | 'down'): void => {
+      clearTimeout(timer);
+      resolve({ status, latencyMs: Math.max(0, Date.now() - startedAt) });
+    };
+    const timer = setTimeout(() => finish('down'), 1_000);
+    timer.unref();
+    void operation().then(
+      () => finish('up'),
+      () => finish('down'),
+    );
+  });
+}
+
+function coalesceOperation<T>(operation: () => Promise<T>): () => Promise<T> {
+  let active: Promise<T> | undefined;
+  return () => {
+    active ??= operation().finally(() => {
+      active = undefined;
+    });
+    return active;
+  };
 }
 
 async function queueCounts(queue: {
@@ -490,6 +506,8 @@ export function createHostedWorkerFromEnvironment(
   );
   observeWorker(reviewWorker, 'reviews', telemetry, logger, reportBackgroundError);
   observeWorker(patchFixWorker, 'patch_fixes', telemetry, logger, reportBackgroundError);
+  const checkPostgres = coalesceOperation(() => pool.query('SELECT 1 AS ready'));
+  const checkRedis = coalesceOperation(() => reviewQueue.getJobCounts('wait'));
 
   const operationsServer = createWorkerOperationsServer({
     host: config.telemetryHost,
@@ -498,10 +516,8 @@ export function createHostedWorkerFromEnvironment(
     dependencies: {
       async check() {
         const [postgres, redis] = await Promise.all([
-          dependencyStatus(() => pool.query('SELECT 1 AS ready')),
-          dependencyStatus(async () => {
-            await reviewQueue.getJobCounts('wait');
-          }),
+          dependencyStatus(checkPostgres),
+          dependencyStatus(checkRedis),
         ]);
         recordDependencyState('postgres', postgres.status);
         recordDependencyState('redis', redis.status);
