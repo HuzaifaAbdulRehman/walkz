@@ -80,6 +80,7 @@ export function parseRecoveryOptions(arguments_) {
       },
       'compose-file': { type: 'string', default: 'infra/compose.production.yml' },
       'env-file': { type: 'string', default: 'infra/.env.production' },
+      'docker-gid': { type: 'string', default: '0' },
       output: { type: 'string', default: 'artifacts/recovery-drill.json' },
       'wait-seconds': { type: 'string', default: '180' },
     },
@@ -93,6 +94,9 @@ export function parseRecoveryOptions(arguments_) {
   if (!Number.isInteger(waitSeconds) || waitSeconds < 30 || waitSeconds > 600) {
     throw new Error('--wait-seconds must be an integer from 30 through 600.');
   }
+  if (!/^\d{1,10}$/.test(values['docker-gid'])) {
+    throw new Error('--docker-gid must be a nonnegative integer.');
+  }
   return {
     baselineManifestPath: resolveRepositoryPath(
       values['baseline-manifest'],
@@ -105,6 +109,7 @@ export function parseRecoveryOptions(arguments_) {
     composeFile: resolveRepositoryPath(values['compose-file'], 'The Compose file'),
     envFile: resolveRepositoryPath(values['env-file'], 'The environment file'),
     outputPath: resolveRepositoryPath(values.output, 'The recovery report'),
+    dockerGid: values['docker-gid'],
     waitSeconds,
   };
 }
@@ -140,9 +145,15 @@ export function createRecoveryIdentity(suffix) {
   };
 }
 
-export function createReleaseEnvironment(manifest, identity, environment = process.env) {
+export function createReleaseEnvironment(
+  manifest,
+  identity,
+  environment = process.env,
+  dockerGid = '0',
+) {
   const result = {
     ...environment,
+    WALKZ_DOCKER_GID: dockerGid,
     WALKZ_POSTGRES_VOLUME: identity.postgresVolume,
     WALKZ_PROOF_VOLUME: identity.proofVolume,
   };
@@ -310,11 +321,13 @@ export async function runRecoveryDrill(options, dependencies = {}) {
     manifests.baseline,
     identity,
     dependencies.environment,
+    options.dockerGid,
   );
   const candidateEnvironment = createReleaseEnvironment(
     manifests.candidate,
     identity,
     dependencies.environment,
+    options.dockerGid,
   );
   const adapter = dependencies.adapter ?? createAdapter(options, identity);
   const temporaryDirectory = await mkdtemp(resolve(tmpdir(), 'walkz-recovery-'));
@@ -330,6 +343,16 @@ export async function runRecoveryDrill(options, dependencies = {}) {
   try {
     assertReleaseImages(adapter, manifests.baseline, baselineEnvironment);
     assertReleaseImages(adapter, manifests.candidate, candidateEnvironment);
+    adapter.compose(
+      ['config', '--quiet'],
+      baselineEnvironment,
+      { label: 'Validate baseline Compose configuration' },
+    );
+    adapter.compose(
+      ['config', '--quiet'],
+      candidateEnvironment,
+      { label: 'Validate candidate Compose configuration' },
+    );
     const existing = adapter.docker([
       'ps', '--all', '--quiet', '--filter',
       `label=com.docker.compose.project=${identity.project}`,
@@ -519,7 +542,11 @@ export async function runRecoveryDrill(options, dependencies = {}) {
 async function main() {
   try {
     const options = parseRecoveryOptions(process.argv.slice(2));
-    const report = await runRecoveryDrill(options);
+    const suffix = randomBytes(6).toString('hex');
+    process.stdout.write(
+      `Recovery drill project: ${createRecoveryIdentity(suffix).project}.\n`,
+    );
+    const report = await runRecoveryDrill(options, { suffix });
     process.stdout.write(
       `Recovery drill passed: restored ${report.knownReviewId}, reconciled one review, ` +
       `and rolled back to ${report.finalRevision.slice(0, 12)}. Temporary backup deleted.\n`,

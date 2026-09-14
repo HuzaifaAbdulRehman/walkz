@@ -5,7 +5,7 @@
   "recommendationReason": "Walkz has reached Milestone 7 with its evidence-first review, proof, hosted, and approved-fix paths intact. Continue toward a reproducible single-host beta while keeping real-user outcome validation as a separate gate.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-14T13:32:05Z",
+  "refreshedAt": "2026-09-14T14:40:00Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -209,6 +209,23 @@
         "run-m7-telemetry-release",
         "run-m7-telemetry-live"
       ]
+    },
+    {
+      "id": "claim-release-recovery",
+      "text": "Walkz can restore a known review from a bounded logical backup, rebuild disposable review queue state from PostgreSQL, run a newer exact application revision, and roll back to an older exact revision without retaining the synthetic backup or drill resources.",
+      "status": "verified",
+      "sourceIds": [
+        "source-postgres-pg-dump",
+        "source-postgres-pg-restore",
+        "source-docker-compose-up",
+        "source-docker-compose-down"
+      ],
+      "runIds": [
+        "run-m7-recovery-focused",
+        "run-m7-recovery-full-tests",
+        "run-m7-recovery-release",
+        "run-m7-recovery-live"
+      ]
     }
   ],
   "sources": [
@@ -365,6 +382,34 @@
       "url": "https://docs.docker.com/engine/logging/configure/",
       "accessedAt": "2026-09-07T16:58:46Z",
       "decisionImpact": "Documents that the default json-file driver can exhaust disk and that the none driver prevents daemon-side log retention."
+    },
+    {
+      "id": "source-postgres-pg-dump",
+      "title": "PostgreSQL 18 pg_dump documentation",
+      "url": "https://www.postgresql.org/docs/18/app-pgdump.html",
+      "accessedAt": "2026-09-14T14:40:00Z",
+      "decisionImpact": "Supports a consistent custom-format logical dump that is compressed and can be inspected before restore."
+    },
+    {
+      "id": "source-postgres-pg-restore",
+      "title": "PostgreSQL 18 pg_restore documentation",
+      "url": "https://www.postgresql.org/docs/18/app-pgrestore.html",
+      "accessedAt": "2026-09-14T14:40:00Z",
+      "decisionImpact": "Supports fail-fast restoration of the custom archive into a fresh isolated database."
+    },
+    {
+      "id": "source-docker-compose-up",
+      "title": "Docker Compose up reference",
+      "url": "https://docs.docker.com/reference/cli/docker/compose/up/",
+      "accessedAt": "2026-09-14T14:40:00Z",
+      "decisionImpact": "Supports health-gated startup for services in the uniquely scoped drill project."
+    },
+    {
+      "id": "source-docker-compose-down",
+      "title": "Docker Compose down reference",
+      "url": "https://docs.docker.com/reference/cli/docker/compose/down/",
+      "accessedAt": "2026-09-14T14:40:00Z",
+      "decisionImpact": "Supports explicit removal of the drill project's named volumes during cleanup."
     }
   ],
   "repositories": [
@@ -1086,6 +1131,48 @@
       "exitCode": 0,
       "summary": "Exact-release API and worker telemetry returned HTTP 200 with fixed dimensions. Redis loss produced bounded HTTP 503 while PostgreSQL stayed up, and recovery returned 200 with exactly one failure and one recovery log. Cleanup left no matching containers or volumes.",
       "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-recovery-focused",
+      "command": "npm test -- <Phase 7.4 focused files> --maxWorkers=1",
+      "exitCode": 0,
+      "summary": "Five focused files passed 30 release manifest, Compose, durable reconciliation, runtime, and recovery drill tests.",
+      "ranAt": "2026-09-14T14:40:00Z"
+    },
+    {
+      "id": "run-m7-recovery-typecheck",
+      "command": "npm run typecheck; LSP diagnostics",
+      "exitCode": 0,
+      "summary": "The workspace build and test-file typecheck passed, and LSP diagnostics reported no errors in the changed worker source files.",
+      "ranAt": "2026-09-14T14:40:00Z"
+    },
+    {
+      "id": "run-m7-recovery-full-tests",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 0,
+      "summary": "The full single-worker suite passed 817 tests in 152 files, with 22 tests and 14 files skipped by existing conditions.",
+      "ranAt": "2026-09-14T14:40:00Z"
+    },
+    {
+      "id": "run-m7-recovery-scans",
+      "command": "gitleaks git --pre-commit --staged --no-banner --redact; osv-scanner scan source --lockfile package-lock.json",
+      "exitCode": 0,
+      "summary": "Gitleaks found no secrets in the staged recovery diff, and OSV-Scanner found no known issues in 338 locked packages. Semgrep was unavailable on this laptop.",
+      "ranAt": "2026-09-14T14:40:00Z"
+    },
+    {
+      "id": "run-m7-recovery-release",
+      "command": "npm run release:verify",
+      "exitCode": 0,
+      "summary": "The candidate API, web, and worker images were built and verified against clean revision 8ac1b42da68a.",
+      "ranAt": "2026-09-14T14:40:00Z"
+    },
+    {
+      "id": "run-m7-recovery-live",
+      "command": "npm run production:recovery -- --baseline-manifest artifacts/release-manifest.baseline.json --env-file infra/.env",
+      "exitCode": 0,
+      "summary": "The 93,387 ms drill restored a 78,929-byte logical dump and one known review across 21 migrations, recovered its BullMQ job from PostgreSQL, started candidate revision 8ac1b42da68a, rolled API and worker back to 8a15d0b8937f, deleted the dump, and left no matching containers, networks, or volumes.",
+      "ranAt": "2026-09-14T14:40:00Z"
     }
   ],
   "gates": [
@@ -1284,6 +1371,26 @@
         "run-m7-telemetry-render",
         "run-m7-telemetry-release",
         "run-m7-telemetry-live"
+      ]
+    },
+    {
+      "id": "gate-m7-release-recovery",
+      "stage": "during",
+      "trigger": "Phase 7.4 rehearses backup, restore, queued-work recovery, upgrade, and rollback.",
+      "requiredEvidence": "A bounded synthetic backup restores a known review and migration ledger, PostgreSQL reconstructs missing Redis work, exact candidate and baseline images run in order, and cleanup removes the backup and all drill resources.",
+      "status": "passed",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-release-recovery"
+      ],
+      "runIds": [
+        "run-m7-recovery-focused",
+        "run-m7-recovery-typecheck",
+        "run-m7-recovery-full-tests",
+        "run-m7-recovery-scans",
+        "run-m7-recovery-release",
+        "run-m7-recovery-live"
       ]
     },
     {

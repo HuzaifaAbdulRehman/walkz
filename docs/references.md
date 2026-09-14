@@ -336,6 +336,24 @@ documents backup and restore as explicit volume operations. Walkz will keep its
 local stack intact, add a separate single-host release contract, and prove
 recovery with disposable data before calling that path ready.
 
+## PostgreSQL recovery drill
+
+We checked PostgreSQL 18's official
+[`pg_dump`](https://www.postgresql.org/docs/18/app-pgdump.html),
+[`pg_restore`](https://www.postgresql.org/docs/18/app-pgrestore.html), and
+[backup overview](https://www.postgresql.org/docs/18/backup.html) on 14
+September 2026. The custom archive format is compressed and can be inspected
+or restored with `pg_restore`. Walkz uses that format for a bounded logical
+backup, stops on the first restore error, and verifies the restored record and
+migration ledger instead of treating dump completion as proof.
+
+Docker's official [`compose up`](https://docs.docker.com/reference/cli/docker/compose/up/)
+and [`compose down`](https://docs.docker.com/reference/cli/docker/compose/down/)
+references were checked the same day. `up --wait` supplies the health gate,
+while `down --volumes` removes named volumes only when requested. The drill
+therefore runs under a random project name, gives its volumes unique names,
+and checks containers, networks, and volumes again after cleanup.
+
 GitHub's [artifact attestation guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
 says attestations on GitHub Free are limited to public repositories. Walkz will
 not change repository visibility or require an Enterprise plan for this

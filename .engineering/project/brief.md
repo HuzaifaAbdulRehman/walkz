@@ -40,20 +40,20 @@ and <https://arxiv.org/abs/2607.03316>.
 Node, Git, Groq, GitHub, PostgreSQL, Redis, and Docker documentation support the main
 boundaries. The full claim, source, and run records are in `evidence.json`. The current
 checkpoint also records a clean-revision image build, bounded operational telemetry,
-and a disposable dependency-failure drill against the exact release images.
+and a timed restore and rollback drill against exact release images.
 
 ## Scope
 
 Milestone 7 packages the verified local and hosted paths for a single-host beta. Phase
-7.3 adds bounded API and worker telemetry, fixed queue and outcome dimensions, durable
-24-hour aggregates, structured operational logs, and dependency health transitions.
+7.4 adds a bounded logical backup, isolated restore, durable queue reconciliation, and
+exact-revision upgrade and rollback rehearsal.
 
 ## Non-goals
 
-Phase 7.3 does not select a hosting vendor, publish images to a registry, expose the
-stack to the internet, or add a separate proof-executor host. It also does not prove
-backup, restore, upgrade, rollback, or clean-host installation. Those checks remain in
-later Milestone 7 phases. Real-user usefulness remains a separate outcome gate.
+Phase 7.4 does not select a hosting vendor, publish images to a registry, expose the
+stack to the internet, retain production backups, or add a separate proof-executor
+host. It also does not prove a clean-host installation. Those checks remain in later
+Milestone 7 phases. Real-user usefulness remains a separate outcome gate.
 
 ## Constraints
 
@@ -77,11 +77,10 @@ shell-free command resolution and descendant cleanup on Windows and Linux.
 
 ## Success and stop conditions
 
-Phase 7.3 succeeds when operators can inspect bounded health, queue, worker, outbox,
-latency, and failure signals without private review content. Dependency probes must
-degrade promptly, avoid duplicate work, and record one failure and recovery transition.
-Milestone 7 is not complete until backup, restore, upgrade, rollback, queued-work
-recovery, and the clean-host beta journey pass.
+Phase 7.4 succeeds when a known review survives a real backup and isolated restore,
+missing Redis work is rebuilt from PostgreSQL, and exact application images move
+forward and back without losing the migration ledger. Milestone 7 is not complete
+until the clean-host beta journey passes.
 
 Revisit the deployment design if a service can build from source at startup, an internal
 port reaches the host, a secret appears in verification output, or a release mixes image
@@ -90,10 +89,10 @@ decision usefulness over CodeRabbit or checks plus an assistant.
 
 ## First slice
 
-The completed slice is operational telemetry. It exposes internal-only API and worker
-snapshots, fixed-cardinality process counters, durable review and outbox aggregates,
-queue delay and failure signals, and bounded dependency checks without source, prompts,
-credentials, IDs, or raw errors.
+The completed slice is release recovery. A disposable drill restores one synthetic
+review, rebuilds its BullMQ job from PostgreSQL, starts a newer release, and rolls API
+and worker back to the exact baseline. It removes the temporary dump and all drill
+resources before reporting success.
 
 ## Delivery path
 
@@ -142,8 +141,10 @@ Huzaifa owns every gate.
 - Passed, during: API and worker telemetry passed 808 full-suite tests, an exact-release
   Compose run, bounded Redis failure and recovery checks, secret and dependency scans,
   and cleanup with no acceptance containers or volumes left.
-- Planned, during: rehearse backup, restore, upgrade, rollback, restart, and queued-work
-  recovery against disposable state.
+- Passed, during: a 93,387 ms disposable drill restored one 78,929-byte dump and a
+  known review across 21 migrations, rebuilt its missing BullMQ job, started candidate
+  revision `8ac1b42`, rolled API and worker back to `8a15d0b`, and left no backup,
+  container, network, or volume behind.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
   with CodeRabbit or a composed baseline on precision, recall, latency, and decision
   usefulness.

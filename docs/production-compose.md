@@ -42,7 +42,8 @@ docker compose --env-file infra/.env.production --file infra/compose.production.
 
 The API and worker expose health and telemetry endpoints only inside Compose.
 See [operational telemetry](operational-telemetry.md) for the safe fields and
-local inspection commands.
+local inspection commands. Before a beta deployment holds valuable data, run
+the [recovery drill](recovery-drill.md) with two exact release manifests.
 
 The worker still needs the Docker socket to create isolated proof containers.
 That socket grants control of the host Docker daemon, so only a trusted Walkz

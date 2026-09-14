@@ -50,6 +50,10 @@ describe('recovery drill contract', () => {
       '--baseline-manifest', 'artifacts/baseline.json',
       '--wait-seconds', '10',
     ])).toThrow(/30 through 600/);
+    expect(() => parseRecoveryOptions([
+      '--baseline-manifest', 'artifacts/baseline.json',
+      '--docker-gid', 'root',
+    ])).toThrow(/nonnegative integer/);
   });
 
   it('requires different clean releases and images', () => {
@@ -84,6 +88,7 @@ describe('recovery drill contract', () => {
       SAFE_VALUE: 'kept',
       WALKZ_POSTGRES_VOLUME: 'walkz-recovery-12345678abcd-postgres',
       WALKZ_PROOF_VOLUME: 'walkz-recovery-12345678abcd-proof',
+      WALKZ_DOCKER_GID: '0',
       WALKZ_API_IMAGE: `sha256:${'4'.repeat(64)}`,
       WALKZ_WEB_IMAGE: `sha256:${'5'.repeat(64)}`,
       WALKZ_WORKER_IMAGE: `sha256:${'6'.repeat(64)}`,
@@ -122,6 +127,7 @@ describe('recovery drill contract', () => {
       composeFile: 'unused',
       envFile: 'unused',
       outputPath: resolve(directory, 'report.json'),
+      dockerGid: '0',
       waitSeconds: 180,
     }, {
       adapter,
@@ -199,6 +205,7 @@ describe('recovery drill contract', () => {
       composeFile: 'unused',
       envFile: 'unused',
       outputPath,
+      dockerGid: '0',
       waitSeconds: 180,
     }, {
       adapter,
