@@ -56,24 +56,16 @@ export const NO_CHALLENGER: ChallengerStep = {
   failureCode: null,
 };
 
-function modelFamily(model: string): string {
-  return model.includes('/') ? model.slice(0, model.indexOf('/')) : model;
-}
-
 export function selectChallengerModel(
   access: ProviderAccessResult,
 ): ProviderModel | null {
-  const primaryFamily = modelFamily(access.selectedModel);
   const candidates = access.models
     .filter((model) =>
       model.id !== access.selectedModel &&
       model.active &&
       model.supportsStrictStructuredOutput)
     .sort((left, right) => {
-      const leftSameFamily = modelFamily(left.id) === primaryFamily ? 1 : 0;
-      const rightSameFamily = modelFamily(right.id) === primaryFamily ? 1 : 0;
-      return leftSameFamily - rightSameFamily ||
-        (right.contextWindow ?? 0) - (left.contextWindow ?? 0) ||
+      return (right.contextWindow ?? 0) - (left.contextWindow ?? 0) ||
         (right.maxCompletionTokens ?? 0) - (left.maxCompletionTokens ?? 0) ||
         left.id.localeCompare(right.id);
     });

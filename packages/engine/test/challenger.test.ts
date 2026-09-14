@@ -109,8 +109,8 @@ const budget = {
 };
 
 describe('blocker challenger', () => {
-  it('chooses an active model from a different family', () => {
-    expect(selectChallengerModel(access)?.id).toBe('qwen/challenger');
+  it('chooses the strongest active model distinct from the reviewer', () => {
+    expect(selectChallengerModel(access)?.id).toBe('openai/secondary');
   });
 
   it('requires a distinct active structured-output model', () => {
@@ -172,7 +172,7 @@ describe('blocker challenger', () => {
 
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]?.[0]).toMatchObject({
-      model: alternateModel.id,
+      model: 'openai/secondary',
       promptVersion: 'walkz-challenge-v1',
     });
     expect(Object.keys(request.mock.calls[0]?.[0] ?? {}).sort()).toEqual([
