@@ -1,10 +1,12 @@
 import type { Server } from 'node:http';
 
 import Fastify, {
+  LogController,
   type FastifyHttpOptions,
   type FastifyInstance,
   type FastifyLoggerOptions,
 } from 'fastify';
+import type { DurableOperationalTelemetry } from '@walkz/persistence';
 import { ZodError } from 'zod';
 
 import {
@@ -36,6 +38,7 @@ import {
   registerGitHubWebhookRoutes,
   type GitHubWebhookApiOptions,
 } from './webhook.js';
+import { createHttpOperationalTelemetry } from './operational-telemetry.js';
 
 type HostedLoggerOptions = Exclude<FastifyHttpOptions<Server>['logger'], boolean | undefined>;
 
@@ -51,6 +54,10 @@ export interface HostedApiOptions {
   readiness: {
     check(): Promise<boolean>;
   };
+  telemetry: {
+    load(): Promise<DurableOperationalTelemetry>;
+    timeoutMs?: number;
+  };
   logger?: boolean | HostedLoggerOptions;
 }
 
@@ -58,17 +65,24 @@ const querySafeRequestSerializer: NonNullable<
   NonNullable<FastifyLoggerOptions['serializers']>['req']
 > =
   (request) => {
-    const queryStart = request.url.indexOf('?');
     return {
-      method: request.method,
-      url: queryStart === -1 ? request.url : request.url.slice(0, queryStart),
-      host: request.host,
-      remoteAddress: request.ip,
-      ...(request.socket.remotePort === undefined
-        ? {}
-        : { remotePort: request.socket.remotePort }),
+      method: normalizeMethod(request.method),
     };
   };
+
+const loggedMethods = new Set([
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'OPTIONS',
+  'HEAD',
+]);
+
+function normalizeMethod(method: string): string {
+  return loggedMethods.has(method) ? method : 'OTHER';
+}
 
 function querySafeLogger(
   logger: HostedApiOptions['logger'],
@@ -80,17 +94,72 @@ function querySafeLogger(
     serializers: {
       ...options.serializers,
       req: querySafeRequestSerializer,
+      err: () => ({
+        type: 'Error',
+        message: 'redacted',
+        stack: '',
+      }),
     },
   };
 }
 
 export function createHostedApi(options: HostedApiOptions): FastifyInstance {
-  const app = Fastify({ logger: querySafeLogger(options.logger) });
+  const telemetry = createHttpOperationalTelemetry();
+  let postgresOperationalState: 'up' | 'down' | undefined;
+  const telemetryTimeoutMs = Math.max(1, Math.min(
+    5_000,
+    options.telemetry.timeoutMs ?? 1_500,
+  ));
+  let durableLoad: Promise<DurableOperationalTelemetry> | undefined;
+  const loadDurable = (): Promise<DurableOperationalTelemetry> => {
+    durableLoad ??= options.telemetry.load().finally(() => {
+      durableLoad = undefined;
+    });
+    return durableLoad;
+  };
+  const loadDurableWithinDeadline = (): Promise<DurableOperationalTelemetry> =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Operational telemetry deadline reached.')),
+        telemetryTimeoutMs,
+      );
+      timer.unref();
+      void loadDurable().then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error: unknown) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      );
+    });
+  const app = Fastify({
+    logController: new LogController({ disableRequestLogging: true }),
+    logger: querySafeLogger(options.logger),
+  });
   app.addHook('onSend', async (request, reply, payload) => {
-    if (request.url.startsWith('/api/') || request.url.startsWith('/auth/')) {
+    if (
+      request.url.startsWith('/api/') ||
+      request.url.startsWith('/auth/') ||
+      request.url.startsWith('/ops/')
+    ) {
       reply.header('cache-control', 'private, no-store');
     }
     return payload;
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    const route = request.routeOptions.url ?? 'unmatched';
+    if (route.startsWith('/health/') || route.startsWith('/ops/')) return;
+    telemetry.observe(reply.statusCode, reply.elapsedTime);
+    request.log.info({
+      event: 'http_request_completed',
+      route,
+      method: normalizeMethod(request.method),
+      statusCode: reply.statusCode,
+      durationMs: Math.max(0, Math.round(reply.elapsedTime)),
+    }, 'Hosted request completed');
   });
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
@@ -107,6 +176,47 @@ export function createHostedApi(options: HostedApiOptions): FastifyInstance {
       // Readiness failures are reported without leaking dependency details.
     }
     return reply.code(503).send({ status: 'not_ready' });
+  });
+  app.get('/ops/telemetry', async (request, reply) => {
+    const startedAt = Date.now();
+    try {
+      const durable = await loadDurableWithinDeadline();
+      if (postgresOperationalState === 'down') {
+        request.log.info({
+          event: 'dependency_recovered',
+          dependency: 'postgres',
+        }, 'Operational dependency recovered');
+      }
+      postgresOperationalState = 'up';
+      return {
+        schemaVersion: 1,
+        service: 'api',
+        generatedAt: new Date().toISOString(),
+        dependencies: {
+          postgres: { status: 'up', latencyMs: Date.now() - startedAt },
+        },
+        process: telemetry.snapshot(),
+        durable,
+      };
+    } catch {
+      if (postgresOperationalState !== 'down') {
+        request.log.warn({
+          event: 'dependency_check_failed',
+          dependency: 'postgres',
+        }, 'Operational dependency check failed');
+      }
+      postgresOperationalState = 'down';
+      return reply.code(503).send({
+        schemaVersion: 1,
+        service: 'api',
+        generatedAt: new Date().toISOString(),
+        dependencies: {
+          postgres: { status: 'down', latencyMs: Date.now() - startedAt },
+        },
+        process: telemetry.snapshot(),
+        durable: null,
+      });
+    }
   });
   registerGitHubWebhookRoutes(app, options.webhook);
   registerGitHubAuthRoutes(app, options.githubAuth);

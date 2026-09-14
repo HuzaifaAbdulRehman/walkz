@@ -6,6 +6,9 @@ export {
 
 export type { DatabasePoolConfig } from './pool.js';
 
+export { loadDurableOperationalTelemetry } from './operational-telemetry.js';
+export type { DurableOperationalTelemetry } from './operational-telemetry.js';
+
 export { insertWebhookDelivery, recordWebhookDelivery } from './webhook-delivery.js';
 
 export type { WebhookDeliveryInput } from './webhook-delivery.js';

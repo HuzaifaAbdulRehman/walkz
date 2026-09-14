@@ -63,6 +63,16 @@ describe('hosted API composition', () => {
         intake: { accept: vi.fn() },
       },
       readiness: { check: vi.fn().mockResolvedValue(true) },
+      telemetry: {
+        load: vi.fn().mockResolvedValue({
+          windowHours: 24,
+          reviewRuns: {
+            byStatus: { completed: 2 },
+            byVerdict: { SHIP: 2 },
+          },
+          outbox: { pending: 0, oldestPendingAgeMs: null },
+        }),
+      },
       logger: {
         stream: {
           write(message: string) {
@@ -72,6 +82,9 @@ describe('hosted API composition', () => {
       },
     });
     apps.push(app);
+    app.get('/test-error', async () => {
+      throw new Error('sensitive request detail');
+    });
 
     const [
       webhook,
@@ -86,6 +99,8 @@ describe('hosted API composition', () => {
       patchDecision,
       patchSuggestion,
       callback,
+      operational,
+      failedRequest,
     ] = await Promise.all([
       app.inject({ method: 'POST', url: '/webhooks/github', payload: {} }),
       app.inject({ method: 'POST', url: '/auth/logout' }),
@@ -120,6 +135,8 @@ describe('hosted API composition', () => {
         method: 'GET',
         url: '/auth/github/callback?code=sensitive-code&state=sensitive-state',
       }),
+      app.inject({ method: 'GET', url: '/ops/telemetry' }),
+      app.inject({ method: 'GET', url: '/test-error' }),
     ]);
 
     expect(webhook.statusCode).toBe(401);
@@ -134,15 +151,32 @@ describe('hosted API composition', () => {
     expect(patchDecision.statusCode).toBe(401);
     expect(patchSuggestion.statusCode).toBe(401);
     expect(callback.statusCode).toBe(400);
+    expect(operational.statusCode).toBe(200);
+    expect(operational.headers['cache-control']).toBe('private, no-store');
+    expect(operational.json()).toMatchObject({
+      schemaVersion: 1,
+      service: 'api',
+      dependencies: { postgres: { status: 'up' } },
+      durable: {
+        reviewRuns: { byVerdict: { SHIP: 2 } },
+        outbox: { pending: 0 },
+      },
+    });
+    expect(failedRequest.statusCode).toBe(500);
     expect(configs.headers['cache-control']).toBe('private, no-store');
     const logs = logLines.join('');
     expect(logs).toContain('/auth/github/callback');
+    expect(logs).toContain('http_request_completed');
+    expect(logs).toContain('/test-error');
+    expect(logs).not.toContain('/ops/telemetry');
     expect(logs).not.toContain('sensitive-code');
     expect(logs).not.toContain('sensitive-state');
+    expect(logs).not.toContain('sensitive request detail');
   });
 
   it('keeps liveness independent from database readiness', async () => {
     const authenticator = { authenticate: vi.fn().mockResolvedValue(null) };
+    const telemetryLoad = vi.fn().mockReturnValue(new Promise(() => undefined));
     const app = createHostedApi({
       githubAuth: {
         stateSigner: createOAuthStateSigner('a'.repeat(32)),
@@ -185,15 +219,33 @@ describe('hosted API composition', () => {
         intake: { accept: vi.fn() },
       },
       readiness: { check: vi.fn().mockRejectedValue(new Error('database secret')) },
+      telemetry: {
+        load: telemetryLoad,
+        timeoutMs: 20,
+      },
     });
     apps.push(app);
 
     const live = await app.inject({ method: 'GET', url: '/health/live' });
     const ready = await app.inject({ method: 'GET', url: '/health/ready' });
+    const [operational, repeatedOperational] = await Promise.all([
+      app.inject({ method: 'GET', url: '/ops/telemetry' }),
+      app.inject({ method: 'GET', url: '/ops/telemetry' }),
+    ]);
 
     expect(live.statusCode).toBe(200);
     expect(ready.statusCode).toBe(503);
     expect(ready.json()).toEqual({ status: 'not_ready' });
     expect(ready.body).not.toContain('database secret');
+    expect(operational.statusCode).toBe(503);
+    expect(repeatedOperational.statusCode).toBe(503);
+    expect(telemetryLoad).toHaveBeenCalledOnce();
+    expect(operational.json()).toMatchObject({
+      service: 'api',
+      dependencies: { postgres: { status: 'down' } },
+      process: { requests: { total: 0 } },
+      durable: null,
+    });
+    expect(operational.body).not.toContain('Operational telemetry deadline');
   });
 });

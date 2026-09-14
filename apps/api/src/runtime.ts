@@ -18,6 +18,7 @@ import {
   listReviewFindings,
   listRepositoryConfigVersions,
   listReviewHistory,
+  loadDurableOperationalTelemetry,
   loadProviderCredential,
   loadVerifiedPatchFixSource,
   preparePatchSuggestionPublication,
@@ -240,6 +241,9 @@ export function createHostedApiFromEnvironment(input: NodeJS.ProcessEnv) {
         const result = await pool.query('SELECT 1 AS ready');
         return result.rows[0]?.ready === 1;
       },
+    },
+    telemetry: {
+      load: () => loadDurableOperationalTelemetry(pool),
     },
     logger: true,
   });
