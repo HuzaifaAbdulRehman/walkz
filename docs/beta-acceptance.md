@@ -50,9 +50,22 @@ Complete these actions in the isolated stack:
 
 1. Sign in with GitHub and connect the selected repository.
 2. Add the repository's Groq key.
-3. Run a review that produces a `FIX` verdict with `VERIFIED` evidence.
-4. Approve and publish the GitHub suggestion.
-5. Apply the suggestion and let Walkz re-prove the change.
+3. Install the known acceptance check from the repository root:
+
+   ```powershell
+   npm run production:acceptance -- --action prepare
+   ```
+
+4. Refresh the dashboard and confirm that the current configuration shows one
+   required trusted check.
+5. Review pull request 28 and confirm a `FIX` verdict with `VERIFIED` evidence.
+6. Approve and publish the GitHub suggestion.
+7. Apply the suggestion and let Walkz re-prove the change.
+
+The `prepare` action is only for this Walkz acceptance fixture. It refuses any
+other repository or a configuration that already contains commands. It writes
+one immutable configuration version with a shell-free Node check for
+`fixtures/live/discount.mjs`; normal repository defaults remain unchanged.
 
 ## Finish the drill
 

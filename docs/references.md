@@ -416,3 +416,19 @@ The worker endpoint uses Node's stable
 [`node:http` server](https://nodejs.org/download/release/latest-v24.x/docs/api/http.html)
 with explicit header, request, and keep-alive limits. No monitoring dependency
 is needed for the single-host beta.
+
+## Groq challenger selection
+
+We checked Groq's [supported-model list](https://console.groq.com/docs/models),
+[structured-output guide](https://console.groq.com/docs/structured-outputs), and
+the model pages for [GPT-OSS 20B](https://console.groq.com/docs/model/openai/gpt-oss-20b)
+and [Qwen 3.8 27B](https://console.groq.com/docs/model/qwen/qwen3.8-27b) on 15
+September 2026. GPT-OSS 20B is a production model with a 131,072-token context
+window. Qwen 3.8 27B is a preview model with a 131,042-token window. Both support
+strict structured output.
+
+Walkz now chooses the strongest active strict-output model that differs from the
+reviewer, using advertised context and completion limits as deterministic tie
+breakers. That keeps the challenger distinct without preferring a preview model.
+Access, quota, or provider failures still return `INCONCLUSIVE`; Walkz does not
+silently switch to a paid provider.

@@ -22,6 +22,18 @@ const serviceEnvironmentNames = {
 };
 const projectPattern = /^walkz-beta-[a-f0-9]{12}$/;
 const stateSchemaVersion = 2;
+const acceptanceRepository = 'HuzaifaAbdulRehman/walkz';
+const acceptanceCommand = Object.freeze({
+  id: 'acceptance-discount',
+  executable: 'node',
+  args: [
+    '--input-type=module',
+    '--eval',
+    "const { applyDiscount } = await import('./fixtures/live/discount.mjs'); const actual = applyDiscount(5, 10); if (actual !== 0) { console.error('fixtures/live/discount.mjs:2 expected applyDiscount(5, 10) to equal 0'); process.exit(1); }",
+  ],
+  cwd: '.',
+  required: true,
+});
 
 function resolveRepositoryPath(value, description) {
   const path = resolve(repositoryRoot, value);
@@ -78,8 +90,8 @@ export function parseBetaAcceptanceOptions(arguments_) {
     allowPositionals: false,
     strict: true,
   });
-  if (!['start', 'finish', 'cleanup'].includes(values.action)) {
-    throw new Error('--action must be start, finish, or cleanup.');
+  if (!['start', 'prepare', 'finish', 'cleanup'].includes(values.action)) {
+    throw new Error('--action must be start, prepare, finish, or cleanup.');
   }
   if (values.action === 'start' && values['baseline-manifest'] === undefined) {
     throw new Error('--baseline-manifest is required when starting acceptance.');
@@ -359,6 +371,174 @@ function psqlJson(adapter, environment, sql, label) {
   } catch {
     throw new Error(`${label} returned invalid JSON.`);
   }
+}
+
+export function createAcceptanceFixtureConfig(value) {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    value.schemaVersion !== 1 ||
+    !Array.isArray(value.commands) ||
+    value.premiumEnabled !== false ||
+    value.spendingLimitUsd !== 0
+  ) {
+    throw new Error('The selected repository configuration is invalid.');
+  }
+  const candidate = value.commands[0];
+  const exactCommand = value.commands.length === 1 &&
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    !Array.isArray(candidate) &&
+    Object.keys(candidate).length === Object.keys(acceptanceCommand).length &&
+    candidate.id === acceptanceCommand.id &&
+    candidate.executable === acceptanceCommand.executable &&
+    candidate.cwd === acceptanceCommand.cwd &&
+    candidate.required === acceptanceCommand.required &&
+    Array.isArray(candidate.args) &&
+    candidate.args.length === acceptanceCommand.args.length &&
+    candidate.args.every((argument, index) => argument === acceptanceCommand.args[index]);
+  if (value.commands.length > 0 && !exactCommand) {
+    throw new Error('Beta acceptance preparation requires an empty command set.');
+  }
+  const config = {
+    ...value,
+    commands: [{ ...acceptanceCommand, args: [...acceptanceCommand.args] }],
+    commandApprovalPolicy: 'trusted_config',
+  };
+  return {
+    config,
+    configHash: digest(JSON.stringify(config)),
+    alreadyPrepared: exactCommand && value.commandApprovalPolicy === 'trusted_config',
+  };
+}
+
+function loadAcceptanceRepository(adapter, environment) {
+  const result = psqlJson(adapter, environment, `
+WITH selected AS (
+  SELECT r.id, r.owner_login, r.repository_name, rc.config_hash, rc.config
+  FROM repositories r
+  JOIN LATERAL (
+    SELECT config_hash, config
+    FROM repository_configs
+    WHERE repository_id = r.id
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  ) rc ON true
+)
+SELECT jsonb_build_object(
+  'count', (SELECT count(*) FROM selected),
+  'repository', (
+    SELECT jsonb_build_object(
+      'repositoryId', id,
+      'owner', owner_login,
+      'name', repository_name,
+      'configHash', config_hash,
+      'config', config
+    )
+    FROM selected
+    ORDER BY id
+    LIMIT 1
+  )
+)::text;
+`, 'Inspect beta repository configuration');
+  if (result.count !== 1 || result.repository === null) {
+    throw new Error('Beta acceptance requires exactly one selected repository.');
+  }
+  return result.repository;
+}
+
+function validateAcceptanceRepository(value) {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof value.repositoryId !== 'string' ||
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value.repositoryId) ||
+    typeof value.owner !== 'string' ||
+    typeof value.name !== 'string' ||
+    typeof value.configHash !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(value.configHash)
+  ) {
+    throw new Error('The selected beta repository record is invalid.');
+  }
+  if (`${value.owner}/${value.name}` !== acceptanceRepository) {
+    throw new Error(`Beta acceptance requires the selected Walkz repository (${acceptanceRepository}).`);
+  }
+  return value;
+}
+
+function saveAcceptanceConfig(adapter, environment, repository, prepared) {
+  const configHex = Buffer.from(JSON.stringify(prepared.config), 'utf8').toString('hex');
+  psqlJson(adapter, environment, `
+WITH inserted AS (
+  INSERT INTO repository_configs
+    (repository_id, schema_version, config_hash, config)
+  VALUES (
+    '${repository.repositoryId}'::uuid,
+    1,
+    '${prepared.configHash}',
+    convert_from(decode('${configHex}', 'hex'), 'UTF8')::jsonb
+  )
+  ON CONFLICT (repository_id, config_hash) DO NOTHING
+  RETURNING id
+)
+SELECT jsonb_build_object(
+  'created', EXISTS (SELECT 1 FROM inserted)
+)::text;
+`, 'Install beta fixture configuration');
+  const result = psqlJson(adapter, environment, `
+SELECT jsonb_build_object('configHash', config_hash)::text
+FROM repository_configs
+WHERE repository_id = '${repository.repositoryId}'::uuid
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+`, 'Confirm beta fixture configuration');
+  if (result.configHash !== prepared.configHash) {
+    throw new Error('The beta fixture configuration was not selected as current.');
+  }
+  return result;
+}
+
+export async function prepareBetaAcceptance(options, dependencies = {}) {
+  const state = parseBetaState(
+    dependencies.state ?? await loadJson(options.statePath, 'The acceptance state'),
+  );
+  const composeSource = await readFile(state.composeFile, 'utf8');
+  if (digest(composeSource) !== state.composeSha256) {
+    throw new Error('The clean beta Compose bundle changed after startup.');
+  }
+  const environment = createBetaEnvironment(
+    state.candidate,
+    state,
+    dependencies.environment,
+  );
+  const adapter = dependencies.adapter ?? createAdapter(state);
+  assertRunningRelease(adapter, state.candidate, environment);
+  const repository = validateAcceptanceRepository(await (
+    dependencies.loadRepository?.(adapter, environment) ??
+    loadAcceptanceRepository(adapter, environment)
+  ));
+  const prepared = createAcceptanceFixtureConfig(repository.config);
+  if (prepared.alreadyPrepared) {
+    return {
+      repository: acceptanceRepository,
+      commandId: acceptanceCommand.id,
+      configHash: repository.configHash,
+    };
+  }
+  const saved = await (
+    dependencies.saveConfig?.(repository, prepared, adapter, environment) ??
+    saveAcceptanceConfig(adapter, environment, repository, prepared)
+  );
+  if (saved.configHash !== prepared.configHash) {
+    throw new Error('The beta fixture configuration hash was not confirmed.');
+  }
+  return {
+    repository: acceptanceRepository,
+    commandId: acceptanceCommand.id,
+    configHash: prepared.configHash,
+  };
 }
 
 function acceptanceObservation(adapter, environment, startedAt) {
@@ -777,6 +957,13 @@ async function main() {
       process.stdout.write(
         `Beta acceptance passed and rolled back to ${report.finalRevision.slice(0, 12)}. ` +
         'All disposable resources were removed.\n',
+      );
+      return;
+    }
+    if (options.action === 'prepare') {
+      const prepared = await prepareBetaAcceptance(options);
+      process.stdout.write(
+        `Prepared ${prepared.repository} with the ${prepared.commandId} trusted fixture check.\n`,
       );
       return;
     }

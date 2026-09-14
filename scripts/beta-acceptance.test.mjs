@@ -5,11 +5,13 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createAcceptanceFixtureConfig,
   createBetaEnvironment,
   createBetaIdentity,
   finishBetaAcceptance,
   parseBetaAcceptanceOptions,
   parseBetaState,
+  prepareBetaAcceptance,
   startBetaAcceptance,
   validateBetaReleasePair,
   validateManualJourney,
@@ -89,6 +91,30 @@ function completeObservation() {
   };
 }
 
+function defaultRepositoryConfig() {
+  return {
+    schemaVersion: 1,
+    baseBranch: null,
+    paths: {
+      include: ['**/*'],
+      exclude: ['.git/**', 'coverage/**', 'dist/**', 'node_modules/**'],
+    },
+    commands: [],
+    commandTimeoutMs: 120_000,
+    commandOutputBytesPerStream: 262_144,
+    diffBudgetBytes: 524_288,
+    fileBudget: 100,
+    tokenBudget: 16_000,
+    provider: { name: 'groq', model: 'auto' },
+    triggerPolicy: 'manual',
+    blockingEvidenceLevels: ['VERIFIED'],
+    policyPacks: ['security-core@1', 'supply-chain@1', 'delivery-safety@1'],
+    commandApprovalPolicy: 'prompt',
+    premiumEnabled: false,
+    spendingLimitUsd: 0,
+  };
+}
+
 async function betaDirectory() {
   const parent = await mkdtemp(resolve(tmpdir(), 'walkz-beta-test-'));
   temporaryDirectories.push(parent);
@@ -115,6 +141,44 @@ describe('clean-host beta acceptance contract', () => {
     expect(() => parseBetaAcceptanceOptions([
       '--action', 'cleanup', '--state', '../outside.json',
     ])).toThrow(/inside the repository/);
+    expect(parseBetaAcceptanceOptions([
+      '--action', 'prepare',
+    ])).toMatchObject({ action: 'prepare' });
+  });
+
+  it('creates one immutable acceptance-only fixture command', () => {
+    const prepared = createAcceptanceFixtureConfig(defaultRepositoryConfig());
+    expect(prepared.config).toMatchObject({
+      commandApprovalPolicy: 'trusted_config',
+      commands: [{
+        id: 'acceptance-discount',
+        executable: 'node',
+        cwd: '.',
+        required: true,
+      }],
+      premiumEnabled: false,
+      spendingLimitUsd: 0,
+    });
+    expect(prepared.config.commands[0].args.join(' ')).toContain(
+      'fixtures/live/discount.mjs:2',
+    );
+    expect(prepared.configHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(prepared.alreadyPrepared).toBe(false);
+    expect(createAcceptanceFixtureConfig({
+      commandApprovalPolicy: prepared.config.commandApprovalPolicy,
+      ...prepared.config,
+      commands: [{
+        required: true,
+        cwd: '.',
+        args: [...prepared.config.commands[0].args],
+        executable: 'node',
+        id: 'acceptance-discount',
+      }],
+    })).toMatchObject({ alreadyPrepared: true });
+    expect(() => createAcceptanceFixtureConfig({
+      ...defaultRepositoryConfig(),
+      commands: [{ id: 'existing' }],
+    })).toThrow(/empty command set/);
   });
 
   it('binds unique resources, public URLs, and immutable images', () => {
@@ -304,6 +368,127 @@ describe('clean-host beta acceptance contract', () => {
     });
     expect(JSON.parse(await readFile(statePath, 'utf8'))).toMatchObject({ project });
     expect(composeCalls.some((call) => call[0] === 'down')).toBe(false);
+  });
+
+  it('prepares only the selected Walkz repository', async () => {
+    const directory = await betaDirectory();
+    const project = directory.split(/[\\/]/).at(-1);
+    const betaState = {
+      ...state(directory),
+      project,
+      postgresVolume: `${project}-postgres`,
+      proofVolume: `${project}-proof`,
+    };
+    const compose = 'name: clean-beta\nservices: {}\n';
+    const { createHash } = await import('node:crypto');
+    betaState.composeSha256 = createHash('sha256').update(compose).digest('hex');
+    await writeFile(resolve(directory, 'compose.production.yml'), compose, 'utf8');
+    let saved;
+    const adapter = {
+      docker() {
+        return candidateRevision;
+      },
+      compose(arguments_) {
+        if (arguments_[0] === 'ps') return `${arguments_.at(-1)}-container\n`;
+        if (arguments_.includes('psql')) {
+          expect(arguments_.at(-1)).toContain('SELECT config_hash, config');
+          return JSON.stringify({
+            count: 1,
+            repository: {
+              repositoryId: '11111111-1111-4111-8111-111111111111',
+              owner: 'HuzaifaAbdulRehman',
+              name: 'walkz',
+              configHash: 'a'.repeat(64),
+              config: defaultRepositoryConfig(),
+            },
+          });
+        }
+        return '';
+      },
+    };
+    const result = await prepareBetaAcceptance(options({ action: 'prepare' }), {
+      adapter,
+      environment: {},
+      state: betaState,
+      saveConfig: async (repository, prepared) => {
+        saved = { repository, prepared };
+        return { configHash: prepared.configHash };
+      },
+    });
+    expect(saved.prepared.config.commands).toHaveLength(1);
+    expect(result).toMatchObject({
+      repository: 'HuzaifaAbdulRehman/walkz',
+      commandId: 'acceptance-discount',
+      configHash: saved.prepared.configHash,
+    });
+
+    await expect(prepareBetaAcceptance(options({ action: 'prepare' }), {
+      adapter,
+      environment: {},
+      state: betaState,
+      loadRepository: async () => ({
+        repositoryId: '11111111-1111-4111-8111-111111111111',
+        owner: 'someone-else',
+        name: 'walkz',
+        configHash: 'a'.repeat(64),
+        config: defaultRepositoryConfig(),
+      }),
+      saveConfig: async () => {
+        throw new Error('not reached');
+      },
+    })).rejects.toThrow(/selected Walkz repository/);
+  });
+
+  it('does not insert an already-current fixture configuration again', async () => {
+    const directory = await betaDirectory();
+    const project = directory.split(/[\\/]/).at(-1);
+    const betaState = {
+      ...state(directory),
+      project,
+      postgresVolume: `${project}-postgres`,
+      proofVolume: `${project}-proof`,
+    };
+    const compose = 'name: clean-beta\nservices: {}\n';
+    const { createHash } = await import('node:crypto');
+    betaState.composeSha256 = createHash('sha256').update(compose).digest('hex');
+    await writeFile(resolve(directory, 'compose.production.yml'), compose, 'utf8');
+    const prepared = createAcceptanceFixtureConfig(defaultRepositoryConfig());
+    const storedHash = 'c'.repeat(64);
+    const adapter = {
+      docker() {
+        return candidateRevision;
+      },
+      compose(arguments_) {
+        if (arguments_[0] === 'ps') return `${arguments_.at(-1)}-container\n`;
+        return '';
+      },
+    };
+    const result = await prepareBetaAcceptance(options({ action: 'prepare' }), {
+      adapter,
+      environment: {},
+      state: betaState,
+      loadRepository: async () => ({
+        repositoryId: '11111111-1111-4111-8111-111111111111',
+        owner: 'HuzaifaAbdulRehman',
+        name: 'walkz',
+        configHash: storedHash,
+        config: {
+          commandApprovalPolicy: 'trusted_config',
+          ...prepared.config,
+          commands: [{
+            required: true,
+            cwd: '.',
+            args: [...prepared.config.commands[0].args],
+            executable: 'node',
+            id: 'acceptance-discount',
+          }],
+        },
+      }),
+      saveConfig: async () => {
+        throw new Error('an idempotent prepare must not insert');
+      },
+    });
+    expect(result.configHash).toBe(storedHash);
   });
 
   it('restarts, rolls back, records metadata, and cleans', async () => {
