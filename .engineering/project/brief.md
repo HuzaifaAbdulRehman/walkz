@@ -39,19 +39,18 @@ and <https://arxiv.org/abs/2607.03316>.
 
 Node, Git, Groq, GitHub, PostgreSQL, Redis, and Docker documentation support the main
 boundaries. The full claim, source, and run records are in `evidence.json`. The current
-checkpoint also records a clean-revision image build and a disposable production Compose
-run against the exact release image IDs.
+checkpoint also records a clean-revision image build, bounded operational telemetry,
+and a disposable dependency-failure drill against the exact release images.
 
 ## Scope
 
 Milestone 7 packages the verified local and hosted paths for a single-host beta. Phase
-7.2 adds a standalone production Compose contract, immutable application images,
-persistent PostgreSQL data, internal service networks, health checks, and a fail-fast
-configuration verifier.
+7.3 adds bounded API and worker telemetry, fixed queue and outcome dimensions, durable
+24-hour aggregates, structured operational logs, and dependency health transitions.
 
 ## Non-goals
 
-Phase 7.2 does not select a hosting vendor, publish images to a registry, expose the
+Phase 7.3 does not select a hosting vendor, publish images to a registry, expose the
 stack to the internet, or add a separate proof-executor host. It also does not prove
 backup, restore, upgrade, rollback, or clean-host installation. Those checks remain in
 later Milestone 7 phases. Real-user usefulness remains a separate outcome gate.
@@ -78,10 +77,11 @@ shell-free command resolution and descendant cleanup on Windows and Linux.
 
 ## Success and stop conditions
 
-Phase 7.2 succeeds when a standalone production model accepts only immutable images,
-publishes only the web edge, starts healthy from a clean release, applies migrations,
-preserves named data, and cleans up its disposable acceptance state. Milestone 7 is not
-complete until telemetry, recovery, rollback, and the clean-host beta journey pass.
+Phase 7.3 succeeds when operators can inspect bounded health, queue, worker, outbox,
+latency, and failure signals without private review content. Dependency probes must
+degrade promptly, avoid duplicate work, and record one failure and recovery transition.
+Milestone 7 is not complete until backup, restore, upgrade, rollback, queued-work
+recovery, and the clean-host beta journey pass.
 
 Revisit the deployment design if a service can build from source at startup, an internal
 port reaches the host, a secret appears in verification output, or a release mixes image
@@ -90,10 +90,10 @@ decision usefulness over CodeRabbit or checks plus an assistant.
 
 ## First slice
 
-The completed slice is the production Compose contract. It uses the exact API image for
-migrations, gives only the web service a loopback host port, keeps data services on an
-internal network, requires explicit secrets and image IDs, and runs application services
-as non-root with read-only filesystems.
+The completed slice is operational telemetry. It exposes internal-only API and worker
+snapshots, fixed-cardinality process counters, durable review and outbox aggregates,
+queue delay and failure signals, and bounded dependency checks without source, prompts,
+credentials, IDs, or raw errors.
 
 ## Delivery path
 
@@ -108,7 +108,8 @@ when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is Phase 7.3 operational telemetry. Huzaifa owns every gate.
+The next gate is Phase 7.4 backup, restore, upgrade, rollback, and restart recovery.
+Huzaifa owns every gate.
 
 - Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
   Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
@@ -138,8 +139,11 @@ The next gate is Phase 7.3 operational telemetry. Huzaifa owns every gate.
   disposable deployment from clean revision `6586547`. The web edge returned HTTP 200,
   20 migrations were present, the three application image IDs matched the release
   manifest, and cleanup left no acceptance containers or volumes.
-- Planned, during: add bounded health, queue, worker, outbox, latency, and failure
-  telemetry without source code, credentials, or unbounded labels.
+- Passed, during: API and worker telemetry passed 808 full-suite tests, an exact-release
+  Compose run, bounded Redis failure and recovery checks, secret and dependency scans,
+  and cleanup with no acceptance containers or volumes left.
+- Planned, during: rehearse backup, restore, upgrade, rollback, restart, and queued-work
+  recovery against disposable state.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
   with CodeRabbit or a composed baseline on precision, recall, latency, and decision
   usefulness.

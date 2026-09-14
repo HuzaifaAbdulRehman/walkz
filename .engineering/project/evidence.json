@@ -5,7 +5,7 @@
   "recommendationReason": "Walkz has reached Milestone 7 with its evidence-first review, proof, hosted, and approved-fix paths intact. Continue toward a reproducible single-host beta while keeping real-user outcome validation as a separate gate.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-14T11:53:23Z",
+  "refreshedAt": "2026-09-14T13:32:05Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
@@ -196,6 +196,18 @@
         "run-m7-compose-render",
         "run-m7-compose-release",
         "run-m7-compose-live"
+      ]
+    },
+    {
+      "id": "claim-operational-telemetry-boundary",
+      "text": "Walkz exposes bounded API, worker, queue, outbox, latency, and failure telemetry without repository identifiers, source, prompts, responses, credentials, job IDs, or raw errors.",
+      "status": "verified",
+      "sourceIds": [],
+      "runIds": [
+        "run-m7-telemetry-focused",
+        "run-m7-telemetry-full-tests",
+        "run-m7-telemetry-release",
+        "run-m7-telemetry-live"
       ]
     }
   ],
@@ -1025,6 +1037,55 @@
       "exitCode": 0,
       "summary": "The disposable stack became healthy, served HTTP 200, applied 20 migrations, used the exact release image IDs, exposed only port 3000 on loopback, and left no acceptance containers or volumes after cleanup.",
       "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-telemetry-focused",
+      "command": "npm test -- <Phase 7.3 focused files> --maxWorkers=1",
+      "exitCode": 0,
+      "summary": "Eight focused files passed 28 API, worker, persistence, migration, and production Compose tests. A later worker-only rerun passed 10 tests after the bounded dependency-check correction.",
+      "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-telemetry-typecheck",
+      "command": "npm run typecheck; LSP diagnostics and build",
+      "exitCode": 0,
+      "summary": "The workspace build and test-file typecheck passed. LSP diagnostics reported no errors in the changed source files, and its TypeScript build was clean.",
+      "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-telemetry-full-tests",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 0,
+      "summary": "The full single-worker suite passed 808 tests in 150 files, with 22 tests and 14 files skipped by their existing conditions. It passed again after the dependency deadline correction.",
+      "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-telemetry-scans",
+      "command": "gitleaks git --pre-commit --staged --no-banner --redact; osv-scanner scan source --lockfile package-lock.json",
+      "exitCode": 0,
+      "summary": "Gitleaks found no secrets in each staged commit, and OSV-Scanner found no known issues in 338 locked packages. Semgrep was unavailable on this laptop.",
+      "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-telemetry-render",
+      "command": "npm run production:verify -- --env-file infra/.env",
+      "exitCode": 0,
+      "summary": "The production verifier accepted internal worker telemetry, readiness health checks, immutable images, web-only publishing, and persistent PostgreSQL.",
+      "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-telemetry-release",
+      "command": "npm run release:verify",
+      "exitCode": 0,
+      "summary": "The release build produced API, web, and worker images bound to clean revision 8a15d0b8937f, with zero npm audit findings. One unchanged retry was needed after a transient Alpine mirror DNS failure.",
+      "ranAt": "2026-09-14T13:32:05Z"
+    },
+    {
+      "id": "run-m7-telemetry-live",
+      "command": "Run the disposable production stack, inspect internal telemetry, stop and restart its Redis service, then remove the stack and volumes.",
+      "exitCode": 0,
+      "summary": "Exact-release API and worker telemetry returned HTTP 200 with fixed dimensions. Redis loss produced bounded HTTP 503 while PostgreSQL stayed up, and recovery returned 200 with exactly one failure and one recovery log. Cleanup left no matching containers or volumes.",
+      "ranAt": "2026-09-14T13:32:05Z"
     }
   ],
   "gates": [
@@ -1209,11 +1270,21 @@
       "stage": "during",
       "trigger": "Phase 7.3 adds bounded operational telemetry without private review content.",
       "requiredEvidence": "Health, queue, worker, outbox, latency, and failure signals are useful for operation, bounded in cardinality, free of source code and credentials, and covered by focused and full tests.",
-      "status": "planned",
+      "status": "passed",
       "owner": "Huzaifa Abdul Rehman",
       "targetDate": null,
-      "claimIds": [],
-      "runIds": []
+      "claimIds": [
+        "claim-operational-telemetry-boundary"
+      ],
+      "runIds": [
+        "run-m7-telemetry-focused",
+        "run-m7-telemetry-typecheck",
+        "run-m7-telemetry-full-tests",
+        "run-m7-telemetry-scans",
+        "run-m7-telemetry-render",
+        "run-m7-telemetry-release",
+        "run-m7-telemetry-live"
+      ]
     },
     {
       "id": "gate-product-outcome",
