@@ -1,0 +1,179 @@
+name: walkz-production
+
+services:
+  postgres:
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment:
+      POSTGRES_DB: walkz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}
+      POSTGRES_USER: walkz
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walkz -d walkz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - data
+    restart: unless-stopped
+    stop_grace_period: 60s
+    volumes:
+      - walkz-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    networks:
+      - data
+    restart: unless-stopped
+
+  migrate:
+    image: ${WALKZ_API_IMAGE:?Set WALKZ_API_IMAGE to an immutable image ID or registry digest}
+    command: ["npm", "--prefix", "/workspace", "run", "migrate:up"]
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}@postgres:5432/walkz
+    depends_on:
+      postgres:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      - data
+    read_only: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    user: "1000:1000"
+
+  api:
+    image: ${WALKZ_API_IMAGE:?Set WALKZ_API_IMAGE to an immutable image ID or registry digest}
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}@postgres:5432/walkz
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?Set GITHUB_APP_ID in the production env file}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?Set GITHUB_CLIENT_ID in the production env file}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?Set GITHUB_CLIENT_SECRET in the production env file}
+      GITHUB_OAUTH_CALLBACK_URL: ${GITHUB_OAUTH_CALLBACK_URL:?Set GITHUB_OAUTH_CALLBACK_URL in the production env file}
+      GITHUB_PRIVATE_KEY_BASE64: ${GITHUB_PRIVATE_KEY_BASE64:?Set GITHUB_PRIVATE_KEY_BASE64 in the production env file}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?Set GITHUB_WEBHOOK_SECRET in the production env file}
+      PORT: "3001"
+      WALKZ_CREDENTIAL_ACTIVE_KEY_ID: ${WALKZ_CREDENTIAL_ACTIVE_KEY_ID:?Set WALKZ_CREDENTIAL_ACTIVE_KEY_ID in the production env file}
+      WALKZ_CREDENTIAL_KEYS_JSON: ${WALKZ_CREDENTIAL_KEYS_JSON:?Set WALKZ_CREDENTIAL_KEYS_JSON in the production env file}
+      WALKZ_HOST: 0.0.0.0
+      WALKZ_OAUTH_STATE_SECRET: ${WALKZ_OAUTH_STATE_SECRET:?Set WALKZ_OAUTH_STATE_SECRET in the production env file}
+      WALKZ_PROMPT_VERSION: ${WALKZ_PROMPT_VERSION:-walkz-review-v1}
+      WALKZ_PROOF_IMAGE: ${WALKZ_PROOF_IMAGE:-node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    cap_drop:
+      - ALL
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    init: true
+    networks:
+      - data
+      - edge
+      - egress
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    user: "1000:1000"
+
+  worker:
+    image: ${WALKZ_WORKER_IMAGE:?Set WALKZ_WORKER_IMAGE to an immutable image ID or registry digest}
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}@postgres:5432/walkz
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?Set GITHUB_APP_ID in the production env file}
+      GITHUB_PRIVATE_KEY_BASE64: ${GITHUB_PRIVATE_KEY_BASE64:?Set GITHUB_PRIVATE_KEY_BASE64 in the production env file}
+      REDIS_URL: redis://redis:6379/0
+      WALKZ_CREDENTIAL_ACTIVE_KEY_ID: ${WALKZ_CREDENTIAL_ACTIVE_KEY_ID:?Set WALKZ_CREDENTIAL_ACTIVE_KEY_ID in the production env file}
+      WALKZ_CREDENTIAL_KEYS_JSON: ${WALKZ_CREDENTIAL_KEYS_JSON:?Set WALKZ_CREDENTIAL_KEYS_JSON in the production env file}
+      WALKZ_DOCKER_WORKSPACE_VOLUME: ${WALKZ_PROOF_VOLUME:-walkz-proof-workspaces}
+      WALKZ_PROOF_IMAGE: ${WALKZ_PROOF_IMAGE:-node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf}
+      WALKZ_PROOF_WORKSPACE_ROOT: /var/lib/walkz/proof
+      WALKZ_PUBLIC_URL: ${WALKZ_PUBLIC_URL:?Set WALKZ_PUBLIC_URL in the production env file}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    group_add:
+      - ${WALKZ_DOCKER_GID:?Set WALKZ_DOCKER_GID in the production env file}
+    init: true
+    networks:
+      - data
+      - egress
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    user: "1000:1000"
+    volumes:
+      - walkz-proof-workspaces:/var/lib/walkz/proof
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  web:
+    image: ${WALKZ_WEB_IMAGE:?Set WALKZ_WEB_IMAGE to an immutable image ID or registry digest}
+    environment:
+      WALKZ_API_URL: http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    init: true
+    networks:
+      - edge
+    ports:
+      - ${WALKZ_BIND_ADDRESS:-127.0.0.1}:${WALKZ_HTTP_PORT:-3000}:3000
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /workspace/apps/web/.next/cache:rw,noexec,nosuid,size=64m
+    user: "1000:1000"
+
+networks:
+  data:
+    internal: true
+  edge:
+  egress:
+
+volumes:
+  walkz-postgres-data:
+    name: ${WALKZ_POSTGRES_VOLUME:-walkz-postgres-data}
+  walkz-proof-workspaces:
+    name: ${WALKZ_PROOF_VOLUME:-walkz-proof-workspaces}

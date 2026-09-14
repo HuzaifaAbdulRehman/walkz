@@ -361,3 +361,19 @@ to the full Git revision but does not replace generated encryption material
 with a predictable value. The release manifest therefore records the exact
 artifact set that passed verification instead of claiming that separate builds
 are byte-for-byte identical.
+
+## Production Compose isolation
+
+Docker's official [production Compose guide](https://docs.docker.com/compose/how-tos/production/),
+[interpolation reference](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/),
+and [networking guide](https://docs.docker.com/compose/how-tos/networking/) were
+checked on 14 September 2026. Docker recommends a production-specific Compose
+file, supports required-value checks with `${VARIABLE:?message}`, and documents
+internal networks for services that should have no external route.
+
+Walkz uses a standalone production file so development `build:` settings cannot
+carry into a deployment. The file accepts only immutable local image IDs or
+registry digests, publishes the web service alone, and keeps PostgreSQL and
+Redis on an internal data network. API and worker services also join a separate
+egress network because GitHub and the selected model provider are external
+dependencies.

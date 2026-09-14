@@ -184,6 +184,9 @@ replacement as a GitHub suggestion.
 npm run verify
 ```
 
+The [single-host production contract](docs/production-compose.md) deploys the
+exact images recorded by `npm run release:verify` without rebuilding them.
+
 Score a bounded, metadata-only review snapshot by exact configuration, provider,
 model, and prompt version:
 

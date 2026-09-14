@@ -77,6 +77,7 @@ LABEL org.opencontainers.image.title="Walkz API" \
 WORKDIR /workspace/apps/api
 COPY --from=build /workspace/apps/api/package.json ./package.json
 COPY --from=build /workspace/apps/api/dist ./dist
+COPY --from=build /workspace/migrations /workspace/migrations
 EXPOSE 3001
 CMD ["node", "dist/bin.js"]
 
