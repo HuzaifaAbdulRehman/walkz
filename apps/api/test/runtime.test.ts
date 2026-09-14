@@ -1,3 +1,4 @@
+import { WALKZ_REVIEW_PROMPT_VERSION } from '@walkz/engine';
 import { describe, expect, it } from 'vitest';
 
 import { parseHostedApiEnvironment } from '../src/index.js';
@@ -36,6 +37,16 @@ describe('hosted API runtime configuration', () => {
     expect(parsed.credentialVault.keys.get('primary-2026')).toEqual(Buffer.alloc(32, 9));
     expect(parsed.port).toBe(3001);
     expect(parsed.host).toBe('0.0.0.0');
+    expect(parsed.promptVersion).toBe(WALKZ_REVIEW_PROMPT_VERSION);
+  });
+
+  it('does not accept an operator-selected prompt version', () => {
+    const parsed = parseHostedApiEnvironment({
+      ...environment(),
+      WALKZ_PROMPT_VERSION: 'removed-prompt-version',
+    });
+
+    expect(parsed.promptVersion).toBe(WALKZ_REVIEW_PROMPT_VERSION);
   });
 
   it('rejects short webhook and state secrets', () => {

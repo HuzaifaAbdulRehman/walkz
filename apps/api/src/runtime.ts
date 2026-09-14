@@ -1,4 +1,7 @@
 import {
+  WALKZ_REVIEW_PROMPT_VERSION,
+} from '@walkz/engine';
+import {
   createGitHubInstallationApp,
   createGitHubOAuthClient,
   createGitHubUserIdentityClient,
@@ -51,8 +54,6 @@ const environmentSchema = z.object({
   WALKZ_OAUTH_STATE_SECRET: z.string().min(32).max(1_024),
   WALKZ_CREDENTIAL_ACTIVE_KEY_ID: z.string().trim().min(1).max(128),
   WALKZ_CREDENTIAL_KEYS_JSON: z.string().min(1).max(100_000),
-  WALKZ_PROMPT_VERSION: z.string().trim().min(1).max(128)
-    .default('walkz-review-v1'),
   WALKZ_PROOF_IMAGE: z.string().trim().max(512)
     .regex(/^(?!-)[^\s@]+@sha256:[a-f0-9]{64}$/i)
     .default('node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf'),
@@ -111,7 +112,7 @@ export function parseHostedApiEnvironment(input: NodeJS.ProcessEnv): HostedApiEn
       activeKeyId: environment.WALKZ_CREDENTIAL_ACTIVE_KEY_ID,
       keys: parseCredentialKeys(environment.WALKZ_CREDENTIAL_KEYS_JSON),
     }),
-    promptVersion: environment.WALKZ_PROMPT_VERSION,
+    promptVersion: WALKZ_REVIEW_PROMPT_VERSION,
     proofImage: environment.WALKZ_PROOF_IMAGE,
     host: environment.WALKZ_HOST,
     port: environment.PORT,
