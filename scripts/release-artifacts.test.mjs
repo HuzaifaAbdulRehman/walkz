@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createImageDefinitions,
   createReleaseManifest,
+  parseReleaseManifest,
   selectForbiddenFirstPartyPaths,
   serializeReleaseManifest,
   verifyImageInspection,
@@ -114,6 +115,41 @@ describe('release artifact contract', () => {
     expect(serializeReleaseManifest(manifest)).toBe(serializeReleaseManifest(manifest));
     expect(manifest.images.map(({ service }) => service)).toEqual(['api', 'web', 'worker']);
     expect(manifest).not.toHaveProperty('createdAt');
+    expect(parseReleaseManifest(JSON.parse(serializeReleaseManifest(manifest))))
+      .toEqual(manifest);
+  });
+
+  it('rejects duplicate, missing, and mutable release identities', () => {
+    const validImage = {
+      service: 'api',
+      target: 'api',
+      reference: 'walkz-api:0.1.0-test',
+      digest: `sha256:${'b'.repeat(64)}`,
+      platform: 'linux/amd64',
+      user: '1000:1000',
+    };
+    const manifest = {
+      schemaVersion: 1,
+      version,
+      source: 'https://github.com/HuzaifaAbdulRehman/walkz',
+      sourceRevision: revision,
+      sourceDateEpoch: 1700000000,
+      sourceTree: 'clean',
+      images: [
+        validImage,
+        { ...validImage, service: 'web', target: 'web' },
+        { ...validImage, service: 'worker', target: 'worker' },
+      ],
+    };
+    expect(() => parseReleaseManifest({
+      ...manifest,
+      images: [...manifest.images, validImage],
+    })).toThrow(/one api image|unexpected image/);
+    expect(() => parseReleaseManifest({
+      ...manifest,
+      images: manifest.images.map((image) =>
+        image.service === 'worker' ? { ...image, digest: 'walkz-worker:latest' } : image),
+    })).toThrow(/worker release image/);
   });
 
   it('rejects a container that actually starts as root', () => {

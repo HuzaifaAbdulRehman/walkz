@@ -137,6 +137,65 @@ export function createReleaseManifest({
   };
 }
 
+export function parseReleaseManifest(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('The release manifest must be an object.');
+  }
+  const manifest = value;
+  validateReleaseIdentity(
+    manifest.version,
+    manifest.sourceRevision,
+    String(manifest.sourceDateEpoch),
+  );
+  if (
+    manifest.schemaVersion !== 1 ||
+    manifest.source !== SOURCE_URL ||
+    !['clean', 'dirty'].includes(manifest.sourceTree) ||
+    !Array.isArray(manifest.images)
+  ) {
+    throw new Error('The release manifest metadata is invalid.');
+  }
+
+  const images = releaseServices.map((definition) => {
+    const matches = manifest.images.filter((image) =>
+      image?.service === definition.service);
+    if (matches.length !== 1) {
+      throw new Error(`The release manifest must contain one ${definition.service} image.`);
+    }
+    const image = matches[0];
+    if (
+      image.target !== definition.target ||
+      typeof image.reference !== 'string' ||
+      !/^sha256:[0-9a-f]{64}$/.test(image.digest ?? '') ||
+      !/^[a-z0-9]+\/[a-z0-9]+$/.test(image.platform ?? '') ||
+      image.user !== REQUIRED_USER
+    ) {
+      throw new Error(`The ${definition.service} release image is invalid.`);
+    }
+    return {
+      service: image.service,
+      target: image.target,
+      reference: image.reference,
+      digest: image.digest,
+      platform: image.platform,
+      user: image.user,
+    };
+  });
+  if (manifest.images.length !== images.length) {
+    throw new Error('The release manifest contains an unexpected image.');
+  }
+
+  return {
+    schemaVersion: 1,
+    version: manifest.version,
+    source: SOURCE_URL,
+    sourceRevision: manifest.sourceRevision,
+    sourceDateEpoch: manifest.sourceDateEpoch,
+    sourceTree: manifest.sourceTree,
+    images,
+  };
+}
+
 export function serializeReleaseManifest(manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
