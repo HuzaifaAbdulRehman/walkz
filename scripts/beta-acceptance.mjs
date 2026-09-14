@@ -21,7 +21,7 @@ const serviceEnvironmentNames = {
   worker: 'WALKZ_WORKER_IMAGE',
 };
 const projectPattern = /^walkz-beta-[a-f0-9]{12}$/;
-const stateSchemaVersion = 1;
+const stateSchemaVersion = 2;
 
 function resolveRepositoryPath(value, description) {
   const path = resolve(repositoryRoot, value);
@@ -179,11 +179,11 @@ function runCommand(command, arguments_, options = {}) {
   }
 }
 
-function createAdapter(options, state, run = runCommand) {
+function createAdapter(state, run = runCommand) {
   const composeArguments = (arguments_) => [
     'compose',
     '--project-name', state.project,
-    '--env-file', options.envFile,
+    '--env-file', state.envFile,
     '--file', state.composeFile,
     ...arguments_,
   ];
@@ -303,6 +303,7 @@ export function parseBetaState(value) {
     state.schemaVersion !== stateSchemaVersion ||
     state.status !== 'awaiting_manual' ||
     !projectPattern.test(state.project ?? '') ||
+    typeof state.envFile !== 'string' ||
     typeof state.startedAt !== 'string' ||
     !Number.isFinite(Date.parse(state.startedAt)) ||
     typeof state.composeSha256 !== 'string' ||
@@ -319,6 +320,10 @@ export function parseBetaState(value) {
     throw new Error('The beta acceptance state is invalid.');
   }
   const publicUrl = parsePublicUrl(state.publicUrl);
+  const envFile = resolveRepositoryPath(
+    state.envFile,
+    'The beta environment file',
+  );
   const deploymentDirectory = validateDeploymentDirectory(
     state.deploymentDirectory,
     state.project,
@@ -328,6 +333,7 @@ export function parseBetaState(value) {
     schemaVersion: stateSchemaVersion,
     status: 'awaiting_manual',
     project: state.project,
+    envFile,
     deploymentDirectory,
     composeFile: resolve(deploymentDirectory, 'compose.production.yml'),
     composeSha256: state.composeSha256,
@@ -536,6 +542,7 @@ export async function startBetaAcceptance(options, dependencies = {}) {
     schemaVersion: stateSchemaVersion,
     status: 'awaiting_manual',
     ...identity,
+    envFile: options.envFile,
     deploymentDirectory,
     composeSha256: digest(composeSource),
     startedAt: new Date(dependencies.now ?? Date.now()).toISOString(),
@@ -550,7 +557,7 @@ export async function startBetaAcceptance(options, dependencies = {}) {
     state,
     dependencies.environment,
   );
-  const adapter = dependencies.adapter ?? createAdapter(options, state);
+  const adapter = dependencies.adapter ?? createAdapter(state);
   let stateWritten = false;
   try {
     await writeFile(composeFile, composeSource, { encoding: 'utf8', flag: 'wx' });
@@ -634,7 +641,7 @@ export async function finishBetaAcceptance(options, dependencies = {}) {
     state,
     dependencies.environment,
   );
-  const adapter = dependencies.adapter ?? createAdapter(options, state);
+  const adapter = dependencies.adapter ?? createAdapter(state);
   const before = validateManualJourney(
     acceptanceObservation(adapter, candidateEnvironment, state.startedAt),
   );
@@ -749,7 +756,7 @@ export async function cleanupBetaAcceptance(options, dependencies = {}) {
     state,
     dependencies.environment,
   );
-  const adapter = dependencies.adapter ?? createAdapter(options, state);
+  const adapter = dependencies.adapter ?? createAdapter(state);
   await cleanupState(options, state, adapter, environment);
 }
 

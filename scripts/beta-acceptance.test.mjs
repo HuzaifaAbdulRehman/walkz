@@ -44,7 +44,7 @@ function options(overrides = {}) {
     baselineManifestPath: 'unused',
     candidateManifestPath: 'unused',
     composeFile: 'unused',
-    envFile: 'unused',
+    envFile: resolve('infra', '.env'),
     statePath: 'unused',
     outputPath: 'unused',
     publicUrl: 'https://walkz.example',
@@ -58,9 +58,10 @@ function options(overrides = {}) {
 function state(directory) {
   const identity = createBetaIdentity('12345678abcd');
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'awaiting_manual',
     ...identity,
+    envFile: resolve('infra', '.env'),
     deploymentDirectory: directory,
     composeSha256: '1'.repeat(64),
     startedAt: '2026-09-14T00:00:00.000Z',
@@ -162,7 +163,10 @@ describe('clean-host beta acceptance contract', () => {
     const valid = { ...state(directory), project: directory.split(/[\\/]/).at(-1) };
     valid.postgresVolume = `${valid.project}-postgres`;
     valid.proofVolume = `${valid.project}-proof`;
-    expect(parseBetaState(valid)).toMatchObject({ project: valid.project });
+    expect(parseBetaState(valid)).toMatchObject({
+      project: valid.project,
+      envFile: resolve('infra', '.env'),
+    });
     expect(() => parseBetaState({
       ...valid,
       deploymentDirectory: resolve('artifacts', valid.project),
