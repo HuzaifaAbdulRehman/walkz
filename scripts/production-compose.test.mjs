@@ -70,6 +70,10 @@ function productionModel() {
       },
       worker: {
         ...hardenedService(images.worker, ['data', 'egress']),
+        expose: ['3002'],
+        healthcheck: {
+          test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3002/health/ready')"],
+        },
         environment: {
           DATABASE_URL: databaseUrl,
           GITHUB_APP_ID: apiEnvironment.GITHUB_APP_ID,
@@ -78,6 +82,8 @@ function productionModel() {
           WALKZ_CREDENTIAL_ACTIVE_KEY_ID: apiEnvironment.WALKZ_CREDENTIAL_ACTIVE_KEY_ID,
           WALKZ_CREDENTIAL_KEYS_JSON: apiEnvironment.WALKZ_CREDENTIAL_KEYS_JSON,
           WALKZ_PUBLIC_URL: 'https://walkz.dev',
+          WALKZ_TELEMETRY_HOST: '0.0.0.0',
+          WALKZ_TELEMETRY_PORT: '3002',
         },
       },
       web: {
@@ -147,6 +153,16 @@ describe('production Compose contract', () => {
     delete model.services.migrate.init;
     expect(() => verifyProductionComposeModel(model)).toThrow(
       /migrate must enable the Compose init process/,
+    );
+  });
+
+  it('rejects missing internal worker telemetry health checks', () => {
+    const model = productionModel();
+    model.services.worker.expose = [];
+    delete model.services.worker.healthcheck;
+    model.services.worker.environment.WALKZ_TELEMETRY_HOST = '127.0.0.1';
+    expect(() => verifyProductionComposeModel(model)).toThrow(
+      /worker must expose telemetry port 3002.*worker must use its readiness endpoint.*worker telemetry must bind port 3002/s,
     );
   });
 

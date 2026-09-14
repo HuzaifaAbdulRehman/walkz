@@ -2,7 +2,7 @@ import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute } from 'node:path';
 
-import type { ConnectionOptions } from 'bullmq';
+import type { ConnectionOptions, Worker } from 'bullmq';
 import type { DockerWorkspaceVolume } from '@walkz/sandbox';
 import {
   prepareVerifiedPatchProposal,
@@ -32,6 +32,7 @@ import {
   listRecoverablePatchFixProposalIds,
   listRecoverableGitHubCommentCommandIds,
   listRecoverableHostedReviewRunIds,
+  loadDurableOperationalTelemetry,
   loadLatestVerifiedPatchFixSourceForPullRequest,
   loadClaimedPatchFixTarget,
   loadProviderCredential,
@@ -70,6 +71,18 @@ import {
   recoverPatchFixes,
   type HostedReviewStore,
 } from './index.js';
+import {
+  createStructuredOperationalLogger,
+  createWorkerOperationalTelemetry,
+  type StructuredOperationalLogger,
+  type WorkerOperationalTelemetry,
+  type WorkerQueueName,
+} from './operational-telemetry.js';
+import {
+  createWorkerOperationsServer,
+  type DependencyStatus,
+  type WorkerQueueCounts,
+} from './operations-server.js';
 
 const base64Schema = z.string().min(1).max(100_000).regex(/^[A-Za-z0-9+/]+={0,2}$/);
 const environmentSchema = z.object({
@@ -110,6 +123,8 @@ const environmentSchema = z.object({
   WALKZ_RECOVERY_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000)
     .default(15_000),
   WALKZ_RECOVERY_BATCH: z.coerce.number().int().min(1).max(1_000).default(100),
+  WALKZ_TELEMETRY_HOST: z.string().trim().min(1).max(255).default('127.0.0.1'),
+  WALKZ_TELEMETRY_PORT: z.coerce.number().int().min(1).max(65_535).default(3002),
 }).passthrough().superRefine((environment, context) => {
   if (
     (environment.WALKZ_PROOF_WORKSPACE_ROOT === undefined) !==
@@ -139,6 +154,8 @@ export interface HostedWorkerEnvironment {
   workspaceVolume?: DockerWorkspaceVolume;
   recoveryIntervalMs: number;
   recoveryBatch: number;
+  telemetryHost: string;
+  telemetryPort: number;
 }
 
 export interface HostedWorkerRuntime {
@@ -235,6 +252,57 @@ export function parseHostedWorkerEnvironment(
         }),
     recoveryIntervalMs: environment.WALKZ_RECOVERY_INTERVAL_MS,
     recoveryBatch: environment.WALKZ_RECOVERY_BATCH,
+    telemetryHost: environment.WALKZ_TELEMETRY_HOST,
+    telemetryPort: environment.WALKZ_TELEMETRY_PORT,
+  };
+}
+
+function observeWorker(
+  worker: Worker,
+  queue: WorkerQueueName,
+  telemetry: WorkerOperationalTelemetry,
+  logger: StructuredOperationalLogger,
+  reportBackgroundError: () => void,
+): void {
+  worker.on('active', (job) => telemetry.recordStarted(queue, job.timestamp));
+  worker.on('completed', (job) => {
+    telemetry.recordCompleted(queue, job.processedOn);
+  });
+  worker.on('failed', (job) => {
+    telemetry.recordFailed(queue);
+    logger.write({
+      event: 'job_failed',
+      queue,
+      attempt: job?.attemptsMade ?? 0,
+    });
+  });
+  worker.on('error', () => {
+    telemetry.recordWorkerError(queue);
+    logger.write({ event: 'worker_error', queue });
+    reportBackgroundError();
+  });
+}
+
+async function dependencyStatus(operation: () => Promise<unknown>): Promise<DependencyStatus> {
+  const startedAt = Date.now();
+  try {
+    await operation();
+    return { status: 'up', latencyMs: Math.max(0, Date.now() - startedAt) };
+  } catch {
+    return { status: 'down', latencyMs: Math.max(0, Date.now() - startedAt) };
+  }
+}
+
+async function queueCounts(queue: {
+  getJobCounts(...types: Array<'wait' | 'active' | 'delayed' | 'failed'>):
+    Promise<Record<string, number>>;
+}): Promise<WorkerQueueCounts> {
+  const counts = await queue.getJobCounts('wait', 'active', 'delayed', 'failed');
+  return {
+    wait: counts.wait ?? 0,
+    active: counts.active ?? 0,
+    delayed: counts.delayed ?? 0,
+    failed: counts.failed ?? 0,
   };
 }
 
@@ -243,6 +311,8 @@ export function createHostedWorkerFromEnvironment(
   onBackgroundError: () => void = () => undefined,
 ): HostedWorkerRuntime {
   const config = parseHostedWorkerEnvironment(input);
+  const telemetry = createWorkerOperationalTelemetry();
+  const logger = createStructuredOperationalLogger();
   const pool = createDatabasePool({
     connectionString: config.databaseUrl,
     maxConnections: 10,
@@ -392,15 +462,74 @@ export function createHostedWorkerFromEnvironment(
     commentCommandHandler,
   );
   const patchFixWorker = createPatchFixWorker(config.redis, patchFixHandler);
+  const dependencyStates: Partial<Record<'postgres' | 'redis', 'up' | 'down'>> = {};
+  const recordDependencyState = (
+    dependency: 'postgres' | 'redis',
+    status: 'up' | 'down',
+  ): void => {
+    const previous = dependencyStates[dependency];
+    dependencyStates[dependency] = status;
+    if (status === 'down' && previous !== 'down') {
+      logger.write({ event: 'dependency_check_failed', dependency });
+    } else if (status === 'up' && previous === 'down') {
+      logger.write({ event: 'dependency_recovered', dependency });
+    }
+  };
   const reportBackgroundError = (): void => {
     try {
       onBackgroundError();
     } catch {}
   };
-  outboxWorker.on('error', reportBackgroundError);
-  reviewWorker.on('error', reportBackgroundError);
-  commentCommandWorker.on('error', reportBackgroundError);
-  patchFixWorker.on('error', reportBackgroundError);
+  observeWorker(outboxWorker, 'outbox', telemetry, logger, reportBackgroundError);
+  observeWorker(
+    commentCommandWorker,
+    'comment_commands',
+    telemetry,
+    logger,
+    reportBackgroundError,
+  );
+  observeWorker(reviewWorker, 'reviews', telemetry, logger, reportBackgroundError);
+  observeWorker(patchFixWorker, 'patch_fixes', telemetry, logger, reportBackgroundError);
+
+  const operationsServer = createWorkerOperationsServer({
+    host: config.telemetryHost,
+    port: config.telemetryPort,
+    telemetry,
+    dependencies: {
+      async check() {
+        const [postgres, redis] = await Promise.all([
+          dependencyStatus(() => pool.query('SELECT 1 AS ready')),
+          dependencyStatus(async () => {
+            await reviewQueue.getJobCounts('wait');
+          }),
+        ]);
+        recordDependencyState('postgres', postgres.status);
+        recordDependencyState('redis', redis.status);
+        return { postgres, redis };
+      },
+    },
+    metrics: {
+      async load() {
+        const [outbox, commentCommands, reviews, patchFixes, durable] =
+          await Promise.all([
+            queueCounts(outboxQueue),
+            queueCounts(commentCommandQueue),
+            queueCounts(reviewQueue),
+            queueCounts(patchFixQueue),
+            loadDurableOperationalTelemetry(pool),
+          ]);
+        return {
+          queues: {
+            outbox,
+            comment_commands: commentCommands,
+            reviews,
+            patch_fixes: patchFixes,
+          },
+          durable,
+        };
+      },
+    },
+  });
 
   let started = false;
   let stopping = false;
@@ -408,19 +537,26 @@ export function createHostedWorkerFromEnvironment(
   let recovery = Promise.resolve();
 
   const recover = async (): Promise<void> => {
-    await recoverOutboxEvents(outboxQueue, outboxStore, config.recoveryBatch);
-    await recoverCommentCommands(commentCommandQueue, {
-      listRecoverableGitHubCommentCommandIds: (limit) =>
-        listRecoverableGitHubCommentCommandIds(pool, limit),
-    }, config.recoveryBatch);
-    await recoverReviewRuns(reviewQueue, {
-      listRecoverableReviewRunIds: (limit) =>
-        listRecoverableHostedReviewRunIds(pool, limit),
-    }, config.recoveryBatch);
-    await recoverPatchFixes(patchFixQueue, {
-      listRecoverablePatchFixProposalIds: (limit) =>
-        listRecoverablePatchFixProposalIds(pool, limit),
-    }, config.recoveryBatch);
+    try {
+      await recoverOutboxEvents(outboxQueue, outboxStore, config.recoveryBatch);
+      await recoverCommentCommands(commentCommandQueue, {
+        listRecoverableGitHubCommentCommandIds: (limit) =>
+          listRecoverableGitHubCommentCommandIds(pool, limit),
+      }, config.recoveryBatch);
+      await recoverReviewRuns(reviewQueue, {
+        listRecoverableReviewRunIds: (limit) =>
+          listRecoverableHostedReviewRunIds(pool, limit),
+      }, config.recoveryBatch);
+      await recoverPatchFixes(patchFixQueue, {
+        listRecoverablePatchFixProposalIds: (limit) =>
+          listRecoverablePatchFixProposalIds(pool, limit),
+      }, config.recoveryBatch);
+      telemetry.recordRecovery('completed');
+    } catch (error) {
+      telemetry.recordRecovery('failed');
+      logger.write({ event: 'recovery_failed' });
+      throw error;
+    }
   };
   const scheduleRecovery = (): void => {
     const jitterMs = Math.floor(Math.random() * Math.min(5_000, config.recoveryIntervalMs));
@@ -449,12 +585,15 @@ export function createHostedWorkerFromEnvironment(
         patchFixWorker.waitUntilReady(),
       ]);
       await recover();
+      await operationsServer.start();
       scheduleRecovery();
+      logger.write({ event: 'service_started' });
     },
     async close() {
       if (stopping) return;
       stopping = true;
       if (recoveryTimer !== undefined) clearTimeout(recoveryTimer);
+      await operationsServer.close();
       await recovery;
       const results = await Promise.allSettled([
         outboxWorker.close(),
@@ -475,6 +614,7 @@ export function createHostedWorkerFromEnvironment(
       if (failures.length > 0) {
         throw new AggregateError(failures, 'Hosted worker shutdown failed.');
       }
+      logger.write({ event: 'service_stopped' });
     },
   };
 }

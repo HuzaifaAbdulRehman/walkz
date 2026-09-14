@@ -111,6 +111,8 @@ services:
       WALKZ_PROOF_IMAGE: ${WALKZ_PROOF_IMAGE:-node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf}
       WALKZ_PROOF_WORKSPACE_ROOT: /var/lib/walkz/proof
       WALKZ_PUBLIC_URL: ${WALKZ_PUBLIC_URL:?Set WALKZ_PUBLIC_URL in the production env file}
+      WALKZ_TELEMETRY_HOST: 0.0.0.0
+      WALKZ_TELEMETRY_PORT: "3002"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -120,6 +122,14 @@ services:
       - ALL
     group_add:
       - ${WALKZ_DOCKER_GID:?Set WALKZ_DOCKER_GID in the production env file}
+    expose:
+      - "3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
     init: true
     networks:
       - data

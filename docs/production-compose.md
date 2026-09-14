@@ -40,6 +40,10 @@ that volume:
 docker compose --env-file infra/.env.production --file infra/compose.production.yml down
 ```
 
+The API and worker expose health and telemetry endpoints only inside Compose.
+See [operational telemetry](operational-telemetry.md) for the safe fields and
+local inspection commands.
+
 The worker still needs the Docker socket to create isolated proof containers.
 That socket grants control of the host Docker daemon, so only a trusted Walkz
 worker image may receive it. A separate proof executor is required before this

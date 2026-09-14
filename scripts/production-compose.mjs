@@ -139,6 +139,14 @@ export function verifyProductionComposeModel(model) {
   if ((services.web.ports?.length ?? 0) !== 1) {
     failures.push('web must publish exactly one host port');
   }
+  const workerExpose = services.worker.expose ?? [];
+  if (!workerExpose.some((value) => String(value) === '3002')) {
+    failures.push('worker must expose telemetry port 3002 only inside Compose');
+  }
+  const workerHealthTest = services.worker.healthcheck?.test ?? [];
+  if (!workerHealthTest.some((value) => String(value).includes('/health/ready'))) {
+    failures.push('worker must use its readiness endpoint for health checks');
+  }
   if (model?.networks?.data?.internal !== true) {
     failures.push('the data network must be internal');
   }
@@ -178,6 +186,12 @@ export function verifyProductionComposeModel(model) {
 
   const apiEnvironment = services.api.environment ?? {};
   const workerEnvironment = services.worker.environment ?? {};
+  if (
+    workerEnvironment.WALKZ_TELEMETRY_HOST !== '0.0.0.0' ||
+    String(workerEnvironment.WALKZ_TELEMETRY_PORT) !== '3002'
+  ) {
+    failures.push('worker telemetry must bind port 3002 on its internal network');
+  }
   validateRequiredEnvironment(services.postgres.environment, [
     ['POSTGRES_PASSWORD', 12],
   ], failures);

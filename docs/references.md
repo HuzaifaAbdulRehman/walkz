@@ -377,3 +377,24 @@ registry digests, publishes the web service alone, and keeps PostgreSQL and
 Redis on an internal data network. API and worker services also join a separate
 egress network because GitHub and the selected model provider are external
 dependencies.
+
+## Operational telemetry
+
+BullMQ's official [worker guide](https://docs.bullmq.io/guide/workers),
+[event guide](https://docs.bullmq.io/guide/events/), and
+[queue getter guide](https://docs.bullmq.io/guide/jobs/getters) were checked on
+14 September 2026. Workers expose local active, completed, failed, and error
+events. Queues provide status counts without reading job payloads. Walkz uses
+those APIs for fixed queue counters and computes delay from the job timestamp.
+
+Fastify's official [logging guide](https://fastify.dev/docs/v5.6.x/Reference/Logging/)
+and [hook reference](https://fastify.dev/docs/v5.6.x/Reference/Hooks/) were also
+checked on 14 September 2026. Fastify supports custom request and error
+serializers, and its response hook can record timing after a response is sent.
+Walkz disables the default request logs and emits an allowlisted completion
+record without headers, bodies, query strings, error messages, or stack traces.
+
+The worker endpoint uses Node's stable
+[`node:http` server](https://nodejs.org/download/release/latest-v24.x/docs/api/http.html)
+with explicit header, request, and keep-alive limits. No monitoring dependency
+is needed for the single-host beta.

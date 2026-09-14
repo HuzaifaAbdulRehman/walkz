@@ -73,6 +73,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       WALKZ_DOCKER_WORKSPACE_VOLUME: walkz-proof-workspaces
       WALKZ_PROOF_WORKSPACE_ROOT: /var/lib/walkz/proof
+      WALKZ_TELEMETRY_HOST: 0.0.0.0
+      WALKZ_TELEMETRY_PORT: "3002"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -81,6 +83,14 @@ services:
     init: true
     group_add:
       - "0"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    ports:
+      - "127.0.0.1:3002:3002"
     restart: unless-stopped
     stop_grace_period: 30s
     volumes:

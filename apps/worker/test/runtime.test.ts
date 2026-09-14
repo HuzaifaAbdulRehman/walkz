@@ -46,6 +46,8 @@ describe('hosted worker runtime configuration', () => {
       publicUrl: 'https://walkz.example/',
       recoveryIntervalMs: 15_000,
       recoveryBatch: 100,
+      telemetryHost: '127.0.0.1',
+      telemetryPort: 3002,
       redis: {
         host: 'redis.example',
         port: 6380,

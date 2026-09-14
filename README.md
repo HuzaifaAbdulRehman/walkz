@@ -87,9 +87,9 @@ normal review looks like this:
 7. When a verified finding has a proposed replacement, inspect the exact text in the dashboard and approve or reject it.
 8. After approval, Walkz re-runs the proof and regression checks. It publishes a GitHub suggestion only when those checks pass against the same pull-request head.
 
-Comment commands such as `@walkz review` are not implemented. Start a manual
-review from the dashboard, or configure reviews for ready-for-review and push
-events.
+On a pull request, `@walkz-review review` queues a review and
+`@walkz-review propose fix` prepares a verified finding for approval in the
+dashboard. The commands must be the entire comment.
 
 Walkz never merges the pull request or applies a patch on its own. An approved
 replacement is re-proved first, then published as a GitHub suggestion for the
@@ -118,16 +118,17 @@ a native GitHub suggestion. The developer still decides whether to apply it.
 - Bounded fix proposals with explicit approval, isolated reproof and regression
   checks, and apply-ready GitHub suggestions tied to the reviewed head commit.
 
-The hosted stack runs locally, but it is not a production deployment. A real
-pull request has completed the review, approval, reproof, and GitHub suggestion
-path. Fix branches, automatic patch application, and automatic merges are not
-implemented.
+The hosted stack now has a verified single-host production Compose contract. It
+has not yet completed backup, restore, rollback, or clean-host beta rehearsals.
+A real pull request has completed the review, approval, reproof, and GitHub
+suggestion path. Fix branches, automatic patch application, and automatic
+merges are not implemented.
 
 ## Run the hosted stack locally
 
 The hosted services run together with Docker Desktop. PostgreSQL and Redis stay
-inside the Compose network. The dashboard listens on port 3000, while port 3001
-exposes the API readiness check on localhost.
+inside the Compose network. The dashboard listens on port 3000. Local ports
+3001 and 3002 expose API and worker health and telemetry.
 
 First expose dashboard port 3000 through a public HTTPS tunnel. Copy its origin,
 without a trailing slash, into this command:
@@ -166,6 +167,9 @@ docker compose --env-file infra/.env -f infra/compose.yml up -d --build
 Open the public HTTPS origin and sign in with GitHub after the health checks pass.
 The local dashboard is at `http://localhost:3000`, and the API readiness endpoint
 is `http://localhost:3001/health/ready`.
+
+The [operational telemetry guide](docs/operational-telemetry.md) documents the
+bounded JSON snapshots and their privacy limits.
 
 The public address must reach the dashboard rather than the API port. The
 dashboard forwards the allowlisted OAuth, webhook, and API routes to the private
