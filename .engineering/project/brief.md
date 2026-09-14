@@ -1,15 +1,16 @@
 # Project brief
 
-Status: building Milestone 2
+Status: building Milestone 7
 Owner: Huzaifa Abdul Rehman
-Decision date: 2026-09-07
+Decision date: 2026-09-14
 
 ## Project profile
 
-Walkz is a high-risk developer tool delivered first as a local CLI. Milestone 2 adds
-Docker-based proof execution to the existing Node.js 24+, TypeScript, Git, Groq, Zod,
-Vitest, `diff`, and Execa stack. The triggered overlays cover private source, secrets,
-external dependencies, local code execution, and AI-assisted implementation.
+Walkz is a high-risk developer tool with a local CLI and a self-hosted GitHub App. Its
+Node.js and TypeScript workspace now includes a Fastify API, BullMQ worker, Next.js
+dashboard, PostgreSQL, Redis, Groq, and isolated Docker proof execution. Private source,
+credentials, migrations, asynchronous work, user interface, and release artifacts are
+all inside the review boundary.
 
 ## Problem
 
@@ -20,9 +21,10 @@ makes incomplete coverage visible.
 
 ## User and outcome
 
-A solo developer or small-team maintainer should be able to review a branch locally and
-receive a deterministic verdict tied to exact commits, changed lines, repository checks,
-and stated coverage.
+A solo developer or small-team maintainer can review a branch locally or from GitHub,
+receive a deterministic verdict tied to exact commits and evidence, and approve a fix
+that Walkz proves again before reporting it. Milestone 7 turns that working path into a
+reproducible, operable single-host beta.
 
 ## Evidence
 
@@ -35,37 +37,39 @@ fixes. A 2026 field dataset also found more rejected than accepted CodeRabbit co
 See <https://docs.github.com/en/enterprise-cloud@latest/copilot/responsible-use/agents>
 and <https://arxiv.org/abs/2607.03316>.
 
-Node, Git, and Groq documentation support the main boundaries: no shell interpolation,
-no trust in arbitrary Git metadata, bounded structured output, explicit provider failure,
-and a clear private-code disclosure. The full claim and source records are in
-`evidence.json`.
+Node, Git, Groq, GitHub, PostgreSQL, Redis, and Docker documentation support the main
+boundaries. The full claim, source, and run records are in `evidence.json`. The current
+checkpoint also records a clean-revision image build and a disposable production Compose
+run against the exact release image IDs.
 
 ## Scope
 
-Milestone 2 adds counterfactual proof to the working local reviewer. One approved,
-bounded reproducer runs against exact base and head revisions under the same isolated
-conditions. Only base-pass and head-fail evidence may become `VERIFIED`.
+Milestone 7 packages the verified local and hosted paths for a single-host beta. Phase
+7.2 adds a standalone production Compose contract, immutable application images,
+persistent PostgreSQL data, internal service networks, health checks, and a fail-fast
+configuration verifier.
 
 ## Non-goals
 
-This milestone excludes PostgreSQL, Redis, GitHub integration, a dashboard, automatic
-fixes, and multi-model arbitration. It will not claim usefulness on real pull requests
-until the later 10 to 20 change comparison is complete.
+Phase 7.2 does not select a hosting vendor, publish images to a registry, expose the
+stack to the internet, or add a separate proof-executor host. It also does not prove
+backup, restore, upgrade, rollback, or clean-host installation. Those checks remain in
+later Milestone 7 phases. Real-user usefulness remains a separate outcome gate.
 
 ## Constraints
 
-Use free-first Groq access with no paid fallback and a zero spending cap. Private code
-leaves the machine only after a dated disclosure; `--no-model` must remain useful.
-Repository commands require trusted configuration or explicit approval. The local runner
-is not a sandbox and retains the developer's filesystem and network authority. No
-deadline was supplied, so progress is gated by evidence rather than calendar dates.
+Use free-first Groq access with no paid fallback and a zero spending cap. Do not select
+paid infrastructure or publish the repository without explicit approval. Private code
+and BYOK credentials must stay out of images, logs, and telemetry. The release must bind
+every application image to one source revision and keep durable data independent from
+container replacement.
 
 ## Risks and assumptions
 
-The largest costs are hostile proof code escaping its limits, base and head running under
-different conditions, cleanup leaving private source behind, and incomplete proof being
-treated as success. Docker narrows the runtime boundary but does not make the local daemon
-or selected image risk-free.
+The largest operational risks are losing PostgreSQL data, running mismatched application
+images, exposing internal services, leaking credentials through rendered configuration,
+and giving a container too much host authority. The worker still needs the Docker socket
+for proof execution, so the local daemon remains a deliberate high-trust boundary.
 
 The riskiest product assumption is that evidence makes a review more useful than the
 same checks plus an existing assistant. Test it on 10 to 20 historical defects once
@@ -74,37 +78,37 @@ shell-free command resolution and descendant cleanup on Windows and Linux.
 
 ## Success and stop conditions
 
-The baseline is no application code and no runnable review. Milestone 1 succeeds when
-every acceptance case in `AGENTS.md` passes from a clean clone and the demo completes in
-60 seconds. A broken fixture may return `FIX` only when it opts into blocking
-`SUPPORTED` deterministic evidence. The default still blocks only `VERIFIED` evidence.
+Phase 7.2 succeeds when a standalone production model accepts only immutable images,
+publishes only the web edge, starts healthy from a clean release, applies migrations,
+preserves named data, and cleans up its disposable acceptance state. Milestone 7 is not
+complete until telemetry, recovery, rollback, and the clean-host beta journey pass.
 
-Revisit the runner design if child processes survive or argument metacharacters reach a
-shell. Narrow to a deterministic-only tool if no free Groq model meets the structured
-output and budget checks. Stop product expansion if the later real-diff comparison does
-not improve decision usefulness over CodeRabbit or checks plus an assistant.
+Revisit the deployment design if a service can build from source at startup, an internal
+port reaches the host, a secret appears in verification output, or a release mixes image
+revisions. Stop product expansion if the later real-diff comparison does not improve
+decision usefulness over CodeRabbit or checks plus an assistant.
 
 ## First slice
 
-Define proof plans, execution results, resource budgets, and stable digests. A plan binds
-exact revisions, a digest-pinned image, reproducer bytes, locked isolation settings, and
-one command approved outside the plan. The slice passes when boundary tests, a red
-authorization mutation, the full suite, and cross-platform CI succeed.
+The completed slice is the production Compose contract. It uses the exact API image for
+migrations, gives only the web service a loopback host port, keeps data services on an
+internal network, requires explicit secrets and image IDs, and runs application services
+as non-root with read-only filesystems.
 
 ## Delivery path
 
-1. Define proof contracts, external command approval, stable digests, and budgets.
-2. Materialize exact base and head workspaces without changing the developer's tree.
-3. Prepare dependencies separately and run both revisions in locked containers.
-4. Classify paired outcomes and bind verified evidence to the verdict engine.
-5. Add golden changes, measurements, a clean-clone check, and the short demo.
+1. Build immutable API, web, and worker images from one clean revision.
+2. Add and verify the standalone production Compose contract.
+3. Expose bounded operational telemetry without review content or credentials.
+4. Rehearse backup, restore, upgrade, rollback, restart, and queued-work recovery.
+5. Run the complete beta journey from a clean host using exact image digests.
 
 Each phase receives a focused playbook review after the code exists. A phase ends only
 when its checks pass and its commits describe observable behavior.
 
 ## Lifecycle gates
 
-The next gate is the Milestone 2 release check. Huzaifa owns every gate.
+The next gate is Phase 7.3 operational telemetry. Huzaifa owns every gate.
 
 - Passed, release: Milestone 1 passed a clean install, 189 tests, the local demo,
   Gitleaks, OSV, and Windows plus Ubuntu CI at `c24c993`.
@@ -129,6 +133,13 @@ The next gate is the Milestone 2 release check. Huzaifa owns every gate.
   classification was deliberately removed.
 - Passed, release: Milestone 2 passed a local Windows clean clone and clean
   Windows and Ubuntu CI for `9162717`.
+- Passed, during: the standalone production Compose contract passed 10 focused tests,
+  workspace typechecking, 796 full-suite tests, dependency and secret scans, and a live
+  disposable deployment from clean revision `6586547`. The web edge returned HTTP 200,
+  20 migrations were present, the three application image IDs matched the release
+  manifest, and cleanup left no acceptance containers or volumes.
+- Planned, during: add bounded health, queue, worker, outbox, latency, and failure
+  telemetry without source code, credentials, or unbounded labels.
 - Planned, outcome: after 10 to 20 real diffs exist, compare Walkz
   with CodeRabbit or a composed baseline on precision, recall, latency, and decision
   usefulness.

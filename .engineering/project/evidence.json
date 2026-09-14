@@ -2,35 +2,44 @@
   "schemaVersion": 2,
   "phase": "build",
   "recommendation": "go",
-  "recommendationReason": "Milestone 1 is a bounded, testable foundation for Walkz's counterfactual proof. Existing tools overlap its surface, so the project must reach Milestone 2 before claiming differentiation.",
+  "recommendationReason": "Walkz has reached Milestone 7 with its evidence-first review, proof, hosted, and approved-fix paths intact. Continue toward a reproducible single-host beta while keeping real-user outcome validation as a separate gate.",
   "researchCompletedAt": "2026-09-06T20:44:48Z",
   "createdAt": "2026-09-06",
-  "refreshedAt": "2026-09-07T18:16:01Z",
+  "refreshedAt": "2026-09-14T11:53:23Z",
   "project": {
     "name": "Walkz",
     "problem": "Pull-request reviewers can produce plausible findings without evidence that a change caused a real regression.",
     "user": "Solo developers and small-team maintainers who need evidence before merging a pull request.",
-    "outcome": "A maintainer can run a local review and receive a deterministic verdict tied to changed lines, repository checks, and explicit coverage.",
+    "outcome": "A maintainer can run Walkz locally or through its GitHub App and receive an evidence-bound verdict, approve a verified fix, and operate the hosted stack from one reproducible release.",
     "deadline": null,
     "type": "developer-tool",
     "stack": [
-      "Node.js 24.13.0",
+      "Node.js 24+",
       "TypeScript",
-      "npm 11.6.2 workspaces",
-      "Git 2.52.0",
+      "npm workspaces",
+      "Fastify",
+      "Next.js and React",
+      "PostgreSQL",
+      "Redis and BullMQ",
+      "Octokit",
       "Groq OpenAI-compatible HTTP API",
       "Vitest",
-      "Docker 29.7.2"
+      "Docker Compose"
     ],
-    "deliverySurface": "Local cross-platform CLI used inside a Git repository",
+    "deliverySurface": "Cross-platform CLI plus a self-hosted GitHub App, worker, and dashboard",
     "riskClass": "high",
     "triggeredOverlays": [
       "Personal or sensitive data",
       "Authentication, authorization, money or secrets",
+      "Schema, protocol, public API or migration",
+      "User-facing interface",
+      "Operated service or asynchronous work",
+      "Distributed or concurrent behavior",
       "External dependency",
+      "Distributed artifact or container",
       "AI-assisted implementation"
     ],
-    "overlayDecision": "Private source may cross a provider boundary, a provider key is required, and repository commands execute locally. Milestone 2 also runs hostile proof code through a local Docker daemon. Small evidence-backed slices and independent review remain required. Hosted, distributed, migration, and graphical-interface overlays do not apply yet."
+    "overlayDecision": "Private source may cross a provider boundary, BYOK and GitHub credentials require protection, and repository code may execute inside proof containers. The hosted stack adds durable migrations, asynchronous workers, a dashboard, and distributed release images, so service, contract, interface, and artifact checks all apply."
   },
   "repositorySearch": {
     "status": "completed",
@@ -173,6 +182,20 @@
         "run-m2-golden-full-tests",
         "run-m2-golden-shuffled-tests",
         "run-m2-golden-clean-clone"
+      ]
+    },
+    {
+      "id": "claim-production-compose-contract",
+      "text": "Walkz has a standalone production Compose contract that binds API, web, and worker services to one clean source revision, isolates durable data, exposes only the web edge, and runs application processes with reduced authority.",
+      "status": "verified",
+      "sourceIds": [],
+      "runIds": [
+        "run-m7-compose-focused",
+        "run-m7-compose-typecheck",
+        "run-m7-compose-full-tests",
+        "run-m7-compose-render",
+        "run-m7-compose-release",
+        "run-m7-compose-live"
       ]
     }
   ],
@@ -946,6 +969,62 @@
       "exitCode": 0,
       "summary": "Windows and Ubuntu passed from clean GitHub runners for exact commit 9162717a86f64b6c6a4a2dd4935c0adea193153a.",
       "ranAt": "2026-09-07T18:16:01Z"
+    },
+    {
+      "id": "run-m7-compose-focused",
+      "command": "npm test -- scripts/production-compose.test.mjs --maxWorkers=1",
+      "exitCode": 0,
+      "summary": "All 10 focused tests passed, including immutable-image, network, port, secret, identity, and migration checks.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "summary": "The workspace typecheck passed, and LSP diagnostics reported no errors in the new verifier or its tests.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-full-tests",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 0,
+      "summary": "The full single-worker suite passed 796 tests in 145 files, with 22 tests and 14 files skipped by their existing conditions.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-render",
+      "command": "npm run production:verify -- --env-file infra/.env",
+      "exitCode": 0,
+      "summary": "Docker Compose rendered the production model and the verifier accepted its immutable images, web-only publishing, persistent data, network boundaries, reduced privileges, and required configuration.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-gitleaks",
+      "command": "gitleaks git --pre-commit --staged --no-banner --redact",
+      "exitCode": 0,
+      "summary": "Gitleaks found no secrets in the staged production Compose change.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-osv",
+      "command": "osv-scanner --lockfile=package-lock.json",
+      "exitCode": 0,
+      "summary": "OSV-Scanner found no known issues in 338 locked packages.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-release",
+      "command": "npm run release:verify",
+      "exitCode": 0,
+      "summary": "A clean release build produced API, web, and worker images plus a manifest bound to commit 65865471d03d, with zero dependency audit findings.",
+      "ranAt": "2026-09-14T11:53:23Z"
+    },
+    {
+      "id": "run-m7-compose-live",
+      "command": "docker compose --env-file infra/.env -f infra/compose.production.yml up --detach --wait --wait-timeout 180",
+      "exitCode": 0,
+      "summary": "The disposable stack became healthy, served HTTP 200, applied 20 migrations, used the exact release image IDs, exposed only port 3000 on loopback, and left no acceptance containers or volumes after cleanup.",
+      "ranAt": "2026-09-14T11:53:23Z"
     }
   ],
   "gates": [
@@ -1102,6 +1181,39 @@
         "run-m2-golden-osv",
         "run-m2-release-ci"
       ]
+    },
+    {
+      "id": "gate-m7-production-compose",
+      "stage": "during",
+      "trigger": "The standalone production Compose deployment is implemented.",
+      "requiredEvidence": "Exact clean-revision images, no production builds or bind mounts, web-only host publishing, internal durable data services, fail-fast configuration, reduced application privileges, health checks, migrations, and disposable live-stack cleanup.",
+      "status": "passed",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [
+        "claim-production-compose-contract"
+      ],
+      "runIds": [
+        "run-m7-compose-focused",
+        "run-m7-compose-typecheck",
+        "run-m7-compose-full-tests",
+        "run-m7-compose-render",
+        "run-m7-compose-gitleaks",
+        "run-m7-compose-osv",
+        "run-m7-compose-release",
+        "run-m7-compose-live"
+      ]
+    },
+    {
+      "id": "gate-m7-operational-telemetry",
+      "stage": "during",
+      "trigger": "Phase 7.3 adds bounded operational telemetry without private review content.",
+      "requiredEvidence": "Health, queue, worker, outbox, latency, and failure signals are useful for operation, bounded in cardinality, free of source code and credentials, and covered by focused and full tests.",
+      "status": "planned",
+      "owner": "Huzaifa Abdul Rehman",
+      "targetDate": null,
+      "claimIds": [],
+      "runIds": []
     },
     {
       "id": "gate-product-outcome",
