@@ -614,6 +614,7 @@ describe('hosted review job handler', () => {
 
   it('stores a generic error when hosted checkout fails', async () => {
     const reviewStore = store();
+    const onInfrastructureFailure = vi.fn();
     const handler = createHostedReviewJobHandler({
       store: reviewStore,
       tokens: {
@@ -626,6 +627,7 @@ describe('hosted review job handler', () => {
       leaseMs: 60_000,
       proofImage,
       checkout: async () => { throw new Error('sensitive dependency detail'); },
+      onInfrastructureFailure,
     });
 
     await handler.handle(reviewRunId);
@@ -634,6 +636,43 @@ describe('hosted review job handler', () => {
       verdict: 'ERROR',
       summary: expect.not.stringContaining('sensitive'),
     }));
+    expect(onInfrastructureFailure).toHaveBeenCalledWith({
+      reviewRunId,
+      stage: 'checkout',
+    });
+  });
+
+  it('reports a bounded context failure returned by the pipeline', async () => {
+    const reviewStore = store();
+    const onInfrastructureFailure = vi.fn();
+    const handler = createHostedReviewJobHandler({
+      store: reviewStore,
+      tokens: {
+        getInstallationToken: vi.fn().mockResolvedValue({
+          token: 'installation-token',
+          expiresAt: '2026-09-10T02:00:00.000Z',
+        }),
+      },
+      workerId: 'worker-1',
+      leaseMs: 60_000,
+      proofImage,
+      checkout: async (_input, operation) => operation('C:/temp/repo'),
+      runPipeline: vi.fn().mockResolvedValue({
+        decision: { verdict: 'INCONCLUSIVE', reasons: ['context_error'] },
+        run: { findings: [] },
+        context: null,
+        deterministicChecks: null,
+        failure: { stage: 'context' },
+      } as never),
+      onInfrastructureFailure,
+    });
+
+    await handler.handle(reviewRunId);
+
+    expect(onInfrastructureFailure).toHaveBeenCalledWith({
+      reviewRunId,
+      stage: 'context',
+    });
   });
 
   it('fails a run whose prompt implementation is unavailable', async () => {

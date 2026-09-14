@@ -359,6 +359,9 @@ export function createHostedWorkerFromEnvironment(
     workerId: config.workerId,
     leaseMs: config.reviewLeaseMs,
     proofImage: config.proofImage,
+    onInfrastructureFailure: ({ stage }) => {
+      logger.write({ event: 'hosted_review_failed', stage });
+    },
     ...(config.workspaceVolume === undefined
       ? {}
       : { workspaceVolume: config.workspaceVolume }),

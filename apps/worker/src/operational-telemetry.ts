@@ -1,3 +1,5 @@
+import type { HostedReviewFailureStage } from './hosted-review-handler.js';
+
 export const workerQueueNames = [
   'outbox',
   'comment_commands',
@@ -128,6 +130,10 @@ export type OperationalLogEvent =
   | { event: 'service_start_failed' | 'service_stop_failed' }
   | { event: 'worker_error'; queue: WorkerQueueName }
   | { event: 'job_failed'; queue: WorkerQueueName; attempt: number }
+  | {
+      event: 'hosted_review_failed';
+      stage: HostedReviewFailureStage;
+    }
   | { event: 'recovery_failed' }
   | {
       event: 'dependency_check_failed' | 'dependency_recovered';
@@ -163,6 +169,8 @@ export function createStructuredOperationalLogger(
           queue: input.queue,
           attempt: Math.max(0, Math.trunc(input.attempt)),
         };
+      } else if (input.event === 'hosted_review_failed') {
+        record = { ...base, stage: input.stage };
       } else if (
         input.event === 'dependency_check_failed' ||
         input.event === 'dependency_recovered'

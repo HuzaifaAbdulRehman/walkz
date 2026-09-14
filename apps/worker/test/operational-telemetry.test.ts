@@ -57,6 +57,7 @@ describe('worker operational telemetry', () => {
 
     logger.write({ event: 'dependency_recovered', dependency: 'redis' });
     logger.write({ event: 'worker_error', queue: 'reviews' });
+    logger.write({ event: 'hosted_review_failed', stage: 'checks' });
     logger.write({
       event: 'job_failed',
       queue: 'patch_fixes',
@@ -78,6 +79,13 @@ describe('worker operational telemetry', () => {
         service: 'worker',
         event: 'worker_error',
         queue: 'reviews',
+      },
+      {
+        timestamp: '2026-09-14T12:00:00.000Z',
+        level: 'error',
+        service: 'worker',
+        event: 'hosted_review_failed',
+        stage: 'checks',
       },
       {
         timestamp: '2026-09-14T12:00:00.000Z',

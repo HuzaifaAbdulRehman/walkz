@@ -130,7 +130,20 @@ export interface HostedReviewHandlerOptions {
   ) => Promise<ResolvedGitReferences>;
   runPipeline?: typeof runLocalReviewPipeline;
   proveFindings?: typeof proveHostedFindings;
+  onInfrastructureFailure?: (input: {
+    reviewRunId: string;
+    stage: HostedReviewFailureStage;
+  }) => void;
 }
+
+export type HostedReviewFailureStage =
+  | 'prompt_version'
+  | 'dependencies'
+  | 'checkout'
+  | 'context'
+  | 'checks'
+  | 'pipeline'
+  | 'proof';
 
 function summaryFor(verdict: ReviewVerdict): string {
   switch (verdict) {
@@ -299,10 +312,12 @@ export function createHostedReviewJobHandler(
       const controller = new AbortController();
       const heartbeat = startLeaseHeartbeat(input.store, leaseInput, controller);
       let result: HostedReviewResult;
+      let failureStage: HostedReviewFailureStage = 'prompt_version';
       try {
         if (run.promptVersion !== WALKZ_REVIEW_PROMPT_VERSION) {
           throw new Error('Review run prompt version is unavailable in this worker.');
         }
+        failureStage = 'dependencies';
         const [installation, credential] = await Promise.all([
           input.tokens.getInstallationToken(installationNumber(run.installationId)),
           input.store.loadCredential({
@@ -319,6 +334,7 @@ export function createHostedReviewJobHandler(
                 event,
               }),
             });
+        failureStage = 'checkout';
         result = await checkout({
           owner: run.owner,
           repository: run.repository,
@@ -326,6 +342,7 @@ export function createHostedReviewJobHandler(
           headSha: run.headSha,
           githubToken: installation.token,
         }, async (repositoryRoot) => {
+          failureStage = 'pipeline';
           const pipeline = await runPipeline({
             request: {
               repositoryRoot,
@@ -380,8 +397,20 @@ export function createHostedReviewJobHandler(
             signal: controller.signal,
           });
           if (pipeline.context == null || pipeline.deterministicChecks == null) {
+            if (pipeline.failure?.stage === 'context') {
+              input.onInfrastructureFailure?.({
+                reviewRunId: run.reviewRunId,
+                stage: 'context',
+              });
+            } else if (pipeline.failure?.stage === 'checks') {
+              input.onInfrastructureFailure?.({
+                reviewRunId: run.reviewRunId,
+                stage: 'checks',
+              });
+            }
             return resultFromPipeline(pipeline);
           }
+          failureStage = 'proof';
           const proof = await proveFindings(pipeline.run.findings, {
             reviewRunId: run.reviewRunId,
             baseSha: run.baseSha,
@@ -407,6 +436,10 @@ export function createHostedReviewJobHandler(
             : { temporaryRoot: input.workspaceVolume.root }),
         });
       } catch {
+        input.onInfrastructureFailure?.({
+          reviewRunId: run.reviewRunId,
+          stage: failureStage,
+        });
         if (controller.signal.aborted) {
           await heartbeat.stop();
           throw new Error('Review run lease was lost during execution.');
