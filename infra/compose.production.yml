@@ -146,6 +146,33 @@ services:
       - walkz-proof-workspaces:/var/lib/walkz/proof
       - /var/run/docker.sock:/var/run/docker.sock
 
+  reconcile:
+    image: ${WALKZ_WORKER_IMAGE:?Set WALKZ_WORKER_IMAGE to an immutable image ID or registry digest}
+    command: ["node", "dist/reconcile-bin.js"]
+    environment:
+      DATABASE_URL: postgresql://walkz:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}@postgres:5432/walkz
+      REDIS_URL: redis://redis:6379/0
+      WALKZ_RECOVERY_BATCH: ${WALKZ_RECOVERY_BATCH:-100}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    init: true
+    networks:
+      - data
+    profiles:
+      - operations
+    read_only: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    user: "1000:1000"
+
   web:
     image: ${WALKZ_WEB_IMAGE:?Set WALKZ_WEB_IMAGE to an immutable image ID or registry digest}
     environment:

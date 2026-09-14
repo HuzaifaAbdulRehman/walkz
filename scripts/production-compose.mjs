@@ -5,8 +5,8 @@ import { parseArgs } from 'node:util';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, '..');
-const serviceNames = ['postgres', 'redis', 'migrate', 'api', 'worker', 'web'];
-const hardenedServices = ['migrate', 'api', 'worker', 'web'];
+const serviceNames = ['postgres', 'redis', 'migrate', 'api', 'worker', 'reconcile', 'web'];
+const hardenedServices = ['migrate', 'api', 'worker', 'reconcile', 'web'];
 const placeholderPattern = /(?:change[-_ ]?me|example|replace|placeholder)/i;
 const immutableImagePattern = /^(?:sha256:[0-9a-f]{64}|[^\s@]+@sha256:[0-9a-f]{64})$/i;
 
@@ -157,6 +157,7 @@ export function verifyProductionComposeModel(model) {
     migrate: ['data'],
     api: ['data', 'edge', 'egress'],
     worker: ['data', 'egress'],
+    reconcile: ['data'],
     web: ['edge'],
   };
   for (const [name, expected] of Object.entries(expectedNetworks)) {
@@ -183,6 +184,15 @@ export function verifyProductionComposeModel(model) {
   if (services.migrate.image !== services.api.image) {
     failures.push('migrate must use the exact API image');
   }
+  if (services.reconcile.image !== services.worker.image) {
+    failures.push('reconcile must use the exact worker image');
+  }
+  if (
+    !(services.reconcile.profiles ?? []).includes('operations') ||
+    (services.reconcile.volumes ?? []).length > 0
+  ) {
+    failures.push('reconcile must be an on-demand operation without host volumes');
+  }
 
   const apiEnvironment = services.api.environment ?? {};
   const workerEnvironment = services.worker.environment ?? {};
@@ -207,7 +217,7 @@ export function verifyProductionComposeModel(model) {
     ['GITHUB_APP_ID', 1],
     ['GITHUB_PRIVATE_KEY_BASE64', 32],
   ], failures);
-  for (const name of ['migrate', 'api', 'worker']) {
+  for (const name of ['migrate', 'api', 'worker', 'reconcile']) {
     validateDatabaseUrl(services[name].environment?.DATABASE_URL, name, failures);
   }
   validateCredentialKeys(apiEnvironment, 'api', failures);

@@ -65,12 +65,9 @@ import {
   createHostedPatchFixJobHandler,
   createReviewQueue,
   createReviewWorker,
-  recoverOutboxEvents,
-  recoverCommentCommands,
-  recoverReviewRuns,
-  recoverPatchFixes,
   type HostedReviewStore,
 } from './index.js';
+import { recoverDurableWork } from './durable-recovery.js';
 import {
   createStructuredOperationalLogger,
   createWorkerOperationalTelemetry,
@@ -554,18 +551,25 @@ export function createHostedWorkerFromEnvironment(
 
   const recover = async (): Promise<void> => {
     try {
-      await recoverOutboxEvents(outboxQueue, outboxStore, config.recoveryBatch);
-      await recoverCommentCommands(commentCommandQueue, {
-        listRecoverableGitHubCommentCommandIds: (limit) =>
-          listRecoverableGitHubCommentCommandIds(pool, limit),
-      }, config.recoveryBatch);
-      await recoverReviewRuns(reviewQueue, {
-        listRecoverableReviewRunIds: (limit) =>
-          listRecoverableHostedReviewRunIds(pool, limit),
-      }, config.recoveryBatch);
-      await recoverPatchFixes(patchFixQueue, {
-        listRecoverablePatchFixProposalIds: (limit) =>
-          listRecoverablePatchFixProposalIds(pool, limit),
+      await recoverDurableWork({
+        outbox: outboxQueue,
+        commentCommands: commentCommandQueue,
+        reviews: reviewQueue,
+        patchFixes: patchFixQueue,
+      }, {
+        outbox: outboxStore,
+        commentCommands: {
+          listRecoverableGitHubCommentCommandIds: (limit) =>
+            listRecoverableGitHubCommentCommandIds(pool, limit),
+        },
+        reviews: {
+          listRecoverableReviewRunIds: (limit) =>
+            listRecoverableHostedReviewRunIds(pool, limit),
+        },
+        patchFixes: {
+          listRecoverablePatchFixProposalIds: (limit) =>
+            listRecoverablePatchFixProposalIds(pool, limit),
+        },
       }, config.recoveryBatch);
       telemetry.recordRecovery('completed');
     } catch (error) {

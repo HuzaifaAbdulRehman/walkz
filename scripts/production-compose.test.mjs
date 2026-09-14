@@ -86,6 +86,14 @@ function productionModel() {
           WALKZ_TELEMETRY_PORT: '3002',
         },
       },
+      reconcile: {
+        ...hardenedService(images.worker, ['data']),
+        environment: {
+          DATABASE_URL: databaseUrl,
+          REDIS_URL: 'redis://redis:6379/0',
+        },
+        profiles: ['operations'],
+      },
       web: {
         ...hardenedService(images.web, ['edge']),
         environment: { WALKZ_API_URL: 'http://api:3001' },
@@ -163,6 +171,19 @@ describe('production Compose contract', () => {
     model.services.worker.environment.WALKZ_TELEMETRY_HOST = '127.0.0.1';
     expect(() => verifyProductionComposeModel(model)).toThrow(
       /worker must expose telemetry port 3002.*worker must use its readiness endpoint.*worker telemetry must bind port 3002/s,
+    );
+  });
+
+  it('keeps reconciliation isolated from the Docker socket', () => {
+    const model = productionModel();
+    model.services.reconcile.image = images.api;
+    model.services.reconcile.volumes = [{
+      type: 'bind',
+      source: '/var/run/docker.sock',
+      target: '/var/run/docker.sock',
+    }];
+    expect(() => verifyProductionComposeModel(model)).toThrow(
+      /reconcile must use the exact worker image.*on-demand operation without host volumes/s,
     );
   });
 
