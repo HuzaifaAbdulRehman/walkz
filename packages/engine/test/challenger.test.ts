@@ -175,6 +175,13 @@ describe('blocker challenger', () => {
       model: alternateModel.id,
       promptVersion: 'walkz-challenge-v1',
     });
+    expect(Object.keys(request.mock.calls[0]?.[0] ?? {}).sort()).toEqual([
+      'maxOutputTokens',
+      'model',
+      'promptVersion',
+      'systemPrompt',
+      'userPrompt',
+    ]);
     expect(request.mock.calls[0]?.[0].userPrompt).toContain('\\u{202E}');
     expect(request.mock.calls[0]?.[0].userPrompt).not.toContain('\u202E');
     expect(result.step).toMatchObject({

@@ -127,7 +127,13 @@ export async function runSecuritySpecialist(input: {
 
   let result: StructuredReviewResult;
   try {
-    result = await method.call(input.provider, prompt, { signal: input.signal });
+    result = await method.call(input.provider, {
+      model: prompt.model,
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+      maxOutputTokens: prompt.maxOutputTokens,
+      promptVersion: prompt.promptVersion,
+    }, { signal: input.signal });
   } catch (error) {
     const cancelled = isCancelled(error, input.signal);
     return {

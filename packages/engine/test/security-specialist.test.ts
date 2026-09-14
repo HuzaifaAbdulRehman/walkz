@@ -115,6 +115,13 @@ describe('security specialist', () => {
       model: 'mock/reviewer',
       promptVersion: WALKZ_SECURITY_PROMPT_VERSION,
     });
+    expect(Object.keys(request.mock.calls[0]?.[0] ?? {}).sort()).toEqual([
+      'maxOutputTokens',
+      'model',
+      'promptVersion',
+      'systemPrompt',
+      'userPrompt',
+    ]);
     expect(request.mock.calls[0]?.[0].systemPrompt).toContain('no tools');
     expect(result.step.status).toBe('complete');
     expect(result.findings).toEqual([

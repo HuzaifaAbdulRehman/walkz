@@ -296,9 +296,13 @@ export async function challengeLikelyBlockers(input: {
 
   let result: StructuredChallengeResult;
   try {
-    result = await input.provider.requestStructuredChallenge(prompt, {
-      signal: input.signal,
-    });
+    result = await input.provider.requestStructuredChallenge({
+      model: prompt.model,
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+      maxOutputTokens: prompt.maxOutputTokens,
+      promptVersion: prompt.promptVersion,
+    }, { signal: input.signal });
   } catch (error) {
     const cancelled = isCancelled(error, input.signal);
     return {
