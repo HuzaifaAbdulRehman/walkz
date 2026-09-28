@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseReleaseOptions } from './build-release.mjs';
+import { orderReleaseBuilds, parseReleaseOptions } from './build-release.mjs';
 
 describe('release build options', () => {
   it('keeps the generated manifest inside the repository', () => {
@@ -19,6 +19,19 @@ describe('release build options', () => {
   it('requires an explicit override for development builds', () => {
     expect(parseReleaseOptions(['--allow-dirty']).allowDirty).toBe(true);
     expect(parseReleaseOptions([]).allowDirty).toBe(false);
+  });
+
+  it('builds the worker first without changing manifest order', () => {
+    const definitions = [
+      { service: 'api' },
+      { service: 'web' },
+      { service: 'worker' },
+    ];
+
+    expect(orderReleaseBuilds(definitions).map(({ service }) => service))
+      .toEqual(['worker', 'api', 'web']);
+    expect(definitions.map(({ service }) => service))
+      .toEqual(['api', 'web', 'worker']);
   });
 
   it('uses the pinned Alpine branch for worker packages and excludes credentials', async () => {

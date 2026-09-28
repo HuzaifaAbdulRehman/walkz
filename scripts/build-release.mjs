@@ -126,6 +126,13 @@ export function parseReleaseOptions(arguments_) {
   };
 }
 
+export function orderReleaseBuilds(definitions) {
+  return [
+    ...definitions.filter(({ service }) => service === 'worker'),
+    ...definitions.filter(({ service }) => service !== 'worker'),
+  ];
+}
+
 export async function buildRelease(options) {
   const packageJson = JSON.parse(await readFile(resolve(repositoryRoot, 'package.json'), 'utf8'));
   const version = packageJson.version;
@@ -139,7 +146,8 @@ export async function buildRelease(options) {
   }
 
   const imageRecords = [];
-  for (const definition of createImageDefinitions(version, revision)) {
+  const definitions = createImageDefinitions(version, revision);
+  for (const definition of orderReleaseBuilds(definitions)) {
     process.stdout.write(`Building ${definition.reference} from ${revision.slice(0, 12)}.\n`);
     run('docker', [
       'build',
