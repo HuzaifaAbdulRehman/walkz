@@ -1,3 +1,3 @@
 export function applyDiscount(total, discount) {
-  return total - discount;
+  return Math.max(total - discount, 0);
 }
