@@ -393,6 +393,53 @@ describe('clean-host beta acceptance contract', () => {
     expect(composeCalls.some((call) => call[0] === 'down')).toBe(false);
   });
 
+  it('bounds host readiness retries and cleans a failed start', async () => {
+    const directory = await betaDirectory();
+    const project = directory.split(/[\\/]/).at(-1);
+    const statePath = resolve(directory, '..', `${project}-state.json`);
+    temporaryDirectories.push(statePath);
+    const baseline = manifest(baselineRevision, '1');
+    const candidate = manifest(candidateRevision, '4');
+    const imageMap = new Map([
+      ...baseline.images.map((image) => [image.digest, `${baselineRevision}|${image.service}`]),
+      ...candidate.images.map((image) => [image.digest, `${candidateRevision}|${image.service}`]),
+    ]);
+    let cleaned = false;
+    let fetchAttempts = 0;
+    const adapter = {
+      docker(arguments_) {
+        if (arguments_[0] === 'image') return imageMap.get(arguments_[2]);
+        if (arguments_[0] === 'inspect') return candidateRevision;
+        return '';
+      },
+      compose(arguments_) {
+        if (arguments_[0] === 'ps') return `${arguments_.at(-1)}-container\n`;
+        if (arguments_[0] === 'down') cleaned = true;
+        return '';
+      },
+      async fetch() {
+        fetchAttempts += 1;
+        throw new TypeError('fetch failed');
+      },
+    };
+
+    await expect(startBetaAcceptance(options({
+      statePath,
+      waitSeconds: 0,
+    }), {
+      adapter,
+      baseline,
+      candidate,
+      composeSource: 'name: clean-beta\nservices: {}\n',
+      deploymentDirectory: directory,
+      environment: {},
+      suffix: project.slice('walkz-beta-'.length),
+    })).rejects.toThrow(/host readiness deadline/);
+    expect(fetchAttempts).toBe(1);
+    expect(cleaned).toBe(true);
+    await expect(readFile(statePath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('prepares only the selected Walkz repository', async () => {
     const directory = await betaDirectory();
     const project = directory.split(/[\\/]/).at(-1);
@@ -568,6 +615,7 @@ describe('clean-host beta acceptance contract', () => {
     temporaryDirectories.push(outputPath, statePath);
     let cleaned = false;
     let runningRevision = candidateRevision;
+    let fetchAttempts = 0;
     const imageMap = new Map([
       ...betaState.baseline.images.map((image) => [image.digest, `${baselineRevision}|${image.service}`]),
       ...betaState.candidate.images.map((image) => [image.digest, `${candidateRevision}|${image.service}`]),
@@ -596,6 +644,8 @@ describe('clean-host beta acceptance contract', () => {
         return '';
       },
       async fetch(url) {
+        fetchAttempts += 1;
+        if (fetchAttempts === 3) throw new TypeError('fetch failed');
         if (url.endsWith('/auth/github/start')) {
           return new Response(null, {
             status: 302,
@@ -624,6 +674,7 @@ describe('clean-host beta acceptance contract', () => {
     });
     expect(JSON.parse(await readFile(outputPath, 'utf8'))).toEqual(report);
     expect(JSON.stringify(report)).not.toContain('suggestionDigest');
+    expect(fetchAttempts).toBe(5);
     expect(cleaned).toBe(true);
   });
 });

@@ -649,10 +649,21 @@ function stableJourneyDigest(observation) {
   }));
 }
 
-async function assertWebAndOAuth(adapter, state) {
-  const home = await adapter.fetch(state.localUrl);
-  if (!home.ok) throw new Error('The beta dashboard is unavailable.');
-  const oauth = await adapter.fetch(`${state.localUrl}/auth/github/start`);
+async function probeWebAndOAuth(adapter, state) {
+  let home;
+  try {
+    home = await adapter.fetch(state.localUrl);
+  } catch {
+    return false;
+  }
+  if (!home.ok) return false;
+  let oauth;
+  try {
+    oauth = await adapter.fetch(`${state.localUrl}/auth/github/start`);
+  } catch {
+    return false;
+  }
+  if (oauth.status >= 500) return false;
   const location = oauth.headers.get('location');
   if (
     oauth.status < 300 ||
@@ -662,6 +673,21 @@ async function assertWebAndOAuth(adapter, state) {
     new URL(location).pathname !== '/login/oauth/authorize'
   ) {
     throw new Error('The beta GitHub sign-in route is invalid.');
+  }
+  return true;
+}
+
+async function waitForWebAndOAuth(adapter, state, timeoutMs) {
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  while (true) {
+    if (await probeWebAndOAuth(adapter, state)) return;
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error('The beta host readiness deadline expired.');
+    }
+    await new Promise((resolvePromise) => {
+      setTimeout(resolvePromise, Math.min(250, remainingMs));
+    });
   }
 }
 
@@ -779,7 +805,7 @@ export async function startBetaAcceptance(options, dependencies = {}) {
       'api', 'worker', 'web',
     ], environment, { label: 'Start clean beta application' });
     assertRunningRelease(adapter, state.candidate, environment);
-    await assertWebAndOAuth(adapter, state);
+    await waitForWebAndOAuth(adapter, state, options.waitSeconds * 1_000);
     return state;
   } catch (operationError) {
     try {
@@ -858,7 +884,7 @@ export async function finishBetaAcceptance(options, dependencies = {}) {
       '--force-recreate', 'api', 'worker', 'web',
     ], candidateEnvironment, { label: 'Restart beta application' });
     assertRunningRelease(adapter, state.candidate, candidateEnvironment);
-    await assertWebAndOAuth(adapter, state);
+    await waitForWebAndOAuth(adapter, state, options.waitSeconds * 1_000);
     const afterRestart = validateManualJourney(
       acceptanceObservation(adapter, candidateEnvironment, state.startedAt),
     );
@@ -874,7 +900,7 @@ export async function finishBetaAcceptance(options, dependencies = {}) {
       '--force-recreate', '--no-deps', 'api', 'worker', 'web',
     ], baselineEnvironment, { label: 'Roll back full beta application' });
     assertRunningRelease(adapter, state.baseline, baselineEnvironment);
-    await assertWebAndOAuth(adapter, state);
+    await waitForWebAndOAuth(adapter, state, options.waitSeconds * 1_000);
     const afterRollback = validateManualJourney(
       acceptanceObservation(adapter, baselineEnvironment, state.startedAt),
     );
