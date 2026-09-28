@@ -11,6 +11,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { parseWalkzConfig } from '../packages/contracts/dist/index.js';
 import { parseReleaseManifest } from './release-artifacts.mjs';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -401,11 +402,11 @@ export function createAcceptanceFixtureConfig(value) {
   if (value.commands.length > 0 && !exactCommand) {
     throw new Error('Beta acceptance preparation requires an empty command set.');
   }
-  const config = {
+  const config = parseWalkzConfig({
     ...value,
     commands: [{ ...acceptanceCommand, args: [...acceptanceCommand.args] }],
     commandApprovalPolicy: 'trusted_config',
-  };
+  });
   return {
     config,
     configHash: digest(JSON.stringify(config)),
@@ -520,7 +521,10 @@ export async function prepareBetaAcceptance(options, dependencies = {}) {
     loadAcceptanceRepository(adapter, environment)
   ));
   const prepared = createAcceptanceFixtureConfig(repository.config);
-  if (prepared.alreadyPrepared) {
+  if (
+    prepared.alreadyPrepared &&
+    repository.configHash === prepared.configHash
+  ) {
     return {
       repository: acceptanceRepository,
       commandId: acceptanceCommand.id,

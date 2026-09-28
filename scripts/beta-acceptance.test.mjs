@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { parseWalkzConfig } from '../packages/contracts/dist/index.js';
 
 import {
   createAcceptanceFixtureConfig,
@@ -179,6 +181,27 @@ describe('clean-host beta acceptance contract', () => {
       ...defaultRepositoryConfig(),
       commands: [{ id: 'existing' }],
     })).toThrow(/empty command set/);
+  });
+
+  it('matches the worker config hash after JSONB reorders fields', () => {
+    const source = defaultRepositoryConfig();
+    const reordered = Object.fromEntries(Object.entries(source).reverse());
+    reordered.paths = {
+      exclude: source.paths.exclude,
+      include: source.paths.include,
+    };
+    reordered.provider = {
+      model: source.provider.model,
+      name: source.provider.name,
+    };
+
+    const prepared = createAcceptanceFixtureConfig(reordered);
+    const canonical = parseWalkzConfig(prepared.config);
+    const workerHash = createHash('sha256')
+      .update(JSON.stringify(canonical), 'utf8')
+      .digest('hex');
+
+    expect(prepared.configHash).toBe(workerHash);
   });
 
   it('binds unique resources, public URLs, and immutable images', () => {
@@ -439,7 +462,7 @@ describe('clean-host beta acceptance contract', () => {
     })).rejects.toThrow(/selected Walkz repository/);
   });
 
-  it('does not insert an already-current fixture configuration again', async () => {
+  it('uses the canonical hash to identify the current fixture configuration', async () => {
     const directory = await betaDirectory();
     const project = directory.split(/[\\/]/).at(-1);
     const betaState = {
@@ -453,7 +476,7 @@ describe('clean-host beta acceptance contract', () => {
     betaState.composeSha256 = createHash('sha256').update(compose).digest('hex');
     await writeFile(resolve(directory, 'compose.production.yml'), compose, 'utf8');
     const prepared = createAcceptanceFixtureConfig(defaultRepositoryConfig());
-    const storedHash = 'c'.repeat(64);
+    const storedHash = prepared.configHash;
     const adapter = {
       docker() {
         return candidateRevision;
@@ -489,6 +512,39 @@ describe('clean-host beta acceptance contract', () => {
       },
     });
     expect(result.configHash).toBe(storedHash);
+
+    let repaired = false;
+    const repairedResult = await prepareBetaAcceptance(
+      options({ action: 'prepare' }),
+      {
+        adapter,
+        environment: {},
+        state: betaState,
+        loadRepository: async () => ({
+          repositoryId: '11111111-1111-4111-8111-111111111111',
+          owner: 'HuzaifaAbdulRehman',
+          name: 'walkz',
+          configHash: 'c'.repeat(64),
+          config: {
+            commandApprovalPolicy: 'trusted_config',
+            ...prepared.config,
+            commands: [{
+              required: true,
+              cwd: '.',
+              args: [...prepared.config.commands[0].args],
+              executable: 'node',
+              id: 'acceptance-discount',
+            }],
+          },
+        }),
+        saveConfig: async (_repository, candidate) => {
+          repaired = true;
+          return { configHash: candidate.configHash };
+        },
+      },
+    );
+    expect(repaired).toBe(true);
+    expect(repairedResult.configHash).toBe(prepared.configHash);
   });
 
   it('restarts, rolls back, records metadata, and cleans', async () => {
