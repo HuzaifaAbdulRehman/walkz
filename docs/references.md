@@ -380,6 +380,16 @@ with a predictable value. The release manifest therefore records the exact
 artifact set that passed verification instead of claiming that separate builds
 are byte-for-byte identical.
 
+## Alpine package retention
+
+We checked Alpine's official [`apk` guide](https://wiki.alpinelinux.org/wiki/Apk)
+on 28 September 2026. It warns that an exact package version may disappear from
+a repository after an update. The worker image therefore pins its Node and
+Alpine base by digest, installs `git`, `ca-certificates`, and `docker-cli` from
+that stable branch without exact package revisions, and records the finished
+image IDs in the release manifest. Separate builds may differ, but the artifact
+that passed verification remains immutable.
+
 ## Production Compose isolation
 
 Docker's official [production Compose guide](https://docs.docker.com/compose/how-tos/production/),

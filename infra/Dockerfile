@@ -98,7 +98,7 @@ LABEL org.opencontainers.image.title="Walkz Worker" \
     io.walkz.service="worker"
 
 USER root
-RUN apk add --no-cache git=2.54.0-r0 ca-certificates=20260611-r0 docker-cli=29.5.3-r1 \
+RUN apk add --no-cache git ca-certificates docker-cli \
     && mkdir -p /var/lib/walkz/proof \
     && chown -R 1000:1000 /var/lib/walkz
 USER 1000:1000

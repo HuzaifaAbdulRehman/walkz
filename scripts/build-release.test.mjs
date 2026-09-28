@@ -21,12 +21,13 @@ describe('release build options', () => {
     expect(parseReleaseOptions([]).allowDirty).toBe(false);
   });
 
-  it('pins worker packages and excludes local credentials from the context', async () => {
+  it('uses the pinned Alpine branch for worker packages and excludes credentials', async () => {
     const [dockerfile, dockerignore] = await Promise.all([
       readFile(resolve('infra', 'Dockerfile'), 'utf8'),
       readFile('.dockerignore', 'utf8'),
     ]);
-    expect(dockerfile).toMatch(/apk add --no-cache git=\d[^ ]+ ca-certificates=\d[^ ]+ docker-cli=\d[^ ]+/);
+    expect(dockerfile).toMatch(/apk add --no-cache git ca-certificates docker-cli/);
+    expect(dockerfile).not.toMatch(/apk add --no-cache [^\n]*\w+=\d/);
     for (const pattern of ['**/.env', '**/.npmrc', '**/*.pem', '**/*.key']) {
       expect(dockerignore.split(/\r?\n/)).toContain(pattern);
     }
