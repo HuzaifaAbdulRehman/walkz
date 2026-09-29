@@ -1,17 +1,17 @@
 {
   "name": "@walkz/api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node dist/bin.js"
   },
   "dependencies": {
-    "@walkz/contracts": "0.1.0",
-    "@walkz/engine": "0.1.0",
-    "@walkz/github": "0.1.0",
-    "@walkz/persistence": "0.1.0",
-    "@walkz/providers": "0.1.0",
+    "@walkz/contracts": "1.0.0",
+    "@walkz/engine": "1.0.0",
+    "@walkz/github": "1.0.0",
+    "@walkz/persistence": "1.0.0",
+    "@walkz/providers": "1.0.0",
     "fastify": "5.12.3"
   }
 }
