@@ -212,10 +212,10 @@ that data cannot reveal defects Walkz never reported.
 
 ## Roadmap
 
-Milestones 1 through 6 are complete. The hosted path covers the GitHub App,
+Milestones 1 through 7 are complete. The hosted path covers the GitHub App,
 checks, configuration, review history, approved fixes, and reproof. Advanced
 reliability adds blocker arbitration, security review, versioned policy packs,
 scoped MCP tools, feedback evaluation, and explicit JavaScript/TypeScript and
-Python adapters. Milestone 7 now covers release artifacts, production Compose,
+Python adapters. Milestone 7 covers release artifacts, production Compose,
 operational telemetry, recovery drills, and clean-host beta acceptance. It does
 not select or provision a paid hosting service.
