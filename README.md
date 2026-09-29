@@ -2,6 +2,11 @@
 
 **AI-powered pull request co-pilot.**
 
+**Latest release:** [Walkz v1.0.0](https://github.com/HuzaifaAbdulRehman/walkz/releases/tag/v1.0.0)
+
+Walkz is released for local and self-hosted use. A permanent public deployment
+is outside the current scope.
+
 Walkz reviews diffs, runs repository checks, and uses evidence instead of
 model confidence to decide whether a change is ready to ship.
 
@@ -118,11 +123,12 @@ a native GitHub suggestion. The developer still decides whether to apply it.
 - Bounded fix proposals with explicit approval, isolated reproof and regression
   checks, and apply-ready GitHub suggestions tied to the reviewed head commit.
 
-The hosted stack now has a verified single-host production Compose contract. It
-has not yet completed backup, restore, rollback, or clean-host beta rehearsals.
-A real pull request has completed the review, approval, reproof, and GitHub
-suggestion path. Fix branches, automatic patch application, and automatic
-merges are not implemented.
+The hosted stack now has a verified single-host production Compose contract.
+Backup and restore, rollback, queue-restart recovery, and the clean-host beta
+journey have all been rehearsed against disposable data. A real pull request
+has completed the review, approval, reproof, and GitHub suggestion path. Fix
+branches, automatic patch application, and automatic merges are not
+implemented.
 
 ## Run the hosted stack locally
 
